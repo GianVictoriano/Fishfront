@@ -1,15 +1,41 @@
-//first page mga pre baguhin nalang pag mag front end na
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { useRouter } from 'expo-router';
+import * as Google from 'expo-auth-session/providers/google';
+import { Link, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { Alert, Button, TextInput, View } from 'react-native';
+import { Alert, Button, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+
+// This is necessary for the auth session to work correctly on the web.
+if (Platform.OS === 'web') {
+  WebBrowser.maybeCompleteAuthSession();
+}
+
+// Define the base URL for the API
+const API_URL = 'http://192.168.254.105:8000';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const router = useRouter();
+
+  // This is the stable configuration that worked for web login.
+  // We will use this as the base to restore functionality.
+  const redirectUri = Platform.select({
+    web: 'http://localhost:8081',
+    // For native, we use the Expo proxy redirect URI
+    default: 'https://auth.expo.io/@gianvictoriano/fishfront',
+  });
+
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    expoClientId: '2592879566-iv5obaksm3viv04pptpnlsn9mbmivg5s.apps.googleusercontent.com',
+    iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com', // Placeholder
+    // The androidClientId is required by the library, but we use the Web ID to ensure
+    // consistency with the web-based redirect flow in Expo Go.
+    androidClientId: '2592879566-iv5obaksm3viv04pptpnlsn9mbmivg5s.apps.googleusercontent.com',
+    webClientId: '2592879566-iv5obaksm3viv04pptpnlsn9mbmivg5s.apps.googleusercontent.com',
+    redirectUri,
+  });
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -21,9 +47,50 @@ export default function LoginScreen() {
     checkAuth();
   }, []);
 
+  // Handle the response from Google Sign-In
+  useEffect(() => {
+    console.log('[AUTH] Response changed:', response);
+    if (response?.type === 'success') {
+      const { authentication } = response;
+      if (authentication?.accessToken) {
+        handleGoogleSignIn(authentication.accessToken);
+      }
+    } else if (response?.type === 'error') {
+      Alert.alert('Google Sign-In Error', response.error?.message || 'An unknown error occurred.');
+    }
+  }, [response]);
+
+  // Send the Google access token to the Laravel backend
+  const handleGoogleSignIn = async (accessToken) => {
+    try {
+      const apiResponse = await axios.post(`${API_URL}/api/auth/google`, {
+        token: accessToken,
+      }, {
+        headers: {
+          Accept: 'application/json',
+        }
+      });
+
+      // Destructure token and user from the response
+      const { token, user } = apiResponse.data;
+
+      // Store both the token and the user data
+      await AsyncStorage.setItem('auth_token', token);
+      await AsyncStorage.setItem('user_data', JSON.stringify(user));
+
+      Alert.alert('Login Successful', 'You are now signed in.');
+      router.replace('/home');
+
+    } catch (error) {
+      console.error('Failed to process Google Sign-In with backend:', error.response?.data || error.message);
+      Alert.alert('Login Failed', 'Could not verify your Google account with the server.');
+    }
+  };
+
+  // Standard email/password login
   const handleLogin = async () => {
     try {
-      const response = await axios.post('http://192.168.254.105:8000/api/login', {
+      const response = await axios.post(`${API_URL}/api/login`, {
         email,
         password,
       }, {
@@ -32,8 +99,12 @@ export default function LoginScreen() {
         }
       });
 
-      const token = response.data.token;
+      // Destructure token and user from the response
+      const { token, user } = response.data;
+
+      // Store both the token and the user data
       await AsyncStorage.setItem('auth_token', token);
+      await AsyncStorage.setItem('user_data', JSON.stringify(user));
 
       Alert.alert('Login successful');
       router.replace('/home');
@@ -44,22 +115,69 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={{ padding: 20 }}>
+    <View style={styles.container}>
+      <Text style={styles.title}>Login</Text>
       <TextInput
         placeholder="Email"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
-        style={{ borderWidth: 1, marginBottom: 10, padding: 8 }}
+        style={styles.input}
       />
       <TextInput
         placeholder="Password"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
-        style={{ borderWidth: 1, marginBottom: 10, padding: 8 }}
+        style={styles.input}
       />
-      <Button title="Login" onPress={handleLogin} />
+      <View style={styles.buttonContainer}>
+        <Button title="Login" onPress={handleLogin} />
+      </View>
+      <Link href="/forgot-password" asChild>
+        <TouchableOpacity>
+          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+        </TouchableOpacity>
+      </Link>
+      <View style={styles.buttonContainer}>
+        <Button
+          title="Sign in with Google"
+          disabled={!request}
+          onPress={() => {
+            promptAsync();
+          }}
+        />
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    marginBottom: 15,
+    padding: 10,
+    fontSize: 16,
+  },
+  buttonContainer: {
+    marginVertical: 10,
+  },
+  forgotPasswordText: {
+    color: '#007BFF',
+    textAlign: 'center',
+    paddingVertical: 10,
+  },
+});
