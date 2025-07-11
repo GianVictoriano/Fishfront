@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+
 import * as Google from 'expo-auth-session/providers/google';
 import { Link, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -27,7 +28,7 @@ export default function LoginScreen() {
     default: 'https://auth.expo.io/@gianvictoriano/fishfront',
   });
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     expoClientId: '2592879566-iv5obaksm3viv04pptpnlsn9mbmivg5s.apps.googleusercontent.com',
     iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com', // Placeholder
     // The androidClientId is required by the library, but we use the Web ID to ensure
@@ -49,22 +50,35 @@ export default function LoginScreen() {
 
   // Handle the response from Google Sign-In
   useEffect(() => {
-    console.log('[AUTH] Response changed:', response);
+    console.log('[AUTH] Full response object:', JSON.stringify(response, null, 2));
+
     if (response?.type === 'success') {
-      const { authentication } = response;
-      if (authentication?.accessToken) {
-        handleGoogleSignIn(authentication.accessToken);
+      console.log('[AUTH] Response type is success.');
+      // With useIdTokenAuthRequest, the token is in the response params.
+      const { id_token } = response.params;
+
+      if (id_token) {
+        console.log('[AUTH] id_token found in params. Proceeding to sign in.');
+        handleGoogleSignIn(id_token);
+      } else {
+        console.error('[AUTH] id_token is missing from the response params.');
+        Alert.alert('Google Sign-In Error', 'Could not retrieve ID token from Google response. Please try again.');
       }
     } else if (response?.type === 'error') {
+      console.error('[AUTH] Response type is error.', response.error);
       Alert.alert('Google Sign-In Error', response.error?.message || 'An unknown error occurred.');
+    
+    } else if (response?.type) {
+        console.log(`[AUTH] Response type is '${response.type}'. No action taken.`);
     }
+
   }, [response]);
 
-  // Send the Google access token to the Laravel backend
-  const handleGoogleSignIn = async (accessToken) => {
+  // Send the Google ID token to the Laravel backend
+  const handleGoogleSignIn = async (idToken) => {
     try {
       const apiResponse = await axios.post(`${API_URL}/api/auth/google`, {
-        token: accessToken,
+        token: idToken,
       }, {
         headers: {
           Accept: 'application/json',
@@ -74,12 +88,18 @@ export default function LoginScreen() {
       // Destructure token and user from the response
       const { token, user } = apiResponse.data;
 
-      // Store both the token and the user data
+      // Store the token and user data
       await AsyncStorage.setItem('auth_token', token);
-      await AsyncStorage.setItem('user_data', JSON.stringify(user));
+      await AsyncStorage.setItem('user', JSON.stringify(user)); // Corrected key to 'user'
 
       Alert.alert('Login Successful', 'You are now signed in.');
-      router.replace('/home');
+
+      // Redirect based on user role
+      if (user.profile && user.profile.role === 'collaborator') {
+        router.replace('/collab/home');
+      } else {
+        router.replace('/home');
+      }
 
     } catch (error) {
       console.error('Failed to process Google Sign-In with backend:', error.response?.data || error.message);
@@ -102,12 +122,21 @@ export default function LoginScreen() {
       // Destructure token and user from the response
       const { token, user } = response.data;
 
-      // Store both the token and the user data
+      // Store the token and user data
       await AsyncStorage.setItem('auth_token', token);
-      await AsyncStorage.setItem('user_data', JSON.stringify(user));
+      await AsyncStorage.setItem('user', JSON.stringify(user));
+
+      // Set the token on the API client for future requests
+      setAuthToken(token);
 
       Alert.alert('Login successful');
-      router.replace('/home');
+
+      // Redirect based on user role
+      if (user.profile && user.profile.role === 'collaborator') {
+        router.replace('/collab/home');
+      } else {
+        router.replace('/home');
+      }
     } catch (error) {
       console.error(error.response?.data || error.message);
       Alert.alert('Login failed', 'Invalid credentials, please check your input');

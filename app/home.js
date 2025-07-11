@@ -1,9 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import { Link, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Button, Image, Modal, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { API_URL } from '../utils/api';
+import apiClient from '../utils/api';
 
 const Navbar = ({ onLinkPress }) => (
   <View style={styles.nav}>
@@ -32,17 +31,18 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const fetchUser = async () => {
-      const token = await AsyncStorage.getItem('auth_token');
       try {
-        const response = await axios.get(`${API_URL}/api/profile`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-          },
-        });
+        // apiClient already has the token from the interceptor
+        const response = await apiClient.get('/profile');
         setUser(response.data.user);
       } catch (error) {
-        console.error('Failed to fetch user:', error);
+        console.error('Failed to fetch user:', error.response?.data || error.message);
+        // If the token is invalid (e.g., expired), the interceptor might not handle it.
+        // We should redirect to login.
+        if (error.response?.status === 401) {
+          await AsyncStorage.removeItem('auth_token');
+          router.replace('/');
+        }
       }
     };
     fetchUser();

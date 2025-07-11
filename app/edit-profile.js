@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Button, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { API_URL } from '../utils/api';
+import { apiClient } from '../utils/api';
 
 export default function EditProfileScreen() {
   const [user, setUser] = useState(null);
@@ -37,29 +37,15 @@ export default function EditProfileScreen() {
 
   const handleUpdateProfile = async () => {
     setSaving(true);
-    const token = await AsyncStorage.getItem('auth_token');
-    if (!token) {
-      Alert.alert('Error', 'Authentication token not found. Please log in again.');
-      router.replace('/');
-      return;
-    }
 
     try {
-      const response = await axios.put(
-        `${API_URL}/api/profile`,
-        {
-          name,
-          program,
-          section,
-          description,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-          },
-        }
-      );
+      // Use the apiClient which has the base URL and auth headers configured
+      const response = await apiClient.put('/profile', {
+        name,
+        program,
+        section,
+        description,
+      });
 
       // Update the user data in AsyncStorage with the fresh data from the server
       const updatedUser = response.data.user;

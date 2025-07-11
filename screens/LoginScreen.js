@@ -1,4 +1,4 @@
-//palagyan design, pero oks na logic
+//dagdagan ng design, pero okay na ang logic
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
