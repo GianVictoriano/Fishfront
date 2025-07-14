@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
+import apiClient from '../utils/api';
 
 import * as Google from 'expo-auth-session/providers/google';
 import { Link, useRouter } from 'expo-router';
@@ -12,8 +12,7 @@ if (Platform.OS === 'web') {
   WebBrowser.maybeCompleteAuthSession();
 }
 
-// Define the base URL for the API
-const API_URL = 'http://192.168.254.105:8000';
+
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -77,7 +76,7 @@ export default function LoginScreen() {
   // Send the Google ID token to the Laravel backend
   const handleGoogleSignIn = async (idToken) => {
     try {
-      const apiResponse = await axios.post(`${API_URL}/api/auth/google`, {
+                  const apiResponse = await apiClient.post('/auth/google/callback', {
         token: idToken,
       }, {
         headers: {
