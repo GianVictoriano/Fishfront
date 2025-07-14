@@ -6,32 +6,36 @@ import { Link, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
 import { Alert, Button, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import apiClient, {API_URL} from '../utils/api';
+
 
 // This is necessary for the auth session to work correctly on the web.
 if (Platform.OS === 'web') {
   WebBrowser.maybeCompleteAuthSession();
 }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> bcc6beb42c6729d3e57e23d98085242f4cba1e52
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isAuthInProgress, setIsAuthInProgress] = useState(false);
   const router = useRouter();
 
   // This is the stable configuration that worked for web login.
-  // We will use this as the base to restore functionality.
+
   const redirectUri = Platform.select({
     web: 'http://localhost:8081',
-    // For native, we use the Expo proxy redirect URI
+    // For native
     default: 'https://auth.expo.io/@gianvictoriano/fishfront',
   });
 
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     expoClientId: '2592879566-iv5obaksm3viv04pptpnlsn9mbmivg5s.apps.googleusercontent.com',
-    iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com', // Placeholder
-    // The androidClientId is required by the library, but we use the Web ID to ensure
-    // consistency with the web-based redirect flow in Expo Go.
+    iosClientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com', 
     androidClientId: '2592879566-iv5obaksm3viv04pptpnlsn9mbmivg5s.apps.googleusercontent.com',
     webClientId: '2592879566-iv5obaksm3viv04pptpnlsn9mbmivg5s.apps.googleusercontent.com',
     redirectUri,
@@ -62,13 +66,15 @@ export default function LoginScreen() {
       } else {
         console.error('[AUTH] id_token is missing from the response params.');
         Alert.alert('Google Sign-In Error', 'Could not retrieve ID token from Google response. Please try again.');
+        setIsAuthInProgress(false);
       }
     } else if (response?.type === 'error') {
       console.error('[AUTH] Response type is error.', response.error);
       Alert.alert('Google Sign-In Error', response.error?.message || 'An unknown error occurred.');
-    
-    } else if (response?.type) {
+      setIsAuthInProgress(false);
+    } else if (response?.type && response.type !== 'idle') {
         console.log(`[AUTH] Response type is '${response.type}'. No action taken.`);
+        setIsAuthInProgress(false);
     }
 
   }, [response]);
@@ -76,33 +82,46 @@ export default function LoginScreen() {
   // Send the Google ID token to the Laravel backend
   const handleGoogleSignIn = async (idToken) => {
     try {
+<<<<<<< HEAD
                   const apiResponse = await apiClient.post('/auth/google/callback', {
+=======
+      console.log('[AUTH] Sending token to backend...');
+      const apiResponse = await apiClient.post('/auth/google', {
+>>>>>>> bcc6beb42c6729d3e57e23d98085242f4cba1e52
         token: idToken,
       }, {
         headers: {
           Accept: 'application/json',
         }
       });
+      console.log('[AUTH] Backend response received:', apiResponse.data);
 
       // Destructure token and user from the response
       const { token, user } = apiResponse.data;
+      console.log('[AUTH] Token:', token ? 'Exists' : 'Missing');
+      console.log('[AUTH] User data:', user);
 
       // Store the token and user data
       await AsyncStorage.setItem('auth_token', token);
-      await AsyncStorage.setItem('user', JSON.stringify(user)); // Corrected key to 'user'
+      await AsyncStorage.setItem('user_data', JSON.stringify(user));
+      console.log('[AUTH] Token and user data stored.');
 
       Alert.alert('Login Successful', 'You are now signed in.');
 
       // Redirect based on user role
-      if (user.profile && user.profile.role === 'collaborator') {
+      if (user && user.profile && user.profile.role === 'collaborator') {
+        console.log('[AUTH] Redirecting to collaborator home...');
         router.replace('/collab/home');
       } else {
+        console.log('[AUTH] Redirecting to user home...');
         router.replace('/home');
       }
 
     } catch (error) {
       console.error('Failed to process Google Sign-In with backend:', error.response?.data || error.message);
       Alert.alert('Login Failed', 'Could not verify your Google account with the server.');
+    } finally {
+      setIsAuthInProgress(false);
     }
   };
 
@@ -160,7 +179,7 @@ export default function LoginScreen() {
         style={styles.input}
       />
       <View style={styles.buttonContainer}>
-        <Button title="Login" onPress={handleLogin} />
+        <Button title="Login" onPress={handleLogin} disabled={isAuthInProgress} />
       </View>
       <Link href="/forgot-password" asChild>
         <TouchableOpacity>
@@ -170,8 +189,9 @@ export default function LoginScreen() {
       <View style={styles.buttonContainer}>
         <Button
           title="Sign in with Google"
-          disabled={!request}
+          disabled={!request || isAuthInProgress}
           onPress={() => {
+            setIsAuthInProgress(true);
             promptAsync();
           }}
         />
