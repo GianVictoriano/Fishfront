@@ -1,21 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Link, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
+import Navbar from '../components/Navbar';
 import { useEffect, useState } from 'react';
-import { Button, Image, Modal, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import apiClient from '../utils/api';
+import { ImageBackground, Modal, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-const Navbar = ({ onLinkPress }) => (
-  <View style={styles.nav}>
-    <Link href="/home" style={styles.navLink} onPress={onLinkPress}>Home</Link>
-    <Link href="/forum" style={styles.navLink} onPress={onLinkPress}>Forum</Link>
-    <Link href="/news" style={styles.navLink} onPress={onLinkPress}>News</Link>
-    <Link href="/about" style={styles.navLink} onPress={onLinkPress}>About Us</Link>
-    <Link href="/profile" style={styles.navLink} onPress={onLinkPress}>Profile</Link>
-  </View>
-);
+
 
 export default function HomeScreen() {
-  const [user, setUser] = useState(null);
   const [navVisible, setNavVisible] = useState(false);
   const router = useRouter();
 
@@ -28,30 +19,6 @@ export default function HomeScreen() {
     };
     checkAuth();
   }, []);
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        // apiClient already has the token from the interceptor
-        const response = await apiClient.get('/profile');
-        setUser(response.data.user);
-      } catch (error) {
-        console.error('Failed to fetch user:', error.response?.data || error.message);
-        // If the token is invalid (e.g., expired), the interceptor might not handle it.
-        // We should redirect to login.
-        if (error.response?.status === 401) {
-          await AsyncStorage.removeItem('auth_token');
-          router.replace('/');
-        }
-      }
-    };
-    fetchUser();
-  }, []);
-
-  const handleLogout = async () => {
-    await AsyncStorage.removeItem('auth_token');
-    router.replace('/');
-  };
 
   const handleLinkPress = () => {
     if (Platform.OS !== 'web') {
@@ -82,19 +49,18 @@ export default function HomeScreen() {
           </Modal>
         </>
       )}
-      <View style={styles.content}>
-        {user ? (
-          <>
-            {user.profile?.avatar && (
-              <Image source={{ uri: user.profile.avatar }} style={styles.avatar} />
-            )}
-            <Text>Welcome, {user.name}</Text>
-          </>
-        ) : (
-          <Text>Loading...</Text>
-        )}
-        <Button title="Logout" onPress={handleLogout} />
-      </View>
+      <ImageBackground
+        source={{ uri: 'https://images.unsplash.com/photo-1541580623-c11019a495d2?q=80&w=2070' }}
+        style={styles.hero}
+        resizeMode="cover"
+      >
+        <View style={styles.heroOverlay}>
+          <Text style={styles.heroTitle}>Welcome to Fisherman Publications</Text>
+          <Text style={styles.heroText}>
+            Your one-stop destination for the latest in fishing news, community forums, and expert articles. Dive in and explore the world of angling with us.
+          </Text>
+        </View>
+      </ImageBackground>
     </SafeAreaView>
   );
 }
@@ -104,11 +70,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  content: {
+  hero: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  heroOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     padding: 20,
+    width: '100%',
+  },
+  heroTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  heroText: {
+    fontSize: 18,
+    color: '#fff',
+    textAlign: 'center',
+    lineHeight: 26,
   },
   menuButton: {
     position: 'absolute',
@@ -120,7 +106,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     color: '#007BFF',
   },
-  nav: {
+nav: {
     ...Platform.select({
       web: {
         flexDirection: 'row',
@@ -169,13 +155,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 20,
-    borderWidth: 2,
-    borderColor: '#007BFF',
   },
 });

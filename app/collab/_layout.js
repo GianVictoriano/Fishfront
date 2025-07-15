@@ -20,13 +20,21 @@ const SidebarLink = ({ href, text, icon, isMinimized, onPress }) => {
 };
 
 // The main sidebar component
+import { useAuth } from '~/context/AuthContext';
+
 const Sidebar = ({ isMinimized }) => {
   const router = useRouter();
+  const { logout } = useAuth();
 
   const handleLogout = async () => {
-    await AsyncStorage.multiRemove(['auth_token', 'user']);
-    router.replace('/'); // Redirect to login screen
+    try {
+      await logout();
+      router.replace('/'); // Redirect to login screen
+    } catch (e) {
+      console.error('Logout failed:', e);
+    }
   };
+
 
   return (
     <View style={[styles.sidebar, isMinimized && styles.sidebarMinimized]}>
@@ -98,7 +106,7 @@ const styles = StyleSheet.create({
   },
   sidebarIcon: {
     fontSize: 20,
-    marginRight: 15,
+    marginRight: 15,  
   },
   sidebarLinkText: {
     fontSize: 18,
@@ -116,8 +124,8 @@ const styles = StyleSheet.create({
   toggleButton: {
     position: 'absolute',
     top: 15,
-    left: 15,
-    backgroundColor: '#3949ab',
+    left: -20,
+    backgroundColor: '#1a237e',
     borderRadius: 20,
     width: 40,
     height: 40,
@@ -129,5 +137,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 24,
     fontWeight: 'bold',
+    marginBottom: 5,
   },
 });

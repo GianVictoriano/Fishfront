@@ -1,26 +1,28 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 
-const Card = ({ title, children }) => (
+const DashboardCard = ({ title, value }) => (
   <View style={styles.card}>
     <Text style={styles.cardTitle}>{title}</Text>
-    <View style={styles.cardContent}>{children}</View>
+    <Text style={styles.cardValue}>{value}</Text>
   </View>
 );
 
 export default function DashboardScreen() {
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.header}>Collaborator Dashboard</Text>
-      <Card title="Projects Overview">
-        <Text style={styles.paragraph}>You are currently assigned to 3 active projects. The deadline for the 'Fisheries Data Analysis' project is approaching.</Text>
-      </Card>
-      <Card title="Shared Resources">
-        <Text style={styles.paragraph}>A new research paper on 'Sustainable Aquaculture' has been added to the shared drive.</Text>
-      </Card>
-      <Card title="Assigned Tasks">
-        <Text style={styles.paragraph}>You have 5 pending tasks. The task 'Review Q2 Report' is due tomorrow.</Text>
-      </Card>
+      <Text style={styles.title}>Dashboard</Text>
+      <View style={styles.cardsContainer}>
+        <DashboardCard title="Projects in Review" value="5" />
+        <DashboardCard title="Approved Content" value="23" />
+        <DashboardCard title="Pending Tasks" value="8" />
+        <DashboardCard title="Team Members" value="12" />
+      </View>
+      <View style={styles.recentActivity}>
+        <Text style={styles.sectionTitle}>Recent Activity</Text>
+        <Text style={styles.activityItem}>- User 'John Doe' submitted new content for review.</Text>
+        <Text style={styles.activityItem}>- Project 'Summer Campaign' was approved.</Text>
+      </View>
     </ScrollView>
   );
 }
@@ -29,39 +31,50 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#f0f4f8',
+    backgroundColor: '#f5f5f5',
   },
-  header: {
+  title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1a237e',
     marginBottom: 20,
-    textAlign: 'center',
+  },
+  cardsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderRadius: 8,
     padding: 20,
-    marginBottom: 20,
+    width: '48%',
+    marginBottom: 15,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 5,
-    borderLeftWidth: 5,
-    borderLeftColor: '#3949ab',
+    shadowRadius: 4,
+    elevation: 3,
   },
   cardTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#303f9f',
+    color: '#666',
+  },
+  cardValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 10,
+  },
+  recentActivity: {
+    marginTop: 20,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
     marginBottom: 10,
   },
-  cardContent: {},
-  paragraph: {
+  activityItem: {
     fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
-    marginBottom: 10,
+    marginBottom: 5,
   },
 });

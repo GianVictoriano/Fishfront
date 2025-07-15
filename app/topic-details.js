@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, Button, FlatList, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { apiClient } from '../utils/api';
+import apiClient from '../utils/api';
 
 export default function TopicDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -12,16 +12,26 @@ export default function TopicDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  const [fetchError, setFetchError] = useState(null);
   const fetchTopic = async () => {
     try {
       const response = await apiClient.get(`/topics/${id}`);
       setTopic(response.data);
+      setFetchError(null);
     } catch (error) {
-      console.error('Error fetching topic:', error);
+      let msg = `Error fetching topic with id=${id}: `;
+      if (error.response) {
+        msg += JSON.stringify(error.response.data);
+      } else {
+        msg += error.message;
+      }
+      setFetchError(msg);
+      console.error(msg, error);
     } finally {
       setLoading(false);
     }
   };
+
 
   const handleAddComment = async () => {
     if (!comment.trim()) return;
@@ -55,13 +65,18 @@ export default function TopicDetailsScreen() {
   if (!topic) {
     return (
       <View style={styles.centered}>
+        <Button title="Back" onPress={() => router.back()} />
         <Text>Topic not found</Text>
+        {fetchError && (
+          <Text style={{color: 'red', marginTop: 10}}>{fetchError}</Text>
+        )}
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      <Button title="Back" onPress={() => router.back()} />
       <View style={styles.topicContainer}>
         <Text style={styles.title}>{topic.title}</Text>
         <Text style={styles.author}>By: {topic.user?.name}</Text>

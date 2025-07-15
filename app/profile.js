@@ -1,62 +1,17 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import { Link, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Button, Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { API_URL } from '../utils/api';
+import { useState } from 'react';
+import { ActivityIndicator, Button, Image, Modal, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
+import Navbar from '~/components/Navbar';
+import { useAuth } from '~/context/AuthContext';
 
 export default function ProfileScreen() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [navVisible, setNavVisible] = useState(false);
+  const { user, loading, logout } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    const loadUserFromStorage = async () => {
-      setLoading(true);
-      const token = await AsyncStorage.getItem('auth_token');
-      const userDataString = await AsyncStorage.getItem('user_data');
-
-      if (!token || !userDataString) {
-        // If there's no token or user data, the user is not properly logged in.
-        router.replace('/');
-        return;
-      }
-
-      try {
-        const userData = JSON.parse(userDataString);
-        setUser(userData);
-      } catch (e) {
-        console.error('Failed to parse user data from storage:', e);
-        // If data is corrupted, clear it and send user to login.
-        await AsyncStorage.clear();
-        router.replace('/');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadUserFromStorage();
-  }, []);
-
   const handleLogout = async () => {
-    setLoading(true);
-    const token = await AsyncStorage.getItem('auth_token');
-    try {
-      if (token) {
-        await axios.post(`${API_URL}/api/logout`, {}, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-      }
-    } catch (error) {
-      console.error('Failed to logout from server:', error.response?.data || error.message);
-      // We proceed to log out on the client-side regardless of server response
-    } finally {
-      await AsyncStorage.removeItem('auth_token');
-      await AsyncStorage.removeItem('user_data');
-      router.replace('/');
-    }
+    await logout();
+    // The redirection logic is now handled globally in _layout.js
   };
 
   if (loading) {
@@ -78,7 +33,30 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.profileContainer}>
+      {/* Persistent Navbar */}
+      {Platform.OS === 'web' ? (
+        <Navbar />
+      ) : (
+        <>
+          <TouchableOpacity style={styles.menuButton} onPress={() => setNavVisible(true)}>
+            <Text style={styles.menuButtonText}>☰</Text>
+          </TouchableOpacity>
+          <Modal
+            animationType="slide"
+            transparent
+            visible={navVisible}
+            onRequestClose={() => setNavVisible(false)}
+          >
+            <TouchableOpacity style={styles.modalOverlayNav} activeOpacity={1} onPressOut={() => setNavVisible(false)}>
+              <View style={styles.modalViewNav}>
+                <Navbar onLinkPress={() => setNavVisible(false)} />
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        </>
+      )}
+
+      <ScrollView contentContainerStyle={styles.profileContainer} showsVerticalScrollIndicator={false}>
         {user.profile?.avatar && (
           <Image source={{ uri: user.profile.avatar }} style={styles.avatar} />
         )}
@@ -107,12 +85,32 @@ export default function ProfileScreen() {
         <View style={styles.logoutButtonContainer}>
           <Button title="Logout" onPress={handleLogout} color="#dc3545" />
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  menuButton: {
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    zIndex: 10,
+    padding: 10
+  },
+  menuButtonText: {
+    fontSize: 28,
+    color: '#007BFF',
+  },
+  modalOverlayNav: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalViewNav: {
+    width: '75%',
+    height: '100%',
+    backgroundColor: '#fff',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',

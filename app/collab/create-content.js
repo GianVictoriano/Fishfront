@@ -28,7 +28,7 @@ export default function CreateContentScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>      Create New Content</Text>
+      <Text style={styles.header}>Create New Content</Text>
       <Text style={styles.subtitle}>Select a content type to begin.</Text>
       
       <View style={styles.optionsGrid}>
