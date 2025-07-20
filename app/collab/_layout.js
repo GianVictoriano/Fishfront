@@ -22,7 +22,7 @@ import { useAuth } from '~/context/AuthContext';
 
 const Sidebar = ({ isMinimized }) => {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
   const handleLogout = async () => {
     try {
@@ -43,6 +43,9 @@ const Sidebar = ({ isMinimized }) => {
         <SidebarLink href="/collab/review-content" text="Review Content" icon="👀" isMinimized={isMinimized} />
         <SidebarLink href="/collab/collaborate" text="Collaborate" icon="🤝" isMinimized={isMinimized} />
         <SidebarLink href="/collab/users" text="Users" icon="👥" isMinimized={isMinimized} />
+        {(user?.profile?.role === 'admin' || user?.profile?.role === 'collaborator') && (
+          <SidebarLink href="/admin/branding" text="Manage Website" icon="🌐" isMinimized={isMinimized} />
+        )}
       </ScrollView>
       <View style={styles.sidebarFooter}>
         <SidebarLink text="Logout" icon="🚪" isMinimized={isMinimized} onPress={handleLogout} />
