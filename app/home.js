@@ -1,14 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import Navbar from '../components/Navbar';
 import { useEffect, useState } from 'react';
 import { ImageBackground, Modal, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-
+import Navbar from '../components/Navbar';
+import { useBranding } from '../context/BrandingContext';
 
 export default function HomeScreen() {
   const [navVisible, setNavVisible] = useState(false);
   const router = useRouter();
+  const { backgroundUrl } = useBranding();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -50,16 +50,11 @@ export default function HomeScreen() {
         </>
       )}
       <ImageBackground
-        source={{ uri: 'https://images.unsplash.com/photo-1541580623-c11019a495d2?q=80&w=2070' }}
+        source={backgroundUrl}
         style={styles.hero}
         resizeMode="cover"
       >
-        <View style={styles.heroOverlay}>
-          <Text style={styles.heroTitle}>Welcome to Fisherman Publications</Text>
-          <Text style={styles.heroText}>
-            Your one-stop destination for the latest in fishing news, community forums, and expert articles. Dive in and explore the world of angling with us.
-          </Text>
-        </View>
+        {/* No content inside the hero for a clean background view */}
       </ImageBackground>
     </SafeAreaView>
   );
@@ -71,30 +66,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   hero: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    padding: 20,
-    width: '100%',
-  },
-  heroTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  heroText: {
-    fontSize: 18,
-    color: '#fff',
-    textAlign: 'center',
-    lineHeight: 26,
+    flex: 1, // Make the background take up the remaining space
   },
   menuButton: {
     position: 'absolute',

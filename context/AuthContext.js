@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../utils/api';
 
@@ -7,7 +8,8 @@ const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+
+  const [auth, setAuth] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const loginWithGoogleToken = async (idToken) => {
@@ -19,13 +21,13 @@ export const AuthProvider = ({ children }) => {
       await AsyncStorage.setItem('auth_token', token);
       await AsyncStorage.setItem('user_data', JSON.stringify(user));
       apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(user);
+      setAuth(user);
     } catch (error) {
       console.error('Failed to process Google Sign-In with backend:', error.response?.data || error.message);
       // Clear any partial state
       await AsyncStorage.removeItem('auth_token');
       delete apiClient.defaults.headers.common['Authorization'];
-      setUser(null);
+      setAuth(null);
     } finally {
       setLoading(false);
     }
@@ -35,24 +37,35 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem('auth_token');
-      if (token) {
+      const storedUser = await AsyncStorage.getItem('user_data');
+
+      if (token && storedUser) {
+        // If we have a token and user data from storage, the user is logged in.
+        // Use this data directly instead of making another API call.
         apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        const response = await apiClient.get('/users/me');
-        setUser(response.data.user);
+        const parsedUser = JSON.parse(storedUser);
+        console.log('2. [AuthContext.js] User object loaded from AsyncStorage:', JSON.stringify(parsedUser, null, 2));
+        setAuth(parsedUser);
       } else {
-        setUser(null);
+        // Otherwise, they are logged out.
+        setAuth(null);
       }
     } catch (e) {
-      console.error('Failed to reload user session:', e);
-      setUser(null);
+      console.error('Failed to reload user session from storage:', e);
+      setAuth(null); // Ensure state is cleared on error
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    reloadUser();
-  }, []);
+    // Only try to reload from storage if we don't already have a user in memory.
+    // This prevents a race condition on login where the context reloads
+    // before AsyncStorage has been updated.
+    if (!auth) {
+      reloadUser();
+    }
+  }, [auth]);
 
   const login = async (email, password) => {
     try {
@@ -62,7 +75,7 @@ export const AuthProvider = ({ children }) => {
       await AsyncStorage.setItem('auth_token', token);
       await AsyncStorage.setItem('user_data', JSON.stringify(user));
       apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(user);
+      setAuth(user);
 
       return { success: true };
     } catch (error) {
@@ -73,7 +86,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     setLoading(true);
-    setUser(null);
+    setAuth(null);
     delete apiClient.defaults.headers.common['Authorization'];
     try {
       await AsyncStorage.removeItem('auth_token');
@@ -86,16 +99,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   const value = {
-    user,
+    user: auth, // Provide the `auth` state as `user` for consumers
     loading,
     login,
     logout,
     reloadUser,
     loginWithGoogleToken,
+    setAuth,
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginWithGoogleToken, reloadUser, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

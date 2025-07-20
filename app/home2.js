@@ -1,12 +1,12 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { SafeAreaView, Platform, StyleSheet, Text, TouchableOpacity, View, ImageBackground, Modal } from 'react-native';
+import { ImageBackground, Modal, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import GuestNavbar from '../components/GuestNavbar';
 import { useBranding } from '../context/BrandingContext';
 
 export default function GuestHomeScreen() {
   const [navVisible, setNavVisible] = useState(false);
-  const [hover, setHover] = useState(false); // <-- add hover state
+  const [hover, setHover] = useState(false);
   const router = useRouter();
   const { backgroundUrl } = useBranding();
 
@@ -15,8 +15,6 @@ export default function GuestHomeScreen() {
       setNavVisible(false);
     }
   };
-
-
 
   return (
     <SafeAreaView style={styles.container}>
@@ -42,19 +40,16 @@ export default function GuestHomeScreen() {
           </Modal>
         </>
       )}
-
       {/* The main content with the background image */}
       <ImageBackground
         source={backgroundUrl}
         style={styles.hero}
         resizeMode="cover"
       >
-        {/* The overlay is removed to show the full image brightness */}
         <View style={styles.heroContent}>
           <TouchableOpacity
             style={[
               styles.heroButton,
-              styles.getStartedButton,
               Platform.OS === 'web' && hover ? styles.heroButtonHover : null
             ]}
             onPress={() => router.push('/signin')}
@@ -73,6 +68,12 @@ export default function GuestHomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  heroContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff', // A fallback background color
@@ -82,27 +83,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  heroContent: {
+  heroOverlay: {
     flex: 1,
-    justifyContent: 'center', // Center the button vertically
+    justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', // Dark overlay for text readability
+    padding: 24,
     width: '100%',
-    ...Platform.select({
-      web: {
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-      },
-    }),
   },
   heroTitle: {
     fontSize: 36,
     fontWeight: 'bold',
     color: '#fff',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 2,
   },
   heroText: {
     fontSize: 18,
@@ -110,9 +104,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 26,
-  },
-  getStartedButton: { // This style is now merged into heroContent and heroButton
-    // No longer a separate style, but its properties are in heroContent and heroButton
   },
   heroButton: {
     backgroundColor: '#007BFF',
@@ -133,9 +124,6 @@ const styles = StyleSheet.create({
     color: '#000',
     border: '2px solid #000',
   } : {},
-  getStartedButton: {
-    alignSelf: 'center',
-  },
   heroButtonText: {
     color: '#fff',
     fontSize: 18,
@@ -171,5 +159,13 @@ const styles = StyleSheet.create({
     width: '80%',
     height: '100%',
     backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: -2,
+      height: 0,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });
