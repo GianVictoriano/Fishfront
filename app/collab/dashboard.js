@@ -1,80 +1,179 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { useAuth } from '~/context/AuthContext';
+import { useRouter } from 'expo-router';
 
-const DashboardCard = ({ title, value }) => (
-  <View style={styles.card}>
-    <Text style={styles.cardTitle}>{title}</Text>
-    <Text style={styles.cardValue}>{value}</Text>
+const StatCard = ({ title, value, iconName, color }) => (
+  <View style={styles.statCard}>
+    <View style={[styles.iconContainer, { backgroundColor: color }]}>
+      <Feather name={iconName} size={24} color="#fff" />
+    </View>
+    <View>
+      <Text style={styles.statCardTitle}>{title}</Text>
+      <Text style={styles.statCardValue}>{value}</Text>
+    </View>
   </View>
 );
 
-export default function DashboardScreen() {
+const ActivityItem = ({ text, time, iconName }) => (
+  <View style={styles.activityItem}>
+    <Feather name={iconName} size={20} color="#555" />
+    <Text style={styles.activityText}>{text}</Text>
+    <Text style={styles.activityTime}>{time}</Text>
+  </View>
+);
+
+const QuickAction = ({ title, iconName, href }) => {
+  const router = useRouter();
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Dashboard</Text>
-      <View style={styles.cardsContainer}>
-        <DashboardCard title="Projects in Review" value="5" />
-        <DashboardCard title="Approved Content" value="23" />
-        <DashboardCard title="Pending Tasks" value="8" />
-        <DashboardCard title="Team Members" value="12" />
+    <TouchableOpacity style={styles.quickAction} onPress={() => router.push(href)}>
+      <Feather name={iconName} size={22} color="#303F9F" />
+      <Text style={styles.quickActionText}>{title}</Text>
+    </TouchableOpacity>
+  );
+};
+
+export default function DashboardScreen() {
+  const { user } = useAuth();
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Welcome, {user?.profile?.name || 'Collaborator'}!</Text>
+        <Text style={styles.subtitle}>Here's a summary of your workspace.</Text>
       </View>
-      <View style={styles.recentActivity}>
+
+      <View style={styles.statsContainer}>
+        <StatCard title="In Review" value="5" iconName="file-text" color="#FFA726" />
+        <StatCard title="Approved" value="23" iconName="check-square" color="#66BB6A" />
+        <StatCard title="Pending Tasks" value="8" iconName="alert-circle" color="#EF5350" />
+        <StatCard title="Team Members" value="12" iconName="users" color="#5C6BC0" />
+      </View>
+
+      <View style={styles.sectionContainer}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={styles.quickActionsGrid}>
+          <QuickAction title="Create Content" iconName="plus-circle" href="/collab/create-content" />
+          <QuickAction title="Review Content" iconName="eye" href="/collab/review-content" />
+        </View>
+      </View>
+
+      <View style={styles.sectionContainer}>
         <Text style={styles.sectionTitle}>Recent Activity</Text>
-        <Text style={styles.activityItem}>- User 'John Doe' submitted new content for review.</Text>
-        <Text style={styles.activityItem}>- Project 'Summer Campaign' was approved.</Text>
+        <View style={styles.activityList}>
+          <ActivityItem iconName="git-pull-request" text="John Doe submitted new content for review." time="2h ago" />
+          <ActivityItem iconName="check-circle" text="Project 'Summer Campaign' was approved." time="1d ago" />
+          <ActivityItem iconName="user-plus" text="Jane Smith joined the team." time="3d ago" />
+        </View>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: '#f5f5f5',
+  },
+  header: {
+    marginBottom: 30,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 20,
+    color: '#1A202C',
   },
-  cardsContainer: {
+  subtitle: {
+    fontSize: 16,
+    color: '#718096',
+    marginTop: 4,
+  },
+  statsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    marginHorizontal: -8,
   },
-  card: {
+  statCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 20,
-    width: '48%',
-    marginBottom: 15,
+    borderRadius: 12,
+    padding: 16,
+    width: '46%', // Responsive width
+    margin: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
+  iconContainer: {
+    padding: 12,
+    borderRadius: 8,
+    marginRight: 12,
   },
-  cardValue: {
-    fontSize: 24,
+  statCardTitle: {
+    fontSize: 14,
+    color: '#718096',
+    fontWeight: '500',
+  },
+  statCardValue: {
+    fontSize: 22,
     fontWeight: 'bold',
-    marginTop: 10,
+    color: '#1A202C',
+    marginTop: 4,
   },
-  recentActivity: {
-    marginTop: 20,
+  sectionContainer: {
+    marginTop: 30,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 10,
+    color: '#1A202C',
+    marginBottom: 15,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  quickAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    width: '48%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
+  quickActionText: {
+    marginLeft: 12,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#303F9F',
+  },
+  activityList: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
   },
   activityItem: {
-    fontSize: 16,
-    marginBottom: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F7F8FA',
+  },
+  activityText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 14,
+    color: '#4A4A4A',
+  },
+  activityTime: {
+    fontSize: 12,
+    color: '#A0AEC0',
   },
 });

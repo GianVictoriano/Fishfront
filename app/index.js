@@ -1,3 +1,4 @@
+import React from 'react';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { SafeAreaView, Platform, StyleSheet, Text, TouchableOpacity, View, ImageBackground, Modal } from 'react-native';
@@ -9,6 +10,14 @@ export default function GuestHomeScreen() {
   const [hover, setHover] = useState(false); // <-- add hover state
   const router = useRouter();
   const { backgroundUrl } = useBranding();
+
+  // Redirect to /news on entry (web and native), defer until after first render
+  React.useEffect(() => {
+    const timeout = setTimeout(() => {
+      router.replace('/news2');
+    }, 0);
+    return () => clearTimeout(timeout);
+  }, []);
 
   const handleLinkPress = () => {
     if (Platform.OS !== 'web') {
