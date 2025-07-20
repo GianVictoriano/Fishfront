@@ -6,7 +6,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// This is necessary for the auth session to work correctly on the web.
+
 if (Platform.OS === 'web') {
   WebBrowser.maybeCompleteAuthSession();
 }
@@ -17,7 +17,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const router = useRouter();
-  const { user, loading, loginWithGoogleToken } = useAuth();
+    const { user, loading, login, loginWithGoogleToken } = useAuth();
 
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     clientId: WEB_CLIENT_ID,

@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 
-// A single link in the sidebar
 const SidebarLink = ({ href, text, icon, isMinimized, onPress }) => {
   const router = useRouter();
   return (
@@ -19,7 +18,6 @@ const SidebarLink = ({ href, text, icon, isMinimized, onPress }) => {
   );
 };
 
-// The main sidebar component
 import { useAuth } from '~/context/AuthContext';
 
 const Sidebar = ({ isMinimized }) => {
@@ -29,7 +27,7 @@ const Sidebar = ({ isMinimized }) => {
   const handleLogout = async () => {
     try {
       await logout();
-      router.replace('/'); // Redirect to login screen
+      router.replace('/');
     } catch (e) {
       console.error('Logout failed:', e);
     }
@@ -41,6 +39,7 @@ const Sidebar = ({ isMinimized }) => {
       <ScrollView>
         <SidebarLink href="/collab/dashboard" text="Dashboard" icon="📊" isMinimized={isMinimized} />
         <SidebarLink href="/collab/create-content" text="Create Content" icon="✍️" isMinimized={isMinimized} />
+        <SidebarLink href="/collab/manage-collaborators" text="Manage Collaborators" icon="👥" isMinimized={isMinimized} />
         <SidebarLink href="/collab/review-content" text="Review Content" icon="👀" isMinimized={isMinimized} />
         <SidebarLink href="/collab/collaborate" text="Collaborate" icon="🤝" isMinimized={isMinimized} />
         <SidebarLink href="/collab/users" text="Users" icon="👥" isMinimized={isMinimized} />
@@ -55,7 +54,6 @@ const Sidebar = ({ isMinimized }) => {
 export default function CollaboratorLayout() {
   const [isMinimized, setIsMinimized] = useState(false);
 
-  // Sidebar is only for web for now
   if (Platform.OS !== 'web') {
     return <Slot />;
   }

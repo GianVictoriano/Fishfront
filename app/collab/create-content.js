@@ -17,13 +17,10 @@ export default function CreateContentScreen() {
   const router = useRouter();
 
   const handlePress = (type) => {
-    // For now, we'll show an alert. Later, this can navigate to the specific creation screen.
     Alert.alert(
       `Create New ${type}`,
       `You are about to create a new ${type.toLowerCase()}. This will navigate to the creation form.`
     );
-    // Example navigation:
-    // router.push(`/collab/create-${type.toLowerCase()}`);
   };
 
   return (
@@ -73,7 +70,6 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   optionsGrid: {
-    // Using a simple column layout for now
   },
   card: {
     backgroundColor: '#ffffff',
