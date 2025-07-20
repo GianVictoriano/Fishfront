@@ -14,10 +14,6 @@ if (Platform.OS === 'web') {
   WebBrowser.maybeCompleteAuthSession();
 }
 
-<<<<<<< HEAD
-
-=======
->>>>>>> bcc6beb42c6729d3e57e23d98085242f4cba1e52
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -82,12 +78,8 @@ export default function LoginScreen() {
   // Send the Google ID token to the Laravel backend
   const handleGoogleSignIn = async (idToken) => {
     try {
-<<<<<<< HEAD
-                  const apiResponse = await apiClient.post('/auth/google/callback', {
-=======
       console.log('[AUTH] Sending token to backend...');
       const apiResponse = await apiClient.post('/auth/google', {
->>>>>>> bcc6beb42c6729d3e57e23d98085242f4cba1e52
         token: idToken,
       }, {
         headers: {
