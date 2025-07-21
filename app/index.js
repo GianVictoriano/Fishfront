@@ -1,29 +1,23 @@
+import React from 'react';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { SafeAreaView, Platform, StyleSheet, Text, TouchableOpacity, View, ImageBackground, Modal } from 'react-native';
 import GuestNavbar from '../components/GuestNavbar';
 import { useBranding } from '../context/BrandingContext';
 
-<<<<<<< HEAD
-
-if (Platform.OS === 'web') {
-  WebBrowser.maybeCompleteAuthSession();
-}
-
-const WEB_CLIENT_ID = '2592879566-iv5obaksm3viv04pptpnlsn9mbmivg5s.apps.googleusercontent.com';
-
-export default function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const router = useRouter();
-    const { user, loading, login, loginWithGoogleToken } = useAuth();
-=======
 export default function GuestHomeScreen() {
   const [navVisible, setNavVisible] = useState(false);
   const [hover, setHover] = useState(false); // <-- add hover state
   const router = useRouter();
   const { backgroundUrl } = useBranding();
->>>>>>> bb4654215de1a83cc4cf017ef605ccce2de60190
+
+  // Redirect to /news on entry (web and native), defer until after first render
+  React.useEffect(() => {
+    const timeout = setTimeout(() => {
+      router.replace('/news2');
+    }, 0);
+    return () => clearTimeout(timeout);
+  }, []);
 
   const handleLinkPress = () => {
     if (Platform.OS !== 'web') {
