@@ -34,6 +34,7 @@ export default function TopicDetailsScreen() {
 
 
   const handleAddComment = async () => {
+    console.log('[DEBUG] handleAddComment called with:', comment);
     if (!comment.trim()) return;
     
     setSubmitting(true);
@@ -74,6 +75,7 @@ export default function TopicDetailsScreen() {
     );
   }
 
+  console.log('[DEBUG] TopicDetailsScreen rendered');
   return (
     <View style={styles.container}>
       <Button title="Back" onPress={() => router.back()} />
@@ -116,7 +118,7 @@ export default function TopicDetailsScreen() {
           placeholderTextColor="#999"
         />
         <Button 
-          title={submitting ? "Posting..." : "Post Comment"} 
+          title={submitting ? "Posting..." : "DEBUG POST"} 
           onPress={handleAddComment} 
           disabled={!comment.trim() || submitting}
         />

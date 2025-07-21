@@ -251,7 +251,7 @@ export default function ForumScreen() {
                   selectedTopic.comments.map((comment, idx) => (
                     <View key={comment.id || idx} style={styles.commentCard}>
                       <View style={styles.commentHeader}>
-                        <Text style={styles.commentAuthor}>{comment.user?.name || 'Anonymous'}</Text>
+                        <Text style={styles.commentAuthor}>{comment.user?.profile?.name || 'Anonymous'}</Text>
                         <Text style={styles.commentDate}>{new Date(comment.created_at).toLocaleDateString()}</Text>
                       </View>
                       <Text style={styles.commentBody}>{comment.body}</Text>
@@ -274,19 +274,24 @@ export default function ForumScreen() {
                     onPress={async () => {
                       if (!commentText.trim()) return;
                       setPostingComment(true);
-                      // Simulate posting (append locally)
-                      const newComment = {
-                        id: Date.now(),
-                        body: commentText,
-                        created_at: new Date().toISOString(),
-                        user: { name: "You" },
-                      };
-                      setSelectedTopic(prev => ({
-                        ...prev,
-                        comments: [...(prev.comments || []), newComment],
-                      }));
-                      setCommentText("");
-                      setPostingComment(false);
+                      try {
+                        await apiClient.post(`/topics/${selectedTopic.id}/comments`, { body: commentText });
+// Optimistically update comment count in topics list
+setTopics(prevTopics => prevTopics.map(topic =>
+  topic.id === selectedTopic.id
+    ? { ...topic, comments: [...(topic.comments || []), { body: commentText, user: { profile: { name: 'You' } }, created_at: new Date().toISOString() }] }
+    : topic
+));
+// Re-fetch the selected topic to update comments
+const response = await apiClient.get(`/topics/${selectedTopic.id}`);
+setSelectedTopic(response.data);
+setCommentText("");
+                      } catch (error) {
+                        console.error('Failed to post comment:', error);
+                        alert('Failed to post comment. Please try again.');
+                      } finally {
+                        setPostingComment(false);
+                      }
                     }}
                     disabled={postingComment || !commentText.trim()}
                   >

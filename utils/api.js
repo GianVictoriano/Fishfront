@@ -2,7 +2,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const API_URL = 'http://192.168.254.105:8000';
+export const API_URL = 'http://192.168.254.106:8000';
 
 const apiClient = axios.create({
   baseURL: `${API_URL}/api`,
@@ -49,4 +49,5 @@ apiClient.interceptors.response.use(
   }
 );
 
+export { apiClient };
 export default apiClient;

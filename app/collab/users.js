@@ -85,8 +85,8 @@ export default function UsersScreen() {
         const response = await apiClient.get('/users');
         const allUsers = response.data.users;
 
-        const regularUsers = allUsers.filter(u => u.profile.role === 'user');
-        const collaboratorUsers = allUsers.filter(u => u.profile.role === 'collaborator');
+        const regularUsers = allUsers.filter(u => u.profile && u.profile.role === 'user');
+        const collaboratorUsers = allUsers.filter(u => u.profile && u.profile.role === 'collaborator');
 
         setUsers(regularUsers);
         setCollaborators(collaboratorUsers);

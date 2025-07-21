@@ -1,29 +1,59 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, SafeAreaView, Platform, TouchableOpacity, Modal } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, SafeAreaView, Platform, TouchableOpacity, Modal, ImageBackground } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import Navbar from '../components/Navbar';
+import { useBranding } from '../context/BrandingContext';
+
+const Section = ({ title, underlineWidth, children }) => (
+  <View style={styles.section}>
+    <View style={styles.headingContainer}>
+      <Text style={styles.heading}>{title}</Text>
+      <View 
+        style={[styles.headingUnderline, { width: underlineWidth }]} 
+      />
+    </View>
+    {children}
+  </View>
+);
+
+const CoreValue = ({ text }) => (
+  <View style={styles.valueItem}>
+    <Text style={styles.valueText}>• {text}</Text>
+  </View>
+);
 
 export default function AboutScreen() {
   const [navVisible, setNavVisible] = useState(false);
+  const { logoUrl } = useBranding();
+
+  const coreValues1 = [
+    { id: '1', text: 'Patriotism' },
+    { id: '2', text: 'Service' },
+    { id: '3', text: 'Integrity' },
+  ];
+
+  const coreValues2 = [
+    { id: '4', text: 'Resilience' },
+    { id: '5', text: 'Excellence' },
+    { id: '6', text: 'Faith' },
+  ];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f8f9fa' }}>
+    <SafeAreaView style={styles.safeArea}>
       {Platform.OS === 'web' ? (
         <Navbar />
       ) : (
         <>
           <TouchableOpacity style={styles.menuButton} onPress={() => setNavVisible(true)}>
-            <Text style={styles.menuButtonText}>☰</Text>
+            <Feather name="menu" size={28} color="#fff" />
           </TouchableOpacity>
           <Modal
             animationType="slide"
-            transparent={true}
+            transparent
             visible={navVisible}
-            onRequestClose={() => {
-              setNavVisible(!navVisible);
-            }}>
-            <TouchableOpacity
-              style={styles.modalOverlayNav}
-              onPress={() => setNavVisible(false)}>
+            onRequestClose={() => setNavVisible(false)}
+          >
+            <TouchableOpacity style={styles.modalOverlayNav} activeOpacity={1} onPressOut={() => setNavVisible(false)}>
               <View style={styles.modalViewNav}>
                 <Navbar onLinkPress={() => setNavVisible(false)} />
               </View>
@@ -31,108 +61,115 @@ export default function AboutScreen() {
           </Modal>
         </>
       )}
-      <ScrollView style={styles.container}>
-        <View style={styles.content}>
-          <Text style={styles.title}>About Our Community</Text>
+      <ImageBackground 
+        source={logoUrl} 
+        style={styles.container} 
+        resizeMode="cover"
+        blurRadius={5}
+      >
+        <View style={styles.overlay}>
+          <ScrollView contentContainerStyle={styles.content}>
+            <Section title="VISION" underlineWidth="190%">
+              <Text style={styles.paragraph}>
+                A Premier National University that develops leaders in the global knowledge economy
+              </Text>
+            </Section>
 
-          <View style={styles.section}>
-            <Text style={styles.heading}>Our Vision</Text>
-            <Text style={styles.paragraph}>
-              To be a leading and proactive fishing community, fostering a sustainable and technologically advanced fishing industry in the region, recognized for its innovation, collaboration, and commitment to environmental stewardship.
-            </Text>
-          </View>
+            <Section title="MISSION" underlineWidth="150%">
+              <Text style={styles.paragraph}>
+                A University committed to producing leaders by providing a 21st century learning environment through innovations in education, multidisciplinary research, and community and industry partnerships in order to nurture the spirit of nationhood, propel the national economy, and engage the world for sustainable development.
+              </Text>
+            </Section>
 
-          <View style={styles.section}>
-            <Text style={styles.heading}>Our Mission</Text>
-            <Text style={styles.paragraph}>
-              To empower our local fishermen by providing access to modern technology, real-time data, and a collaborative platform that enhances safety, increases efficiency, and ensures the long-term viability of our marine resources for future generations.
-            </Text>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.heading}>Our Core Values</Text>
-            <View style={styles.valueItem}>
-              <Text style={styles.valueTitle}>Community:</Text>
-              <Text style={styles.valueText}>We foster a spirit of collaboration, mutual support, and shared knowledge among all members.</Text>
-            </View>
-            <View style={styles.valueItem}>
-              <Text style={styles.valueTitle}>Innovation:</Text>
-              <Text style={styles.valueText}>We embrace technology and new ideas to solve challenges and create opportunities.</Text>
-            </View>
-            <View style={styles.valueItem}>
-              <Text style={styles.valueTitle}>Sustainability:</Text>
-              <Text style={styles.valueText}>We are committed to responsible fishing practices that protect our marine ecosystem for the future.</Text>
-            </View>
-            <View style={styles.valueItem}>
-              <Text style={styles.valueTitle}>Integrity:</Text>
-              <Text style={styles.valueText}>We operate with honesty, transparency, and respect for our members and the environment.</Text>
-            </View>
-            <View style={styles.valueItem}>
-              <Text style={styles.valueTitle}>Safety:</Text>
-              <Text style={styles.valueText}>We prioritize the well-being and safety of our fishermen above all else.</Text>
-            </View>
-          </View>
+            <Section title="CORE VALUES" underlineWidth="100%">
+              <View style={styles.valuesGrid}>
+                <View style={styles.valuesColumn}>
+                  {coreValues1.map(value => (
+                    <CoreValue key={value.id} text={value.text} />
+                  ))}
+                </View>
+                <View style={styles.valuesColumn}>
+                  {coreValues2.map(value => (
+                    <CoreValue key={value.id} text={value.text} />
+                  ))}
+                </View>
+              </View>
+            </Section>
+          </ScrollView>
         </View>
-      </ScrollView>
+      </ImageBackground>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#080C1D', // Dark navy background
+  },
   container: {
     flex: 1,
   },
-  content: {
-    padding: 20,
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(8, 12, 29, 0.6)', // Semi-transparent overlay
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1a237e',
-    textAlign: 'center',
-    marginBottom: 30,
+  content: {
+    paddingHorizontal: Platform.OS === 'web' ? 64 : 32,
+    paddingVertical: Platform.OS === 'web' ? 64 : 80,
+    flexGrow: 1,
+    maxWidth: 896, // Corresponds to max-w-2xl, but in a wider container
+    marginLeft: 32, // Corresponds to ml-8
   },
   section: {
-    marginBottom: 25,
+    marginBottom: 40, // Corresponds to mb-10
+  },
+  headingContainer: {
+    position: 'relative',
+    alignSelf: 'flex-start', // Makes the container wrap the content
+    marginBottom: 12, // Corresponds to mb-3
   },
   heading: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#3f51b5',
-    marginBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    paddingBottom: 5,
+    fontSize: 30, // Corresponds to text-3xl
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    position: 'relative',
+    zIndex: 10,
+  },
+  headingUnderline: {
+    position: 'absolute',
+    bottom: 14, // Corresponds to bottom-3.5
+    left: -8, // Corresponds to -ml-2
+    height: 40, // Corresponds to h-10
+    backgroundColor: '#164e63', // Tailwind's cyan-900
+    zIndex: 5,
   },
   paragraph: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#333',
+    fontSize: 20, // Corresponds to text-xl
+    lineHeight: 32, // Corresponds to leading-relaxed
+    color: '#E5E7EB',
+  },
+  valuesGrid: {
+    flexDirection: 'row',
+    paddingLeft: 16, // Corresponds to pl-4
+  },
+  valuesColumn: {
+    flex: 1,
   },
   valueItem: {
-    marginBottom: 10,
-  },
-  valueTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#555',
+    marginBottom: 4, // Corresponds to space-y-1
   },
   valueText: {
-    fontSize: 16,
-    lineHeight: 22,
-    color: '#444',
-    paddingLeft: 10,
+    fontSize: 18, // Corresponds to text-lg
+    lineHeight: 28, // Corresponds to leading-relaxed
+    color: '#D1D5DB',
   },
   menuButton: {
     position: 'absolute',
-    top: Platform.OS === 'android' ? 10 : 40,
+    top: 40,
     left: 20,
-    zIndex: 10,
+    zIndex: 100,
     padding: 10,
-  },
-  menuButtonText: {
-    fontSize: 28,
-    color: '#0d47a1',
   },
   modalOverlayNav: {
     flex: 1,
