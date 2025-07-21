@@ -78,7 +78,7 @@ const Sidebar = ({ isMinimized }) => {
         <SidebarLink href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} />
         <SidebarLink href="/collab/users" text="Users" iconName="user-check" isMinimized={isMinimized} />
         {(user?.profile?.role === 'admin' || user?.profile?.role === 'collaborator') && (
-          <SidebarLink href="/admin/branding" text="Manage Website" iconName="settings" isMinimized={isMinimized} />
+          <SidebarLink href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} />
         )}
       </ScrollView>
       <View style={styles.sidebarFooter}>

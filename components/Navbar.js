@@ -20,7 +20,7 @@ const NavLink = ({ href, text, iconName, pathname, onLinkPress }) => {
 
   return (
     <TouchableOpacity style={linkStyle} onPress={() => { router.push(href); onLinkPress(); }}>
-      <FontAwesome name={iconName} size={20} style={iconStyle} />
+      <FontAwesome name={iconName} size={15} style={iconStyle} />
       <Text style={textStyle}>{text}</Text>
     </TouchableOpacity>
   );
@@ -62,10 +62,10 @@ const Navbar = ({ onLinkPress = () => {} }) => {
                         {user?.profile?.avatar ? (
               <Image source={{ uri: user.profile.avatar }} style={styles.userAvatar} />
             ) : (
-              <FontAwesome name="user-circle" size={24} color="#333" />
+              <FontAwesome name="user-circle" size={18} color="#333" />
             )}
             <Text style={styles.userName}>{user?.name || 'Profile'}</Text>
-            <FontAwesome name={dropdownVisible ? 'angle-up' : 'angle-down'} size={20} color="#333" />
+            <FontAwesome name={dropdownVisible ? 'angle-up' : 'angle-down'} size={15} color="#333" />
           </TouchableOpacity>
         </View>
         {/* Dropdown menu using React Portal on web */}
@@ -80,17 +80,17 @@ const Navbar = ({ onLinkPress = () => {} }) => {
               />
               <View style={styles.dropdownAbsolute} pointerEvents="auto">
                 <TouchableOpacity style={styles.dropdownItem} onPress={() => { router.push('/profile'); setDropdownVisible(false); onLinkPress(); }}>
-                  <FontAwesome name="user" size={16} style={styles.dropdownIcon} />
+                  <FontAwesome name="user" size={13} style={styles.dropdownIcon} />
                   <Text style={styles.dropdownText}>Profile</Text>
                 </TouchableOpacity>
                 {user?.profile?.role === 'admin' && (
                   <TouchableOpacity style={styles.dropdownItem} onPress={() => { router.push('/admin/branding'); setDropdownVisible(false); onLinkPress(); }}>
-                    <FontAwesome name="desktop" size={16} style={styles.dropdownIcon} />
+                    <FontAwesome name="desktop" size={13} style={styles.dropdownIcon} />
                     <Text style={styles.dropdownText}>Manage Website</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity style={styles.dropdownItem} onPress={handleLogout}>
-                  <FontAwesome name="sign-out" size={16} style={styles.dropdownIcon} />
+                  <FontAwesome name="sign-out" size={13} style={styles.dropdownIcon} />
                   <Text style={styles.dropdownText}>Logout</Text>
                 </TouchableOpacity>
               </View>
@@ -138,14 +138,22 @@ const styles = StyleSheet.create({
     zIndex: 9998,
   },
   dropdownAbsolute: {
-    position: 'fixed',
-    right: 40, // Adjust if needed to match the profile button
-    top: 70,   // Adjust if needed to match the profile button
+    ...(Platform.OS === 'web'
+      ? {
+          position: 'fixed',
+          right: 20, // adjust as needed for perfect alignment
+          top: 45,   // adjust as needed for perfect alignment
+        }
+      : {
+          position: 'absolute',
+          right: 0,
+          top: '110%',
+        }),
     backgroundColor: '#fff',
     borderRadius: 8,
     boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
     paddingVertical: 8,
-    minWidth: 160,
+    minWidth: 215,
     zIndex: 9999,
   },
   brandContainer: {
@@ -154,16 +162,16 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   userAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 6,
-    borderWidth: 2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    marginRight: 4,
+    borderWidth: 1.5,
     borderColor: '#1a237e',
     backgroundColor: '#fff',
   },
@@ -171,14 +179,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     ...Platform.select({
       web: {
-        paddingHorizontal: 40,
-        paddingVertical: 12,
+        paddingHorizontal: 20,
+        paddingVertical: 6,
         borderBottomWidth: 1,
         borderBottomColor: '#eee',
       },
       default: {
-        paddingTop: 40,
-        paddingHorizontal: 20,
+        paddingTop: 24,
+        paddingHorizontal: 12,
       },
     }),
   },
@@ -188,13 +196,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   brand: {
-    fontSize: 24,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#1a237e',
   },
   navLinksContainer: {
     flexDirection: 'row',
-    gap: 30,
+    gap: 60,
   },
   mobileNavLinks: {
     marginTop: 30,
@@ -202,12 +210,12 @@ const styles = StyleSheet.create({
   navLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 6,
     ...Platform.select({
       default: {
-        marginBottom: 10,
+        marginBottom: 6,
       },
     }),
   },
@@ -216,13 +224,13 @@ const styles = StyleSheet.create({
   },
   navIcon: {
     color: '#555',
-    marginRight: 12,
+    marginRight: 7,
   },
   navIconActive: {
     color: '#007BFF',
   },
   navLinkText: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
     color: '#333',
   },
@@ -231,28 +239,30 @@ const styles = StyleSheet.create({
   },
   userMenuContainer: {
     position: 'relative',
+    display: 'flex',
+    alignItems: 'flex-end',
   },
   userMenuButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    padding: 8,
-    borderRadius: 8,
+    gap: 5,
+    padding: 5,
+    borderRadius: 6,
     backgroundColor: '#f0f0f0',
   },
   userName: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
   },
   dropdown: {
     position: 'absolute',
-    top: '110%',
+    top: '50%',
     right: 0,
     backgroundColor: '#fff',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#eee',
-    width: 150,
+    width: 250,
     zIndex: 1000,
     elevation: 5,
     shadowColor: '#000',
@@ -263,8 +273,8 @@ const styles = StyleSheet.create({
   dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 15,
+    paddingVertical: 7,
+    paddingHorizontal: 9,
     borderBottomWidth: 1,
     borderBottomColor: '#f5f5f5',
   },
@@ -273,7 +283,7 @@ const styles = StyleSheet.create({
     color: '#555',
   },
   dropdownText: {
-    fontSize: 16,
+    fontSize: 13,
   },
 });
 

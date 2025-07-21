@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { View, Text, Button, Image, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, Button, Image, StyleSheet, ActivityIndicator, Alert, Platform, TouchableOpacity } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useBranding } from '~/context/BrandingContext';
 import { useAuth } from '~/context/AuthContext';
@@ -107,25 +108,42 @@ export default function BrandingManagementScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Website Management</Text>
+      <Text style={styles.title}>Branding Management</Text>
+      <Text style={styles.subtitle}>Update your website's logo and background for a fresh look.</Text>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Logo</Text>
-        <Image source={newLogo ? { uri: newLogo.uri } : logoUrl} style={styles.previewImage} />
-        <Button title="Select New Logo" onPress={() => pickImage('logo')} />
-      </View>
+      <View style={styles.cardRow}>
+        {/* Logo Section */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Logo</Text>
+          <Image source={newLogo ? { uri: newLogo.uri } : logoUrl} style={styles.previewImage} />
+          <Text style={styles.helperText}>Recommended: Square image, PNG/JPG, 150x150px+</Text>
+          <TouchableOpacity style={styles.selectButton} onPress={() => pickImage('logo')}>
+            <Text style={styles.selectButtonText}>{newLogo ? 'Change Logo' : 'Select Logo'}</Text>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Background</Text>
-        <Image source={newBackground ? { uri: newBackground.uri } : backgroundUrl} style={styles.previewImage} />
-        <Button title="Select New Background" onPress={() => pickImage('background')} />
+        {/* Background Section */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Background</Text>
+          <Image source={newBackground ? { uri: newBackground.uri } : backgroundUrl} style={styles.previewImage} />
+          <Text style={styles.helperText}>Recommended: 16:9 image, PNG/JPG, 1280x720px+</Text>
+          <TouchableOpacity style={styles.selectButton} onPress={() => pickImage('background')}>
+            <Text style={styles.selectButtonText}>{newBackground ? 'Change Background' : 'Select Background'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.uploadButtonContainer}>
         {loading ? (
           <ActivityIndicator size="large" color="#007BFF" />
         ) : (
-          <Button title="Upload Changes" onPress={handleUpload} disabled={!newLogo && !newBackground} />
+          <TouchableOpacity
+            style={[styles.uploadButton, (!newLogo && !newBackground) && styles.uploadButtonDisabled]}
+            onPress={handleUpload}
+            disabled={!newLogo && !newBackground}
+          >
+            <Text style={styles.uploadButtonText}>Upload Changes</Text>
+          </TouchableOpacity>
         )}
       </View>
     </View>
@@ -139,30 +157,105 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 10,
     textAlign: 'center',
+    color: '#2d3748',
   },
-  section: {
-    marginBottom: 30,
+  subtitle: {
+    fontSize: 16,
+    color: '#555',
+    textAlign: 'center',
+    marginBottom: 28,
+  },
+  cardRow: {
+    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    justifyContent: 'center',
+    alignItems: 'stretch',
+    gap: 32,
+    marginBottom: 28,
+  },
+  card: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    marginHorizontal: Platform.OS === 'web' ? 12 : 0,
+    marginBottom: Platform.OS === 'web' ? 0 : 18,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+    minWidth: 240,
+    maxWidth: 340,
+    borderWidth: 1,
+    borderColor: '#f1f1f1',
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
-    marginBottom: 10,
+    marginBottom: 12,
+    color: '#222',
   },
   previewImage: {
-    width: 150,
-    height: 150,
-    borderRadius: 8,
+    width: 120,
+    height: 120,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#e2e2e2',
+    marginBottom: 12,
+    backgroundColor: '#f8f8f8',
+    resizeMode: 'cover',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#888',
     marginBottom: 10,
-    backgroundColor: '#e9e9e9',
+    textAlign: 'center',
+  },
+  selectButton: {
+    backgroundColor: '#edf2fa',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 8,
+    marginTop: 2,
+    marginBottom: 2,
+    borderWidth: 1,
+    borderColor: '#90cdf4',
+  },
+  selectButtonText: {
+    color: '#2b6cb0',
+    fontWeight: 'bold',
+    fontSize: 15,
+    letterSpacing: 0.2,
   },
   uploadButtonContainer: {
-    marginTop: 20,
+    marginTop: 18,
+    alignItems: 'center',
+  },
+  uploadButton: {
+    backgroundColor: '#3182ce',
+    paddingVertical: 13,
+    paddingHorizontal: 32,
+    borderRadius: 9,
+    alignItems: 'center',
+    width: 220,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  uploadButtonDisabled: {
+    backgroundColor: '#b8c2cc',
+  },
+  uploadButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 17,
+    letterSpacing: 0.5,
   },
 });
