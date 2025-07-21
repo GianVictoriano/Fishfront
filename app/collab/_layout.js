@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Platform, ScrollView, Image, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Platform, Image, Pressable, ScrollView } from 'react-native';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '~/context/AuthContext';
 import { useBranding } from '~/context/BrandingContext';
+import { Scrollbars } from 'react-custom-scrollbars-2';
 
 // A single link in the sidebar with hover effects
 const SidebarLink = ({ href, text, iconName, isMinimized, onPress }) => {
@@ -19,7 +20,8 @@ const SidebarLink = ({ href, text, iconName, isMinimized, onPress }) => {
       onPress={() => (onPress ? onPress() : router.push(href))}
       style={({ hovered }) => [
         styles.sidebarLink,
-        isActive && styles.sidebarLinkActive,
+        isActive && !isMinimized && styles.sidebarLinkActive,
+        isActive && isMinimized && styles.sidebarLinkActiveMinimized,
         hovered && Platform.OS === 'web' && (isLogout ? styles.logoutHover : styles.sidebarLinkHover),
       ]}
     >
@@ -29,6 +31,7 @@ const SidebarLink = ({ href, text, iconName, isMinimized, onPress }) => {
             name={iconName}
             style={[
               styles.sidebarIcon,
+              isMinimized && styles.sidebarIconMinimized,
               isActive && styles.sidebarIconActive,
               hovered && Platform.OS === 'web' && (isLogout ? styles.logoutIconHover : styles.sidebarIconHover),
             ]}
@@ -52,7 +55,7 @@ const SidebarLink = ({ href, text, iconName, isMinimized, onPress }) => {
 
 // The main sidebar component
 const Sidebar = ({ isMinimized }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, hasModule } = useAuth();
   const { logoUrl, loading: brandingLoading } = useBranding();
   const router = useRouter();
 
@@ -62,7 +65,7 @@ const Sidebar = ({ isMinimized }) => {
   };
 
   return (
-    <View style={[styles.sidebar, isMinimized && styles.sidebarMinimized]}>
+    <View style={[styles.sidebar, isMinimized && styles.sidebarMinimized]} className="sidebar">
        <View style={styles.sidebarHeader}>
         {brandingLoading ? (
           <View style={styles.logoPlaceholder} />
@@ -71,16 +74,44 @@ const Sidebar = ({ isMinimized }) => {
         )}
         {!isMinimized && <Text style={styles.sidebarTitle}>Fisherman</Text>}
       </View>
-      <ScrollView>
-        <SidebarLink href="/collab/dashboard" text="Dashboard" iconName="grid" isMinimized={isMinimized} />
-        <SidebarLink href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} />
-        <SidebarLink href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} />
-        <SidebarLink href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} />
-        <SidebarLink href="/collab/users" text="Users" iconName="user-check" isMinimized={isMinimized} />
-        {(user?.profile?.role === 'admin' || user?.profile?.role === 'collaborator') && (
-          <SidebarLink href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} />
-        )}
-      </ScrollView>
+      {!isMinimized ? (
+        <Scrollbars
+          style={{ flex: 1 }} // Ensure it takes up available space
+          autoHide
+          // Render an invisible thumb
+          renderThumbVertical={props => <div {...props} style={{ ...props.style, backgroundColor: 'transparent' }}/>}
+        >
+          {hasModule('dashboard') && <SidebarLink href="/collab/dashboard" text="Dashboard" iconName="grid" isMinimized={isMinimized} />}
+          {hasModule('create-content') && <SidebarLink href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} />}
+          {hasModule('review-content') && <SidebarLink href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} />}
+          {hasModule('collaborate') && <SidebarLink href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} />}
+          {hasModule('users') && <SidebarLink href="/collab/users" text="Users" iconName="user-check" isMinimized={isMinimized} />}
+          {hasModule('branding') && <SidebarLink href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} />}
+          {(user?.profile?.level === 2 || user?.profile?.level === 3) && (
+              <SidebarLink href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} />
+          )}
+          {user?.profile?.level === 3 && (
+              <SidebarLink href={`/collab/manage-modules/${user.id}`} text="My Modules" iconName="settings" isMinimized={isMinimized} />
+          )}
+        </Scrollbars>
+      ) : (
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          {(() => {
+            // Collect all sidebar links in order
+            const links = [];
+            if (hasModule('dashboard')) links.push(<SidebarLink key="dashboard" href="/collab/dashboard" text="Dashboard" iconName="grid" isMinimized={isMinimized} />);
+            if (hasModule('create-content')) links.push(<SidebarLink key="create-content" href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} />);
+            if (hasModule('review-content')) links.push(<SidebarLink key="review-content" href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} />);
+            if (hasModule('collaborate')) links.push(<SidebarLink key="collaborate" href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} />);
+            if (hasModule('users')) links.push(<SidebarLink key="users" href="/collab/users" text="Users" iconName="user-check" isMinimized={isMinimized} />);
+            if (hasModule('branding')) links.push(<SidebarLink key="branding" href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} />);
+            if (user?.profile?.level === 2 || user?.profile?.level === 3) links.push(<SidebarLink key="manage-users" href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} />);
+            if (user?.profile?.level === 3) links.push(<SidebarLink key="my-modules" href={`/collab/manage-modules/${user.id}`} text="My Modules" iconName="settings" isMinimized={isMinimized} />);
+            // Only show first 7 when minimized
+            return isMinimized ? links.slice(0, 7) : links;
+          })()}
+        </View>
+      )}
       <View style={styles.sidebarFooter}>
         <SidebarLink text="Logout" iconName="log-out" isMinimized={isMinimized} onPress={handleLogout} />
       </View>
@@ -108,9 +139,16 @@ export default function CollaboratorLayout() {
             >
               <Feather name={isMinimized ? 'chevron-right' : 'chevron-left'} size={24} color="#FFF" />
             </Pressable>
-            <ScrollView style={styles.contentScrollView}>
-              <Slot />
-            </ScrollView>
+            <Scrollbars
+              style={{ flex: 1 }} // Ensure it takes up available space
+              autoHide
+              // Render an invisible thumb
+              renderThumbVertical={props => <div {...props} style={{ ...props.style, backgroundColor: 'transparent' }}/>}
+            >
+              <ScrollView style={styles.contentScrollView}>
+                <Slot />
+              </ScrollView>
+            </Scrollbars>
           </View>
         </View>
       </SafeAreaView>
@@ -158,6 +196,7 @@ const styles = StyleSheet.create({
     paddingVertical: 25,
     transition: 'width 0.2s ease-in-out',
     borderRightWidth: 0, // No border needed with high contrast
+    
   },
   sidebarMinimized: {
     width: 90,
@@ -173,7 +212,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 15,
   },
   sidebarLinkActive: {
-    backgroundColor: '#374151', // A lighter gray for active state on dark bg
+    backgroundColor: '#374151',
+
+  },
+  sidebarLinkActiveMinimized: {
+    backgroundColor: '#374151',
+
   },
   sidebarLinkHover: {
     backgroundColor: '#1F2937', // Slightly lighter navy for hover
@@ -187,6 +231,13 @@ const styles = StyleSheet.create({
     marginRight: 20,
     width: 24,
     textAlign: 'center',
+  },
+  sidebarIconMinimized: {
+    position: 'relative',
+    marginRight: 15,
+   
+
+
   },
   sidebarIconActive: {
     color: '#FFFFFF', // White for active icon
@@ -212,12 +263,7 @@ const styles = StyleSheet.create({
   logoutTextHover: {
     color: '#FEE2E2', // Light red for logout text on hover
   },
-  sidebarFooter: {
-    marginTop: 'auto',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)', // Lighter border for dark bg
-  },
+
   contentContainer: {
     flex: 1,
     position: 'relative',

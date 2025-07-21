@@ -1,10 +1,10 @@
 import { Link } from 'expo-router';
 import { useEffect } from 'react';
-import { Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View, Image, ImageBackground } from 'react-native';
+import { Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View, Image, ImageBackground, Alert } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import apiClient from '../api/client';
+import apiClient from '~/utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useBranding } from '../context/BrandingContext';
 import { useRouter } from 'expo-router';
