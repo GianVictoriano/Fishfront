@@ -2,7 +2,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const API_URL = 'http://192.168.254.105:8000';
+export const API_URL = 'http://192.168.254.106:8000';
 
 const apiClient = axios.create({
   baseURL: `${API_URL}/api`,
@@ -48,6 +48,14 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export const getMessages = (groupChatId) => {
+  return apiClient.get(`/group-chats/${groupChatId}/messages`);
+};
+
+export const sendMessage = (groupChatId, message) => {
+  return apiClient.post(`/group-chats/${groupChatId}/messages`, { message });
+};
 
 export { apiClient };
 export default apiClient;

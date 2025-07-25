@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, SafeAreaView, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { MaterialIcons } from '@expo/vector-icons';
 import apiClient from '../../utils/api';
 
-const UserCard = ({ user, onActionPress }) => {
+const UserCard = ({ user }) => {
   const { showActionSheetWithOptions } = useActionSheet();
 
   const handleActionPress = () => {
@@ -61,35 +61,40 @@ const UserCard = ({ user, onActionPress }) => {
         <Text style={styles.userName}>{user.name}</Text>
         <Text style={styles.userEmail}>{user.email}</Text>
       </View>
-      <TouchableOpacity 
-        style={styles.editButton}
-        onPress={handleActionPress}
-      >
-        <MaterialIcons name="more-vert" size={24} color="#666" />
-      </TouchableOpacity>
+      <View style={styles.rightContainer}>
+        {user.profile?.position ? (
+          <Text style={styles.userPosition}>{user.profile.position}</Text>
+        ) : null}
+        <TouchableOpacity 
+          style={styles.editButton}
+          onPress={handleActionPress}
+        >
+          <MaterialIcons name="more-vert" size={24} color="#666" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
 
 export default function UsersScreen() {
-  const [users, setUsers] = useState([]);
-  const [collaborators, setCollaborators] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [filteredUsers, setFilteredUsers] = useState([]);
+  const [filteredCollaborators, setFilteredCollaborators] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
+  // Effect for fetching users once
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         setLoading(true);
-        // Assuming your backend provides a '/users' endpoint
         const response = await apiClient.get('/users');
-        const allUsers = response.data.users;
-
-        const regularUsers = allUsers.filter(u => u.profile && u.profile.role === 'user');
-        const collaboratorUsers = allUsers.filter(u => u.profile && u.profile.role === 'collaborator');
-
-        setUsers(regularUsers);
-        setCollaborators(collaboratorUsers);
+        const usersData = response.data.users || [];
+        setAllUsers(usersData);
+        // Set initial filtered lists
+        setFilteredUsers(usersData.filter(u => u.profile && u.profile.role === 'user'));
+        setFilteredCollaborators(usersData.filter(u => u.profile && u.profile.role === 'collaborator'));
         setError(null);
       } catch (e) {
         setError('Failed to fetch users. Please try again later.');
@@ -102,6 +107,28 @@ export default function UsersScreen() {
     fetchUsers();
   }, []);
 
+  // Effect for filtering based on search term
+  useEffect(() => {
+    const lowercasedTerm = searchTerm.toLowerCase();
+    const filterUsers = (users) => {
+      if (!searchTerm) {
+        return users;
+      }
+      return users.filter(u =>
+        (u.name?.toLowerCase().includes(lowercasedTerm)) ||
+        (u.email?.toLowerCase().includes(lowercasedTerm)) ||
+        (u.profile?.position?.toLowerCase().includes(lowercasedTerm))
+      );
+    };
+
+    const regularUsers = allUsers.filter(u => u.profile && u.profile.role === 'user');
+    const collaboratorUsers = allUsers.filter(u => u.profile && u.profile.role === 'collaborator');
+
+    setFilteredUsers(filterUsers(regularUsers));
+    setFilteredCollaborators(filterUsers(collaboratorUsers));
+
+  }, [searchTerm, allUsers]);
+
   if (loading) {
     return <ActivityIndicator size="large" color="#1a237e" style={styles.centered} />;
   }
@@ -110,17 +137,16 @@ export default function UsersScreen() {
     return <Text style={styles.errorText}>{error}</Text>;
   }
 
-  // Combine both lists into a single data source with type indicators
   const combinedData = [
     { type: 'header', title: 'User Management' },
     { type: 'section', title: 'Collaborators' },
-    ...(collaborators.length > 0 
-      ? collaborators.map(user => ({ ...user, type: 'collaborator' })) 
+    ...(filteredCollaborators.length > 0
+      ? filteredCollaborators.map(user => ({ ...user, type: 'collaborator' }))
       : [{ type: 'empty', text: 'No collaborators found.' }]
     ),
     { type: 'section', title: 'Users' },
-    ...(users.length > 0 
-      ? users.map(user => ({ ...user, type: 'user' })) 
+    ...(filteredUsers.length > 0
+      ? filteredUsers.map(user => ({ ...user, type: 'user' }))
       : [{ type: 'empty', text: 'No users found.' }]
     )
   ];
@@ -140,10 +166,18 @@ export default function UsersScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by name, email, or position..."
+          value={searchTerm}
+          onChangeText={setSearchTerm}
+        />
+      </View>
       <FlatList
         data={combinedData}
         renderItem={renderItem}
-        keyExtractor={(item, index) => 
+        keyExtractor={(item, index) =>
           item.id ? item.id.toString() : `${item.type}-${index}`
         }
         contentContainerStyle={styles.listContainer}
@@ -153,6 +187,30 @@ export default function UsersScreen() {
 }
 
 const styles = StyleSheet.create({
+  searchContainer: {
+    padding: 10,
+    backgroundColor: '#f0f4f8',
+  },
+  searchInput: {
+    height: 40,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  rightContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  userPosition: {
+    fontSize: 14,
+    color: '#666',
+    marginRight: 8,
+    fontStyle: 'italic',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#f0f4f8',

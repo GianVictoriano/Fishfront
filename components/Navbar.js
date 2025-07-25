@@ -44,7 +44,7 @@ const Navbar = ({ onLinkPress = () => {} }) => {
       <View style={styles.nav}>
         <View style={styles.brandContainer}>
           <Image source={logoUrl} style={styles.avatar} />
-          <Text style={styles.brand}>Fisherman</Text>
+          <Text style={styles.brand}>The FISHERMAN</Text>
         </View>
         
         {/* Links for web view */}
@@ -167,9 +167,9 @@ const styles = StyleSheet.create({
     borderRadius: 11,
   },
   avatar: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     marginRight: 4,
     borderWidth: 1.5,
     borderColor: '#1a237e',
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   brand: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1a237e',
   },

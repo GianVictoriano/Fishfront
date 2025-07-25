@@ -140,14 +140,14 @@ export default function CollaboratorLayout() {
               <Feather name={isMinimized ? 'chevron-right' : 'chevron-left'} size={24} color="#FFF" />
             </Pressable>
             <Scrollbars
-              style={{ flex: 1 }} // Ensure it takes up available space
+              style={styles.contentScrollView} 
               autoHide
               // Render an invisible thumb
               renderThumbVertical={props => <div {...props} style={{ ...props.style, backgroundColor: 'transparent' }}/>}
+              // Apply props to the content container
+              renderView={props => <div {...props} style={{ ...props.style, flex: 1, display: 'flex', flexDirection: 'column' }}/>}
             >
-              <ScrollView style={styles.contentScrollView}>
-                <Slot />
-              </ScrollView>
+              <Slot />
             </Scrollbars>
           </View>
         </View>
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     paddingVertical: 25,
     transition: 'width 0.2s ease-in-out',
     borderRightWidth: 0, // No border needed with high contrast
-    
+    marginRight: 12, // Add gap between sidebar and content
   },
   sidebarMinimized: {
     width: 90,
@@ -270,12 +270,12 @@ const styles = StyleSheet.create({
   },
   contentScrollView: {
     flex: 1,
-    padding: 30,
+    // Padding is now handled by the screen components themselves
   },
   toggleButton: {
     position: 'absolute',
     top: 20,
-    left: -16, // Adjust position for dark theme
+    left: -30, // Adjust position for dark theme
     backgroundColor: '#111827', // Match hover state
     borderWidth: 2,
     borderColor: '#111827',

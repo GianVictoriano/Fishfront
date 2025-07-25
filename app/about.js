@@ -61,68 +61,68 @@ export default function AboutScreen() {
           </Modal>
         </>
       )}
-      <ImageBackground 
-        source={logoUrl} 
-        style={styles.container} 
-        resizeMode="cover"
-        blurRadius={5}
-      >
-        <View style={styles.overlay}>
-          <ScrollView contentContainerStyle={styles.content}>
-            <Section title="VISION" underlineWidth="190%">
-              <Text style={styles.paragraph}>
-                A Premier National University that develops leaders in the global knowledge economy
-              </Text>
-            </Section>
-
-            <Section title="MISSION" underlineWidth="150%">
-              <Text style={styles.paragraph}>
-                A University committed to producing leaders by providing a 21st century learning environment through innovations in education, multidisciplinary research, and community and industry partnerships in order to nurture the spirit of nationhood, propel the national economy, and engage the world for sustainable development.
-              </Text>
-            </Section>
-
-            <Section title="CORE VALUES" underlineWidth="100%">
-              <View style={styles.valuesGrid}>
-                <View style={styles.valuesColumn}>
-                  {coreValues1.map(value => (
-                    <CoreValue key={value.id} text={value.text} />
-                  ))}
-                </View>
-                <View style={styles.valuesColumn}>
-                  {coreValues2.map(value => (
-                    <CoreValue key={value.id} text={value.text} />
-                  ))}
-                </View>
-              </View>
-            </Section>
-          </ScrollView>
+      <View style={styles.container}>
+  <ScrollView contentContainerStyle={styles.content}>
+    <Text style={styles.title}>About the Fisherman Community</Text>
+    <Section title="VISION" underlineWidth="190%">
+      <Text style={styles.paragraph}>
+        A Premier National University that develops leaders in the global knowledge economy
+      </Text>
+    </Section>
+    <Section title="MISSION" underlineWidth="150%">
+      <Text style={styles.paragraph}>
+        A University committed to producing leaders by providing a 21st century learning environment through innovations in education, multidisciplinary research, and community and industry partnerships in order to nurture the spirit of nationhood, propel the national economy, and engage the world for sustainable development.
+      </Text>
+    </Section>
+    <Section title="CORE VALUES" underlineWidth="100%">
+      <View style={styles.valuesGrid}>
+        <View style={styles.valuesColumn}>
+          {coreValues1.map(value => (
+            <CoreValue key={value.id} text={value.text} />
+          ))}
         </View>
-      </ImageBackground>
+        <View style={styles.valuesColumn}>
+          {coreValues2.map(value => (
+            <CoreValue key={value.id} text={value.text} />
+          ))}
+        </View>
+      </View>
+    </Section>
+  </ScrollView>
+</View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a237e',
+    textAlign: 'center',
+    marginBottom: 18,
+    marginTop: 10,
+  },
   safeArea: {
     flex: 1,
-    backgroundColor: '#080C1D', // Dark navy background
+    backgroundColor: '#fff', // Plain white background
   },
   container: {
     flex: 1,
+    backgroundColor: '#fff', // Plain white background
   },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(8, 12, 29, 0.6)', // Semi-transparent overlay
-  },
+  // overlay removed for white background
   content: {
-    paddingHorizontal: Platform.OS === 'web' ? 64 : 32,
-    paddingVertical: Platform.OS === 'web' ? 64 : 80,
+    paddingHorizontal: Platform.OS === 'web' ? 24 : 16,
+    paddingVertical: Platform.OS === 'web' ? 32 : 24,
     flexGrow: 1,
-    maxWidth: 896, // Corresponds to max-w-2xl, but in a wider container
-    marginLeft: 32, // Corresponds to ml-8
+    maxWidth: 896,
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    backgroundColor: '#f4f6f8', // Soft bg
   },
   section: {
-    marginBottom: 40, // Corresponds to mb-10
+    marginBottom: 0,
   },
   headingContainer: {
     position: 'relative',
@@ -130,24 +130,24 @@ const styles = StyleSheet.create({
     marginBottom: 12, // Corresponds to mb-3
   },
   heading: {
-    fontSize: 30, // Corresponds to text-3xl
+    fontSize: 20, // Matches Fisherman title in navbar
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: '#222', // Dark text for white bg
     position: 'relative',
     zIndex: 10,
   },
   headingUnderline: {
     position: 'absolute',
-    bottom: 14, // Corresponds to bottom-3.5
+    bottom: 8, // Reduce for smaller heading
     left: -8, // Corresponds to -ml-2
-    height: 40, // Corresponds to h-10
-    backgroundColor: '#164e63', // Tailwind's cyan-900
+    height: 16, // Smaller underline for smaller heading
+    backgroundColor: '#cbd5e1', // Lighter underline for white bg
     zIndex: 5,
   },
   paragraph: {
-    fontSize: 20, // Corresponds to text-xl
-    lineHeight: 32, // Corresponds to leading-relaxed
-    color: '#E5E7EB',
+    fontSize: 13, // Smaller body text
+    lineHeight: 20, // Adjust for smaller font
+    color: '#333', // Darker text for white bg
   },
   valuesGrid: {
     flexDirection: 'row',
@@ -160,9 +160,20 @@ const styles = StyleSheet.create({
     marginBottom: 4, // Corresponds to space-y-1
   },
   valueText: {
-    fontSize: 18, // Corresponds to text-lg
-    lineHeight: 28, // Corresponds to leading-relaxed
-    color: '#D1D5DB',
+    fontSize: 13, // Smaller value text
+    lineHeight: 20, // Adjust for smaller font
+    color: '#444', // Darker text for white bg
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 18,
+    marginBottom: 20,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
   },
   menuButton: {
     position: 'absolute',

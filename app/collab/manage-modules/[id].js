@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable, ScrollView, Switch } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, ScrollView, Switch, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import apiClient from '~/utils/api';
 import { useAuth } from '~/context/AuthContext';
@@ -18,6 +18,7 @@ const ManageModulesScreen = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
+    const [position, setPosition] = useState('');
     const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
 
     const fetchData = useCallback(async () => {
@@ -34,6 +35,7 @@ const ManageModulesScreen = () => {
         const profileData = profileResponse.data;
         setCollaborator(user); // user object from context
         setProfile(profileData);
+        setPosition(profileData.position || '');
         const initialSelected = new Set((profileData.modules || []).map(m => m.id));
         setSelectedModules(initialSelected);
       } else {
@@ -45,6 +47,7 @@ const ManageModulesScreen = () => {
         }
         setCollaborator(collaboratorProfile.user);
         setProfile(collaboratorProfile);
+        setPosition(collaboratorProfile.position || '');
         const initialSelected = new Set((collaboratorProfile.modules || []).map(m => m.id));
         setSelectedModules(initialSelected);
       }
@@ -73,19 +76,27 @@ const ManageModulesScreen = () => {
     const handleSaveChanges = async () => {
         try {
             setSaving(true);
-            // The backend route for updating is /collaborators/{profile}/modules
-            // We need the profile ID, not the user ID.
-            await apiClient.post(`/collaborators/${profile.id}/modules`,
-             {
-                modules: Array.from(selectedModules)
+            setError(null); // Clear previous errors
+
+            const moduleUpdatePromise = apiClient.post(`/collaborators/${profile.id}/modules`, {
+                modules: Array.from(selectedModules),
             });
-            await fetchData(); // Reload the data after saving
+
+            const positionUpdatePromise = apiClient.patch(`/collaborators/${profile.id}`, {
+                position: position,
+            });
+
+            await Promise.all([moduleUpdatePromise, positionUpdatePromise]);
+
+            await fetchData(); // Reload data to reflect changes
+            
             if (user && String(id) === String(user.id)) {
-                setShowLogoutPrompt(true); // Only show prompt for own modules
+                setShowLogoutPrompt(true); // Prompt for re-login if managing self
             }
+
         } catch (err) {
             console.error('Failed to save changes:', err);
-            setError('Failed to save changes. You may not have permission to assign all selected modules.');
+            setError('Failed to save changes. Please check your permissions and try again.');
         } finally {
             setSaving(false);
         }
@@ -102,8 +113,19 @@ const ManageModulesScreen = () => {
     return (
         <>
         <ScrollView style={styles.container}>
-            <Text style={styles.title}>Manage Modules for</Text>
+            <Text style={styles.title}>Manage Collaborator</Text>
             <Text style={styles.userName}>{collaborator?.name}</Text>
+
+            <Text style={styles.label}>Position</Text>
+            <TextInput
+                style={styles.input}
+                value={position}
+                onChangeText={setPosition}
+                placeholder="e.g., Lead Developer"
+                placeholderTextColor="#9CA3AF"
+            />
+
+            <Text style={[styles.label, { marginTop: 20 }]}>Modules</Text>
 
             {(() => {
                 let displayableModules = allModules;
@@ -177,6 +199,22 @@ const styles = StyleSheet.create({
         fontSize: 24,
         fontWeight: 'bold',
         color: '#111827',
+    },
+    label: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: 8,
+    },
+    input: {
+        height: 44,
+        borderColor: '#D1D5DB',
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        backgroundColor: '#FFF',
+        fontSize: 16,
+        marginBottom: 20,
     },
     userName: {
         fontSize: 20,
