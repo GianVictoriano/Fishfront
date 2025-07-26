@@ -89,6 +89,7 @@ const styles = StyleSheet.create({
   listContainer: {
     paddingHorizontal: 20,
     paddingVertical: 24,
+    paddingTop: Platform.OS === 'web' ? 24 : 56, // Extra top padding for mobile
   },
   title: {
     fontSize: 32,

@@ -45,16 +45,16 @@ export default function DashboardScreen() {
       </View>
 
       <View style={styles.statsContainer}>
-        <StatCard title="In Review" value="5" iconName="file-text" color="#FFA726" />
-        <StatCard title="Approved" value="23" iconName="check-square" color="#66BB6A" />
-        <StatCard title="Pending Tasks" value="8" iconName="alert-circle" color="#EF5350" />
-        <StatCard title="Team Members" value="12" iconName="users" color="#5C6BC0" />
+        <StatCard title="In Review" value="1" iconName="file-text" color="#FFA726" />
+        <StatCard title="Approved" value="1" iconName="check-square" color="#66BB6A" />
+        <StatCard title="Pending Tasks" value="2" iconName="alert-circle" color="#EF5350" />
+        <StatCard title="Team Members" value="2" iconName="users" color="#5C6BC0" />
       </View>
 
       <View style={styles.sectionContainer}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickActionsGrid}>
-          <QuickAction title="Create Content" iconName="plus-circle" href="/collab/create-content" />
+          <QuickAction title="Collaborate" iconName="plus-circle" href="/collab/collaborate" />
           <QuickAction title="Review Content" iconName="eye" href="/collab/review-content" />
         </View>
       </View>
@@ -62,9 +62,9 @@ export default function DashboardScreen() {
       <View style={styles.sectionContainer}>
         <Text style={styles.sectionTitle}>Recent Activity</Text>
         <View style={styles.activityList}>
-          <ActivityItem iconName="git-pull-request" text="John Doe submitted new content for review." time="2h ago" />
-          <ActivityItem iconName="check-circle" text="Project 'Summer Campaign' was approved." time="1d ago" />
-          <ActivityItem iconName="user-plus" text="Jane Smith joined the team." time="3d ago" />
+          <ActivityItem iconName="git-pull-request" text="VICTORIANO GIAN PATRICK submitted new content for review." time="2h ago" />
+          <ActivityItem iconName="check-circle" text="Intrams Basketball Tournament was approved." time="1d ago" />
+          <ActivityItem iconName="user-plus" text="gian patrick victoriano joined the team." time="3d ago" />
         </View>
       </View>
     </View>
@@ -74,6 +74,7 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingLeft: 24, // Add space from sidebar
   },
   header: {
     marginBottom: 30,
@@ -82,6 +83,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: '#1A202C',
+    marginTop: 24,
   },
   subtitle: {
     fontSize: 16,
@@ -147,6 +149,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 5,
+    gap: 0,
   },
   quickActionText: {
     marginLeft: 12,

@@ -32,12 +32,17 @@ export const BrandingProvider = ({ children }) => {
       console.log('[BrandingContext] Branding data fetched successfully:', { logo_url, background_url });
 
       // If the fetched URL is valid, use it; otherwise, stick with the fallback.
-      const finalLogoUrl = logo_url || FALLBACK_LOGO_URL;
-      const finalBackgroundUrl = background_url || FALLBACK_BACKGROUND_URL;
+      const finalLogoUrl = logo_url
+        ? (Platform.OS === 'web' ? logo_url : { uri: logo_url })
+        : FALLBACK_LOGO_URL;
+      const finalBackgroundUrl = background_url
+        ? (Platform.OS === 'web' ? background_url : { uri: background_url })
+        : FALLBACK_BACKGROUND_URL;
 
       console.log('[BrandingContext] Setting final image URLs:', { finalLogoUrl, finalBackgroundUrl });
       setLogoUrl(finalLogoUrl);
       setBackgroundUrl(finalBackgroundUrl);
+      console.log('[BrandingContext] Image URLs set:', { logoUrl, backgroundUrl });
     } catch (error) {
       console.error('[BrandingContext] CRITICAL: Failed to fetch branding. Full error object:', error);
       if (error.response) {

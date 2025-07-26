@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Modal, Linking, ScrollView } from 'react-native';
 import apiClient, { sendMessage, getMessages } from '../../utils/api';
+import modalStyles from './modalStyles.js';
+import { useRouter } from 'expo-router';
 
 export default function CollaborateScreen() {
+  const [uploadedFile, setUploadedFile] = useState(null);
   const [search, setSearch] = useState('');
   const [groupChats, setGroupChats] = useState([]);
   const [selectedGroupId, setSelectedGroupId] = useState(null);
@@ -130,67 +133,29 @@ export default function CollaborateScreen() {
     }
   };
 
+  const handleChooseFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'text/plain',
+      });
 
-
-  const renderGroup = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.groupItem, item.id === selectedGroupId && styles.groupItemSelected]}
-      onPress={() => {
-        setSelectedGroupId(item.id);
-        // Clear unread status when a group is selected
-        setUnreadMessages(prev => {
-          const newUnread = { ...prev };
-          delete newUnread[item.id];
-          return newUnread;
-        });
-      }}
-    >
-      <Text style={styles.groupName}>{item.name}</Text>
-      {unreadMessages[item.id] > 0 && (
-        <View style={styles.unreadBadge}>
-          <Text style={styles.unreadCount}>{unreadMessages[item.id]}</Text>
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-
-  const renderMessage = ({ item }) => {
-    const isMyMessage = item.user_id === currentUser?.id;
-
-    let avatarUrl = null;
-    if (item.user?.profile?.avatar) {
-      const avatarPath = item.user.profile.avatar;
-      if (avatarPath.startsWith('http')) {
-        avatarUrl = avatarPath; // It's a full URL
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        // Directly call the plagiarism check with the selected file asset
+        handlePlagiarismCheck('file', result.assets[0]);
+        setUploadedFile(result.assets[0]);
       } else {
-        avatarUrl = `http://192.168.1.3:8000/storage/${avatarPath}`; // It's a relative path
+        setShowUploadMenu(false); // Hide menu if user cancels
       }
+    } catch (err) { 
+      console.error('Error picking document:', err);
+      // Optionally, show an alert to the user
     }
-
-    const messageBubbleStyle = [
-      styles.messageBubble,
-      isMyMessage ? styles.myMessage : styles.theirMessage,
-      item.message.length < 8 && { minWidth: 100 },
-    ];
-
-    return (
-      <View style={[styles.messageContainer, isMyMessage ? styles.myMessageContainer : styles.theirMessageContainer]}>
-        {!isMyMessage && (
-          <Image
-            source={avatarUrl ? { uri: avatarUrl } : require('../../assets/g-logo.png')}
-            style={styles.avatar}
-          />
-        )}
-        <View style={messageBubbleStyle}>
-          <Text style={styles.senderText}>{isMyMessage ? 'Me' : item.user.name}</Text>
-          <Text style={styles.messageText}>{item.message}</Text>
-          <Text style={styles.timeText}>{new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-        </View>
-      </View>
-    );
   };
 
   const handlePlagiarismCheck = useCallback(async (type, data) => {
+    if (type === 'file' && data) {
+      setUploadedFile(data);
+    }
     // Debounce: If a scan is already in progress, do nothing.
     if (isScanningRef.current) return;
     if (!data) return;
@@ -202,27 +167,54 @@ export default function CollaborateScreen() {
     setIsScanning(true);
     setPlagiarismResult(null);
     setScanResult(null);
+    setPlagiarismResult(null);
 
     let pollInterval;
     try {
       const formData = new FormData();
-      if (type === 'text') {
-        formData.append('text', data);
-      } else if (type === 'file') {
-        formData.append('file', data, data.name);
-      } else if (type === 'url') {
-        formData.append('url', data);
-      }
-      // 1. Submit the scan and get the scanId
-      const response = await apiClient.post('/plagiarism-scans', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const scanId = response.data.scanId;
-      if (!scanId) {
-        setScanResult('Failed to start plagiarism scan.');
+      if (type === 'file') {
+        const uri = data.uri;
+if (Platform.OS === 'web') {
+  // On web, data is a File object
+  formData.append('file', data);
+} else {
+  const uri = data.uri;
+  if (!uri) {
+    setScanResult('Invalid file: missing URI.');
+    setIsScanning(false);
+    isScanningRef.current = false;
+    return;
+  }
+  const name = data.name || uri.split('/').pop();
+  const mimeType = data.mimeType || 'application/octet-stream';
+  formData.append('file', {
+    uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+    name,
+    type: mimeType,
+  });
+}
+      } else {
+        // Currently only supporting file uploads
+        setScanResult('Unsupported upload type.');
         setIsScanning(false);
         return;
       }
+
+      // 1. Submit the scan and get scan_id
+      const initialResponse = await apiClient.post('/plagiarism-scans', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      const scanId = initialResponse.data.scan_id;
+      if (!scanId) {
+        setScanResult('Failed to start plagiarism scan. No scan ID received.');
+        setIsScanning(false);
+        isScanningRef.current = false;
+        return;
+      }
+      console.log('Checking status for scan ID:', scanId);
       // 2. Poll for the result
       pollInterval = setInterval(async () => {
         try {
@@ -255,360 +247,323 @@ export default function CollaborateScreen() {
     }
   }, []);
 
-  if (isLoading) {
+  const renderGroup = ({ item }) => (
+    <TouchableOpacity
+      style={[styles.groupItem, item.id === selectedGroupId && styles.groupItemSelected]}
+      onPress={() => {
+        setSelectedGroupId(item.id);
+        // Clear unread status when a group is selected
+        setUnreadMessages(prev => {
+          const newUnread = { ...prev };
+          delete newUnread[item.id];
+          return newUnread;
+        });
+      }}
+    >
+      <Text style={styles.groupName}>{item.name}</Text>
+      {unreadMessages[item.id] > 0 && (
+        <View style={styles.unreadBadge}>
+          <Text style={styles.unreadCount}>{unreadMessages[item.id]}</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+
+  const getScoreStyle = (score) => {
+    if (score > 0.5) return { color: 'red', fontWeight: 'bold' };
+    if (score > 0.2) return { color: 'orange', fontWeight: 'bold' };
+    return { color: 'green', fontWeight: 'bold' };
+  };
+
+  const handleSendReviewMessage = async () => {
+    setIsPlagModalVisible(false); // Close the modal immediately
+
+    try {
+      // 1. Send system message
+      const messageText = `${currentUser.name} has sent a draft for review.`;
+      const response = await apiClient.post(`/group-chats/${selectedGroupId}/messages`, {
+        message: messageText,
+        system: true,
+      });
+    const savedMessage = response.data;
+    setMessages(prevMessages => [savedMessage, ...prevMessages]);
+
+    // 2. Create review_content row with FormData
+    if (uploadedFile) {
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        formData.append('file', uploadedFile);
+      } else {
+        formData.append('file', {
+          uri: uploadedFile.uri,
+          name: uploadedFile.name || uploadedFile.uri.split('/').pop(),
+          type: uploadedFile.mimeType || 'text/plain',
+        });
+      }
+      formData.append('group_id', selectedGroupId);
+      formData.append('user_id', currentUser.id);
+      formData.append('status', 'pending');
+      formData.append('no_of_approval', '0');
+      await apiClient.post('/review-content', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    }
+  } catch (error) {
+    console.error('Failed to send system review message or create review content:', error);
+    alert('Failed to send review notification or create review content. Please try again.');
+  }
+};
+
+  // Render a single chat message
+  const renderMessage = ({ item }) => {
+    // System message: centered, gray, italic
+    if (item.system) {
+      return (
+        <View style={{ alignItems: 'center', marginVertical: 8 }}>
+          <View style={{
+            backgroundColor: '#e0e0e0',
+            paddingVertical: 6,
+            paddingHorizontal: 14,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: '#bdbdbd',
+            maxWidth: '80%',
+          }}>
+            <Text style={{ color: '#616161', fontStyle: 'italic', fontSize: 13, textAlign: 'center' }}>
+              {item.message}
+            </Text>
+          </View>
+          <Text style={{ fontSize: 10, color: '#888', marginTop: 2 }}>{item.created_at ? new Date(item.created_at).toLocaleString() : ''}</Text>
+        </View>
+      );
+    }
+    // Determine if message is from current user
+    const isMe = currentUser && item.user_id === currentUser.id;
     return (
-      <View style={[styles.panelContainer, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#374151" />
+      <View style={{
+        flexDirection: 'row',
+        justifyContent: isMe ? 'flex-end' : 'flex-start',
+        marginVertical: 4,
+      }}>
+        <View style={{
+          backgroundColor: isMe ? '#1976d2' : '#f1f0f0',
+          paddingVertical: 10,
+          paddingHorizontal: 16,
+          borderRadius: 18,
+          maxWidth: '75%',
+          alignSelf: isMe ? 'flex-end' : 'flex-start',
+          borderTopRightRadius: isMe ? 4 : 18,
+          borderTopLeftRadius: isMe ? 18 : 4,
+        }}>
+          <Text style={{ color: isMe ? '#fff' : '#222', fontSize: 16 }}>
+            {item.message}
+          </Text>
+          <View style={{ flexDirection: 'row', justifyContent: isMe ? 'flex-end' : 'flex-start', marginTop: 6 }}>
+            {!isMe && (
+              <Text style={{ color: '#888', fontSize: 12, marginRight: 8 }}>{item.user?.name}</Text>
+            )}
+            <Text style={{ color: '#bbb', fontSize: 10 }}>
+              {item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+            </Text>
+          </View>
+        </View>
       </View>
     );
-  }
-
+  };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={100}
-    >
-      <View style={styles.panelContainer}>
-        {/* Left Panel */}
-        <View style={styles.leftPanel}>
-          <View style={styles.filterContainer}>
-            <TouchableOpacity 
-              style={[styles.filterButton, chatStatusFilter === 'pending' && styles.activeFilter]}
-              onPress={() => setChatStatusFilter('pending')}
-            >
-              <Text style={[styles.filterButtonText, chatStatusFilter === 'pending' && styles.activeFilterText]}>Pending</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.filterButton, chatStatusFilter === 'finished' && styles.activeFilter]}
-              onPress={() => setChatStatusFilter('finished')}
-            >
-              <Text style={[styles.filterButtonText, chatStatusFilter === 'finished' && styles.activeFilterText]}>Finished</Text>
-            </TouchableOpacity>
-          </View>
-          <TextInput
-            style={styles.searchBar}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search group chats..."
-            placeholderTextColor="#aaa"
-          />
-          <FlatList
-            data={filteredGroups}
-            renderItem={renderGroup}
-            keyExtractor={item => item.id}
-            style={styles.groupsList}
-          />
+    <View style={styles.panelContainer}>
+      {/* Left Panel */}
+      <View style={styles.leftPanel}>
+        <View style={styles.filterContainer}>
+          <TouchableOpacity
+            style={[styles.filterButton, chatStatusFilter === 'pending' && styles.activeFilter]}
+            onPress={() => setChatStatusFilter('pending')}
+          >
+            <Text style={[styles.filterButtonText, chatStatusFilter === 'pending' && styles.activeFilterText]}>Pending</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, chatStatusFilter === 'finished' && styles.activeFilter]}
+            onPress={() => setChatStatusFilter('finished')}
+          >
+            <Text style={[styles.filterButtonText, chatStatusFilter === 'finished' && styles.activeFilterText]}>Finished</Text>
+          </TouchableOpacity>
         </View>
+        <TextInput
+          style={styles.searchBar}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search group chats..."
+          placeholderTextColor="#aaa"
+        />
+        <FlatList
+          data={filteredGroups}
+          renderItem={renderGroup}
+          keyExtractor={item => item.id}
+          style={styles.groupsList}
+        />
+      </View>
 
-        {/* Right Panel */}
-        <View style={styles.rightPanel}>
-          <Text style={styles.title}>{groupChats.find(g => g.id === selectedGroupId)?.name || 'Select a Chat'}</Text>
-          {isMessagesLoading ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <ActivityIndicator size="large" color="#374151" />
-            </View>
-          ) : (
+      {/* Right Panel */}
+      <View style={styles.rightPanel}>
+        <Text style={styles.title}>{groupChats.find(g => g.id === selectedGroupId)?.name || 'Select a Chat'}</Text>
+        {isMessagesLoading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#374151" />
+          </View>
+        ) : (
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+          >
             <FlatList
               data={messages}
               renderItem={renderMessage}
-              keyExtractor={item => item.id}
-              style={styles.messageList}
+              keyExtractor={item => item.id.toString()}
+              contentContainerStyle={{ paddingVertical: 10 }}
               inverted
-              ListEmptyComponent={<Text style={styles.emptyMessage}>No messages yet.</Text>}
             />
-          )}
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="Type a message..."
-              placeholderTextColor="#aaa"
-              editable={!!selectedGroupId}
-            />
-            {/* File Upload Fly-up Menu (Web only) */}
-            {Platform.OS === 'web' && (
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <button
-                  style={styles.uploadLabel}
-                  onClick={e => {
-                    e.preventDefault();
-                    setShowUploadMenu(v => !v);
-                  }}
-                  tabIndex={0}
-                >
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05a5.5 5.5 0 0 0-7.78 0l-7.07 7.07a4 4 0 0 0 5.66 5.66l8.49-8.48a2.5 2.5 0 0 0-3.54-3.54l-8.49 8.48"/></svg>
-                </button>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder="Type a message..."
+                placeholderTextColor="#aaa"
+                editable={!!selectedGroupId}
+              />
+              <View style={{ position: 'relative' }}>
+                <TouchableOpacity
+  style={styles.uploadButton}
+  onPress={() => setShowUploadMenu(v => !v)}
+>
+  <Text style={{ fontSize: 24 }}>📎</Text>
+</TouchableOpacity>
                 {showUploadMenu && (
-                  <div style={{
-                    position: 'absolute',
-                    bottom: 44,
-                    right: 0,
-                    background: '#fff',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: 8,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                    zIndex: 100,
-                    minWidth: 170,
-                    padding: 8,
-                  }}>
-                    <button
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        background: 'none',
-                        border: 'none',
-                        textAlign: 'left',
-                        padding: '8px 12px',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        fontSize: 15,
-                        color: '#333',
-                        marginBottom: 4,
-                        transition: 'background 0.2s',
-                      }}
-                      onClick={() => {
-                        const url = prompt('Enter file URL:');
-                        if (url) {
-                          handlePlagiarismCheck('url', url);
-                        }
-                      }}
-                    >
-                      Enter URL
-                    </button>
-                    <label htmlFor="file-upload" style={{
-                      display: 'block',
-                      width: '100%',
-                      background: 'none',
-                      border: 'none',
-                      textAlign: 'left',
-                      padding: '8px 12px',
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      fontSize: 15,
-                      color: '#333',
-                    }}>
-                      Upload File
-                      <input
-                        id="file-upload"
-                        type="file"
-                        style={{ display: 'none' }}
-                        onChange={e => {
-                          if (e.target.files && e.target.files[0]) {
-                            handlePlagiarismCheck('file', e.target.files[0]);
-                          }
-                        }}
-                      />
-                    </label>
-                  </div>
+                  <View style={styles.uploadMenu}>
+  {Platform.OS === 'web' ? (
+    <label style={styles.uploadMenuItem}>
+      <Text style={styles.uploadMenuText}>Upload .txt File</Text>
+      <input
+        type="file"
+        accept=".txt"
+        style={{ display: 'none' }}
+        onChange={e => {
+          if (e.target.files && e.target.files[0]) {
+            handlePlagiarismCheck('file', e.target.files[0]);
+          }
+        }}
+      />
+    </label>
+  ) : (
+    <TouchableOpacity style={styles.uploadMenuItem} onPress={handleChooseFile}>
+      <Text style={styles.uploadMenuText}>Upload .txt File</Text>
+    </TouchableOpacity>
+  )}
+</View>
                 )}
-              </div>
-            )}
-            <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={!selectedGroupId}>
-              <Text style={styles.sendButtonText}>Send</Text>
+              </View>
+              <TouchableOpacity onPress={handleSend} style={styles.sendButton}>
+                <Text style={styles.sendButtonText}>Send</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        )}
+      </View>
+
+      {/* Plagiarism Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={isPlagModalVisible}
+        onRequestClose={() => setIsPlagModalVisible(false)}
+      >
+        <View style={modalStyles.modalOverlay}>
+          <View style={modalStyles.modalViewLarge}>
+            <TouchableOpacity
+              style={modalStyles.closeButton}
+              onPress={() => setIsPlagModalVisible(false)}
+            >
+              <Text style={modalStyles.closeButtonText}>&times;</Text>
             </TouchableOpacity>
+
+            <Text style={modalStyles.modalTitle}>Plagiarism Scan Result</Text>
+
+            {isScanning ? (
+              <View style={modalStyles.loadingContainerModal}>
+                <ActivityIndicator size="large" color="#374151" />
+                <Text style={{ marginTop: 10 }}>Scanning... Please wait.</Text>
+              </View>
+            ) : plagiarismResult ? (
+              <ScrollView style={{ width: '100%' }} contentContainerStyle={{ paddingBottom: 20 }}>
+                <Text style={modalStyles.modalText}>
+                  Similarity Score: <Text style={getScoreStyle(plagiarismResult.result?.score)}>{(plagiarismResult.result?.score).toFixed(2)}%</Text>
+                </Text>
+
+                {plagiarismResult.sources && plagiarismResult.sources.length > 0 && (
+                  <View style={{ width: '100%', marginTop: 15 }}>
+                    <Text style={modalStyles.modalSubtitle}>Internet Sources:</Text>
+                    {plagiarismResult.sources.map((source, index) => (
+                      <View key={index} style={modalStyles.sourceRowBox}>
+                        <TouchableOpacity onPress={() => Linking.openURL(source.url)}>
+                          <Text style={modalStyles.sourceUrl}>{source.url}</Text>
+                        </TouchableOpacity>
+                        <Text><Text style={modalStyles.sourceStatLabel}>Matched Words:</Text> <Text style={modalStyles.sourceStatValue}>{source.plagiarismWords}</Text></Text>
+                        <Text><Text style={modalStyles.sourceStatLabel}>Similarity:</Text> <Text style={modalStyles.sourceStatValue}>{(source.score).toFixed(2)}%</Text></Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {plagiarismResult.citations && plagiarismResult.citations.length > 0 && (
+                  <View style={{ width: '100%', marginTop: 15 }}>
+                    <Text style={modalStyles.modalSubtitle}>Citations:</Text>
+                    {plagiarismResult.citations.map((citation, index) => (
+                      <Text key={index} style={modalStyles.citationText}>- {citation}</Text>
+                    ))}
+                  </View>
+                )}
+
+                {plagiarismResult.detected_attacks && plagiarismResult.detected_attacks.length > 0 && (
+                  <View style={{ width: '100%', marginTop: 15 }}>
+                    <Text style={modalStyles.modalSubtitle}>Detected Attacks:</Text>
+                    {plagiarismResult.detected_attacks.map((attack, index) => (
+                      <Text key={index} style={modalStyles.attackText}>- {attack}</Text>
+                    ))}
+                    <Text style={modalStyles.rawJsonValue}>{JSON.stringify(plagiarismResult, null, 2)}</Text>
+                  </View>
+                )}
+
+                {/* Modal Buttons */}
+                <View style={modalStyles.modalButtonContainer}>
+                  <TouchableOpacity
+                    style={[modalStyles.modalButton, modalStyles.cancelButton]}
+                    onPress={() => setIsPlagModalVisible(false)}
+                  >
+                    <Text style={modalStyles.modalButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[modalStyles.modalButton, modalStyles.sendButtonModal]}
+                    onPress={handleSendReviewMessage}
+                  >
+                    <Text style={modalStyles.modalButtonText}>Send</Text>
+                  </TouchableOpacity>
+                </View>
+
+              </ScrollView>
+            ) : (
+              <Text style={modalStyles.modalText}>No plagiarism result available.</Text>
+            )}
           </View>
         </View>
-
-
-
-        <Modal
-          animationType="fade"
-          transparent={true}
-          visible={isPlagModalVisible}
-          onRequestClose={() => {
-            setIsPlagModalVisible(false);
-            setIsScanning(false);
-          }}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalViewLarge, { width: '90%', height: '80%', padding: 40 }]}>
-              <Text style={styles.modalTitle}>Plagiarism Result</Text>
-              {plagiarismResult && (
-                <Text style={styles.modalText}>Aggregated Score: <Text style={styles.aggScore}>{plagiarismResult.results.score.aggregatedScore.toFixed(2)}%</Text></Text>
-              )}
-              {isScanning ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#374151" />
-                  <Text style={styles.loadingText}>Scanning for plagiarism...</Text>
-                </View>
-              ) : plagiarismResult ? (
-                <View>
-                  <Text style={styles.modalSubtitle}>Detected Internet Sources:</Text>
-                  {plagiarismResult.results.internet.length > 0 ? (
-                    <FlatList
-                      data={plagiarismResult.results.internet}
-                      keyExtractor={(item) => item.id}
-                      renderItem={({ item, index }) => (
-                        <View style={[styles.sourceCard, index > 0 && styles.sourceCardDivider]}>
-                          <Text style={styles.sourceUrl} onPress={() => { if (Platform.OS === 'web') window.open(item.url, '_blank'); }}>{item.url}</Text>
-                          <View style={styles.sourceStatsRow}>
-                            <Text style={styles.sourceStatLabel}>Matched Words: <Text style={styles.sourceStatValue}>{item.matchedWords}</Text></Text>
-                            <Text style={styles.sourceStatLabel}>Identical: <Text style={styles.sourceStatValue}>{item.identicalWords}</Text></Text>
-                            <Text style={styles.sourceStatLabel}>Similar: <Text style={styles.sourceStatValue}>{item.similarWords}</Text></Text>
-                          </View>
-                          <View style={styles.sourceStatsRow}>
-                            <Text style={styles.sourceStatLabel}>Paraphrased: <Text style={styles.sourceStatValue}>{item.paraphrasedWords}</Text></Text>
-                            <Text style={styles.sourceStatLabel}>Total: <Text style={styles.sourceStatValue}>{item.totalWords}</Text></Text>
-                          </View>
-                        </View>
-                      )}
-                      style={{marginTop: 8}}
-                    />
-                  ) : (
-                    <Text>No internet sources detected.</Text>
-                  )}
-                </View>
-              ) : null}
-              <View style={styles.buttonRowBottom}>
-                <TouchableOpacity
-                  style={[styles.buttonWide, styles.buttonCancel]}
-                  onPress={() => {
-                    setIsPlagModalVisible(false);
-                    setIsScanning(false);
-                  }}
-                >
-                  <Text style={styles.textStyle}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.buttonWide, styles.buttonSend, { backgroundColor: '#374151' }]}
-                  onPress={() => {
-                    setIsPlagModalVisible(false);
-                    setIsScanning(false);
-                  }} // TODO: Hook up real send handler
-                >
-                  <Text style={styles.textStyle}>Send</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      </View>
-    </KeyboardAvoidingView>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 220,
-  },
-  loadingText: {
-    marginTop: 20,
-    fontSize: 16,
-    color: '#374151',
-    fontWeight: 'bold',
-  },
-  buttonRowBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    position: 'absolute',
-    left: 0,
-    bottom: 0,
-    padding: 24,
-    backgroundColor: 'white',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    gap: 24,
-  },
-  buttonWide: {
-    flex: 1,
-    borderRadius: 18,
-    paddingVertical: 18,
-    marginHorizontal: 16,
-    alignItems: 'center',
-    elevation: 2,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 999,
-  },
-  modalViewLarge: {
-    margin: 40,
-    backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 40,
-    alignItems: 'center',
-
-    width: '95%',
-    maxWidth: 700,
-    minHeight: 380,
-    justifyContent: 'flex-start',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 30,
-    gap: 16,
-  },
-  button: {
-    borderRadius: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    elevation: 2,
-    marginHorizontal: 8,
-  },
-  buttonCancel: {
-    backgroundColor: '#aaa',
-  },
-  buttonSend: {
-    backgroundColor: '#374151', // Sidebar color
-  },
-  modalTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    textAlign: 'center',
-  },
-  modalSubtitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginTop: 10,
-    marginBottom: 5,
-  },
-  modalText: {
-    marginBottom: 5,
-    textAlign: 'center',
-    fontSize: 18,
-  },
-  sourceItem: {
-    marginBottom: 10,
-    padding: 10,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 5,
-  },
-  sourceUrl: {
-    fontWeight: 'bold',
-  },
-  button: {
-    borderRadius: 20,
-    padding: 10,
-    elevation: 2,
-  },
-  buttonClose: {
-    backgroundColor: '#2196F3',
-    marginTop: 15,
-  },
-  textStyle: {
-    color: 'white',
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
+  // Main Layout
   panelContainer: {
     flex: 1,
     flexDirection: 'row',
@@ -625,6 +580,37 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     marginRight: 12,
   },
+  rightPanel: {
+    flex: 1,
+    padding: 20,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: '#333',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageList: {
+    flex: 1,
+  },
+  emptyMessage: {
+    textAlign: 'center',
+    marginTop: 50,
+    color: '#aaa',
+    fontSize: 16,
+  },
+
+  // Group/Chat List
   filterContainer: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
@@ -667,6 +653,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginBottom: 8,
     backgroundColor: '#f7f7f7',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   groupItemSelected: {
     backgroundColor: '#d1eaff',
@@ -690,47 +679,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
-  rightPanel: {
-    flex: 1,
-    padding: 20,
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: '#333',
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  messageList: {
-    flex: 1,
-  },
-  emptyMessage: {
-    textAlign: 'center',
-    marginTop: 50,
-    color: '#aaa',
-    fontSize: 16,
-  },
+
+  // Message Area
   messageContainer: {
     paddingVertical: 5,
     paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'flex-end',
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
-  },
   myMessageContainer: {
     justifyContent: 'flex-end',
   },
   theirMessageContainer: {
     justifyContent: 'flex-start',
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
   },
   messageBubble: {
     padding: 10,
@@ -761,6 +728,8 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     marginTop: 5,
   },
+
+  // Input Bar
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -781,17 +750,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
-  uploadLabel: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    width: 36,
-    height: 36,
-    border: 'none',
-    cursor: 'pointer',
-  },
   sendButton: {
     backgroundColor: '#374151',
     borderRadius: 8,
@@ -801,8 +759,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sendButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 15,
+    color: 'white',
+    fontWeight: 'bold',
   },
+  uploadButton: {
+    padding: 6,
+  },
+  uploadMenu: {
+    position: 'absolute',
+    bottom: 50, // Position above the input bar
+    right: 10,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  uploadMenuItem: {
+    padding: 10,
+  },
+  uploadMenuText: {
+    fontSize: 16,
+  },
+
+
 });
