@@ -14,23 +14,39 @@ export const AuthProvider = ({ children }) => {
   const [auth, setAuth] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    const loadUser = async () => {
+      const storedToken = await AsyncStorage.getItem('token');
+      // LOG THE TOKEN FROM STORAGE
+      console.log('[AuthContext] Loading token from storage:', storedToken);
+      // ... rest of the function
+    };
+    loadUser();
+  }, []);
   const loginWithGoogleToken = async (idToken) => {
     setLoading(true);
     try {
       const response = await apiClient.post('/auth/google', { token: idToken });
       const { token, user } = response.data;
 
+      console.log('[AuthContext] Received token from backend:', token);
+      console.log('[AuthContext] Received user from backend:', user);
       await AsyncStorage.setItem('auth_token', token);
       await AsyncStorage.setItem('user_data', JSON.stringify(user));
-            setAuth(user);
+      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setAuth(user);
+      console.log('[AuthContext] Received token from backend:', token);
+      console.log('[AuthContext] Received user from backend:', user);
     } catch (error) {
-      console.error('Failed to process Google Sign-In with backend:', error.response?.data || error.message);
+      console.error('[AuthContext] Error during Google login:', error.response?.data || error.message);
       await AsyncStorage.removeItem('auth_token');
-            setAuth(null);
+      delete apiClient.defaults.headers.common['Authorization'];
+      setAuth(null);
     } finally {
       setLoading(false);
     }
   };
+
 
   const reloadUser = async () => {
     setLoading(true);
@@ -39,7 +55,8 @@ export const AuthProvider = ({ children }) => {
       const storedUser = await AsyncStorage.getItem('user_data');
 
       if (token && storedUser) {
-                const parsedUser = JSON.parse(storedUser);
+        apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        const parsedUser = JSON.parse(storedUser);
         setAuth(parsedUser);
       } else {
         setAuth(null);
@@ -79,7 +96,9 @@ export const AuthProvider = ({ children }) => {
     setAuth(null);
         try {
       await AsyncStorage.removeItem('auth_token');
+      console.log('[AuthContext] Removed auth_token');
       await AsyncStorage.removeItem('user_data');
+      console.log('[AuthContext] Removed user_data');
     } catch (e) {
       console.error('Logout failed:', e);
     } finally {

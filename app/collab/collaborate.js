@@ -36,7 +36,7 @@ export default function CollaborateScreen() {
     try {
       if (!file) return;
       // Get CSRF cookie from the root endpoint
-      await axios.get('http://127.0.0.1:8000/sanctum/csrf-cookie', { withCredentials: true });
+      await axios.get('http://192.168.254.114:8000/sanctum/csrf-cookie', { withCredentials: true });
       const formData = new FormData();
       formData.append('image', file);
       formData.append('group_id', selectedGroupId);

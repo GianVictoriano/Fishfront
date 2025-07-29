@@ -19,6 +19,11 @@ apiClient.interceptors.request.use(
     const token = await AsyncStorage.getItem('auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('[api.js] Attaching Authorization header:', config.headers.Authorization);
+      console.log(`[api.js] Sending request to: ${config.url}`);
+      console.log('[api.js] Request Headers:', JSON.stringify(config.headers, null, 2));
+    } else {
+      console.log('[api.js] No auth_token found in AsyncStorage');
     }
     return config;
   },
