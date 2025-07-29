@@ -11,15 +11,24 @@ import { useRouter } from 'expo-router';
 
 WebBrowser.maybeCompleteAuthSession();
 
+import { makeRedirectUri } from 'expo-auth-session';
+
 const WEB_CLIENT_ID = '2592879566-iv5obaksm3viv04pptpnlsn9mbmivg5s.apps.googleusercontent.com';
+const ANDROID_CLIENT_ID = '2592879566-4p0l72eecsqml325q95qo91llaoc9quo.apps.googleusercontent.com';
+
+const clientId = WEB_CLIENT_ID; // Always use web client for Expo proxy
 
 export default function SignInScreen() {
   const router = useRouter();
   const { loginWithGoogleToken } = useAuth();
   const { logoUrl, backgroundUrl } = useBranding();
 
+
+
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: WEB_CLIENT_ID,
+    clientId: clientId,
+    androidClientId: WEB_CLIENT_ID,
+
   });
 
   useEffect(() => {
@@ -33,8 +42,6 @@ export default function SignInScreen() {
       Alert.alert('Google Sign-In Error', response.error?.message || 'An unknown error occurred.');
     }
   }, [response]);
-
-
 
   return (
     <ImageBackground source={backgroundUrl} style={styles.background} resizeMode="cover">

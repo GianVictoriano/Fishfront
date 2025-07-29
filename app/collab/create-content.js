@@ -91,6 +91,8 @@ export default function CreateContentScreen() {
       handleOpenScrumPanel();
     } else if (type === 'Folio') {
       // Folio logic here
+    } else if (type === 'PublishOnTop') {
+      Alert.alert('Coming Soon', 'Publish on Top of Scrum feature is under development.');
     }
   };
 
@@ -148,6 +150,12 @@ export default function CreateContentScreen() {
           title="Topic"
           description="Start a new discussion in the forum."
           onPress={() => router.push('/forum')}
+        />
+        <CreateOptionCard 
+          icon="arrow-up-bold-box-outline"
+          title="Publish"
+          description="Upload content to display on the news page."
+          onPress={() => handlePress('PublishOnTop')}
         />
       </View>
       {/* Scrum Panel Modal */}
