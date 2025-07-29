@@ -20,7 +20,6 @@ const NavLink = ({ href, text, iconName, pathname, onLinkPress }) => {
 
   return (
     <TouchableOpacity style={linkStyle} onPress={() => { router.push(href); onLinkPress(); }}>
-      <FontAwesome name={iconName} size={15} style={iconStyle} />
       <Text style={textStyle}>{text}</Text>
     </TouchableOpacity>
   );
@@ -162,15 +161,15 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   userAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-  },
-  avatar: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    marginRight: 4,
+  },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    marginRight: 8,
     borderWidth: 1.5,
     borderColor: '#1a237e',
     backgroundColor: '#fff',
@@ -210,9 +209,8 @@ const styles = StyleSheet.create({
   navLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 5,
+    paddingVertical: 8,
     paddingHorizontal: 8,
-    borderRadius: 6,
     ...Platform.select({
       default: {
         marginBottom: 6,
@@ -220,7 +218,8 @@ const styles = StyleSheet.create({
     }),
   },
   navLinkActive: {
-    backgroundColor: '#eef2ff',
+    borderBottomWidth: 2,
+    borderBottomColor: '#007BFF',
   },
   navIcon: {
     color: '#555',
@@ -230,7 +229,7 @@ const styles = StyleSheet.create({
     color: '#007BFF',
   },
   navLinkText: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '600',
     color: '#333',
   },
@@ -251,7 +250,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
   },
   userName: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '600',
   },
   dropdown: {

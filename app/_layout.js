@@ -1,13 +1,14 @@
+import { Slot, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '~/context/AuthContext';
 import { BrandingProvider } from '~/context/BrandingContext';
-import { Slot, useRouter, useSegments } from 'expo-router';
-import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 import { useEffect } from 'react';
+import { View, ActivityIndicator } from 'react-native';
+import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 
-function RootLayoutNav() {
+const InitialLayout = () => {
   const { user, loading } = useAuth();
-  const router = useRouter();
   const segments = useSegments();
+  const router = useRouter();
 
   useEffect(() => {
     if (loading) return;
@@ -27,10 +28,8 @@ function RootLayoutNav() {
     else {
       // Define public routes that guests can access. The root '/' is handled by `segments.length === 0`.
       const publicRoutes = ['home', 'news', 'about', 'signin', 'forgot-password', 'home2', 'news2', 'about2'];
-      
       // A route is protected if it's not the root and not in the public list.
       const isProtectedRoute = segments.length > 0 && !publicRoutes.includes(segments[0]);
-
       if (isProtectedRoute) {
         // Redirect guests from protected routes to the root page
         router.replace('/');
@@ -46,7 +45,7 @@ export default function RootLayout() {
     <ActionSheetProvider>
       <BrandingProvider>
         <AuthProvider>
-          <RootLayoutNav />
+          <InitialLayout />
         </AuthProvider>
       </BrandingProvider>
     </ActionSheetProvider>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, SafeAreaView, Platform, TouchableOpacity, Modal, ImageBackground } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, SafeAreaView, Platform, TouchableOpacity, Modal, ImageBackground, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Navbar from '../components/Navbar';
 import { useBranding } from '../context/BrandingContext';
@@ -55,46 +55,185 @@ export default function AboutScreen() {
           >
             <TouchableOpacity style={styles.modalOverlayNav} activeOpacity={1} onPressOut={() => setNavVisible(false)}>
               <View style={styles.modalViewNav}>
-                <Navbar onLinkPress={() => setNavVisible(false)} />
               </View>
             </TouchableOpacity>
           </Modal>
         </>
       )}
       <View style={styles.container}>
-  <ScrollView contentContainerStyle={styles.content}>
-    <Text style={styles.title}>About the Fisherman Community</Text>
-    <Section title="VISION" underlineWidth="190%">
-      <Text style={styles.paragraph}>
-        A Premier National University that develops leaders in the global knowledge economy
-      </Text>
-    </Section>
-    <Section title="MISSION" underlineWidth="150%">
-      <Text style={styles.paragraph}>
-        A University committed to producing leaders by providing a 21st century learning environment through innovations in education, multidisciplinary research, and community and industry partnerships in order to nurture the spirit of nationhood, propel the national economy, and engage the world for sustainable development.
-      </Text>
-    </Section>
-    <Section title="CORE VALUES" underlineWidth="100%">
-      <View style={styles.valuesGrid}>
-        <View style={styles.valuesColumn}>
-          {coreValues1.map(value => (
-            <CoreValue key={value.id} text={value.text} />
-          ))}
-        </View>
-        <View style={styles.valuesColumn}>
-          {coreValues2.map(value => (
-            <CoreValue key={value.id} text={value.text} />
-          ))}
-        </View>
+        <ScrollView contentContainerStyle={styles.content}>
+          {/* Top Section: About Us */}
+          <View style={styles.heroSection}>
+            <Text style={styles.heroTitle}>About Us</Text>
+            <Text style={styles.heroDesc}>
+              The Fisherman company and community are a lot like our product. We're crafted, not cobbled, for a delightful experience.
+            </Text>
+          </View>
+
+          {/* Section 1 */}
+          <View style={styles.rowSection}>
+            <View style={styles.imageCol}>
+              <Image source={{ uri: 'https://images.pexels.com/photos/3225517/pexels-photo-3225517.jpeg?auto=compress&cs=tinysrgb&w=600' }} style={styles.sectionImage} />
+            </View>
+            <View style={styles.textCol}>
+              <Text style={styles.missionTitle}>Our Mission: Helping Millions of Organizations Grow Better</Text>
+              <Text style={styles.missionText}>
+                We believe not just in growing bigger, but in growing better. And growing better means aligning the success of your own business with the success of your customers. Win-win!
+              </Text>
+            </View>
+          </View>
+
+          {/* Section 2 */}
+          <View style={styles.rowSection}>
+            <View style={styles.textCol}>
+              <Text style={styles.missionTitle}>Our Vision: Empowering Communities</Text>
+              <Text style={styles.missionText}>
+                Our vision is to empower communities through innovation, collaboration, and sustainable growth. We strive for a future where everyone can thrive.
+              </Text>
+            </View>
+            <View style={styles.imageCol}>
+              <Image source={{ uri: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?q=80&w=2070' }} style={styles.sectionImage} />
+            </View>
+          </View>
+
+          {/* Section 3 */}
+          <View style={styles.rowSection}>
+            <View style={styles.imageCol}>
+              <Image source={{ uri: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070' }} style={styles.sectionImage} />
+            </View>
+            <View style={styles.textCol}>
+              <Text style={styles.missionTitle}>Our Values: Integrity & Excellence</Text>
+              <Text style={styles.missionText}>
+                We are committed to integrity, service, and excellence in all that we do, building a culture of trust and achievement for everyone involved.
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
       </View>
-    </Section>
-  </ScrollView>
-</View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  heroSection: {
+    backgroundColor: '#f6f9fb',
+    paddingVertical: 38,
+    paddingHorizontal: 26,
+    borderRadius: 16,
+    marginBottom: 32,
+    alignItems: 'flex-start',
+  },
+  heroTitle: {
+    fontSize: 38,
+    fontWeight: 'bold',
+    color: '#22344c',
+    marginBottom: 8,
+  },
+  heroDesc: {
+    fontSize: 17,
+    color: '#22344c',
+    maxWidth: 600,
+    lineHeight: 26,
+    opacity: 0.9,
+  },
+  rowSection: {
+    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    gap: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  imageCol: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 220,
+  },
+  sectionImage: {
+    width: 260,
+    height: 170,
+    borderRadius: 12,
+    backgroundColor: '#e0e7ef',
+    marginBottom: 0,
+    marginTop: 0,
+  },
+  imagePlaceholder: {
+    width: 260,
+    height: 170,
+    borderRadius: 12,
+    backgroundColor: '#e0e7ef',
+    marginBottom: 0,
+    marginTop: 0,
+  },
+  textCol: {
+    flex: 2,
+    paddingLeft: Platform.OS === 'web' ? 32 : 0,
+    paddingTop: Platform.OS !== 'web' ? 24 : 0,
+    alignItems: Platform.OS === 'web' ? 'flex-start' : 'center',
+    justifyContent: 'center',
+  },
+  missionTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#22344c',
+    marginBottom: 12,
+    lineHeight: 34,
+  },
+  missionText: {
+    fontSize: 16,
+    color: '#22344c',
+    opacity: 0.9,
+    maxWidth: 480,
+    lineHeight: 25,
+  },
+  card: {
+    backgroundColor: '#f8faff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e0e7ef',
+    padding: 20,
+    marginVertical: 12,
+    shadowColor: '#007BFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 7,
+  },
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#007BFF',
+    marginLeft: 6,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  sectionIcon: {
+    marginRight: 5,
+  },
+  sectionText: {
+    fontSize: 15,
+    color: '#222',
+    marginBottom: 2,
+    marginTop: 2,
+    lineHeight: 22,
+  },
+  coreValuesCard: {
+    backgroundColor: '#f0f7ff',
+    borderColor: '#b6d4fe',
+  },
   title: {
     fontSize: 20,
     fontWeight: 'bold',

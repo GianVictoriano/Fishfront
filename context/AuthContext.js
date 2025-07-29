@@ -22,13 +22,11 @@ export const AuthProvider = ({ children }) => {
 
       await AsyncStorage.setItem('auth_token', token);
       await AsyncStorage.setItem('user_data', JSON.stringify(user));
-      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setAuth(user);
+            setAuth(user);
     } catch (error) {
       console.error('Failed to process Google Sign-In with backend:', error.response?.data || error.message);
       await AsyncStorage.removeItem('auth_token');
-      delete apiClient.defaults.headers.common['Authorization'];
-      setAuth(null);
+            setAuth(null);
     } finally {
       setLoading(false);
     }
@@ -41,8 +39,7 @@ export const AuthProvider = ({ children }) => {
       const storedUser = await AsyncStorage.getItem('user_data');
 
       if (token && storedUser) {
-        apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        const parsedUser = JSON.parse(storedUser);
+                const parsedUser = JSON.parse(storedUser);
         setAuth(parsedUser);
       } else {
         setAuth(null);
@@ -68,8 +65,7 @@ export const AuthProvider = ({ children }) => {
 
       await AsyncStorage.setItem('auth_token', token);
       await AsyncStorage.setItem('user_data', JSON.stringify(user));
-      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setAuth(user);
+            setAuth(user);
 
       return { success: true };
     } catch (error) {
@@ -81,8 +77,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     setLoading(true);
     setAuth(null);
-    delete apiClient.defaults.headers.common['Authorization'];
-    try {
+        try {
       await AsyncStorage.removeItem('auth_token');
       await AsyncStorage.removeItem('user_data');
     } catch (e) {

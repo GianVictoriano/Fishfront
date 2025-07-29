@@ -1,32 +1,37 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import apiClient from '../../utils/api';
 
 export default function ReviewPreviewScreen() {
-  const { file } = useLocalSearchParams();
+  const { file, id } = useLocalSearchParams();
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchFile = async () => {
+    const fetchPreviewText = async () => {
+      setLoading(true);
       try {
-        
-        // file param is a relative path like review_uploads/filename.txt
-        const url = `http://192.168.250.65:8000/files/review_uploads/${file}`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Failed to fetch file');
-        const text = await response.text();
-        setContent(text);
+        let reviewId = id;
+        // If id is not provided, try to extract it from the file path (if possible)
+        if (!reviewId && file) {
+          // fallback logic if needed, otherwise show error
+          setError('No review content ID provided.');
+          setLoading(false);
+          return;
+        }
+        const response = await apiClient.get(`/review-content/preview/${reviewId}`);
+        setContent(response.data.text || 'No text extracted.');
       } catch (err) {
-        setError('Unable to load file preview.');
+        setError(err.message || 'Unable to load file preview.');
       } finally {
         setLoading(false);
       }
     };
-    if (file) fetchFile();
-  }, [file]);
+    if (id) fetchPreviewText();
+  }, [id]);
 
   return (
     <View style={styles.container}>
@@ -37,11 +42,61 @@ export default function ReviewPreviewScreen() {
       ) : error ? (
         <Text style={styles.error}>{error}</Text>
       ) : (
-        <ScrollView style={styles.previewBox}>
-          <Text style={styles.content}>{content}</Text>
-        </ScrollView>
+        <>
+          <ScrollView style={styles.previewBox}>
+            <Text style={styles.content}>{content}</Text>
+          </ScrollView>
+          <View style={{ marginTop: 24, flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
+            <ApproveRejectButtons />
+          </View>
+        </>
       )}
     </View>
+  );
+}
+
+function ApproveRejectButtons() {
+  const router = useRouter();
+  const { id } = useLocalSearchParams();
+  const [loading, setLoading] = useState(false);
+  const [confirmation, setConfirmation] = useState(null);
+
+  const handleAction = async (action) => {
+    setLoading(true);
+    try {
+      await apiClient.patch(`/review-content/${id}/${action}`);
+      setConfirmation(action === 'approve' ? 'The draft was approved!' : 'The draft was rejected!');
+      setTimeout(() => {
+        setConfirmation(null);
+        router.replace('/collab/review-content');
+      }, 1500);
+    } catch (error) {
+      setConfirmation(`Failed to ${action}.`);
+      setTimeout(() => setConfirmation(null), 2500);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ... inside return:
+  // {confirmation && <View style={{position:'absolute',top:10,left:0,right:0,alignItems:'center',zIndex:10}}><View style={{backgroundColor:'#222',padding:12,borderRadius:8}}><Text style={{color:'#fff'}}>{confirmation}</Text></View></View>}
+
+  return (
+    <>
+      {confirmation && (
+        <View style={{position:'absolute',top:10,left:0,right:0,alignItems:'center',zIndex:10}}>
+          <View style={{backgroundColor:'#222',padding:12,borderRadius:8,minWidth:200}}>
+            <Text style={{color:'#fff',fontWeight:'bold',textAlign:'center'}}>{confirmation}</Text>
+          </View>
+        </View>
+      )}
+      <TouchableOpacity style={{ backgroundColor: '#43a047', padding: 12, borderRadius: 8, marginRight: 10 }} disabled={loading} onPress={() => handleAction('approve')}>
+        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Approve</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={{ backgroundColor: '#e53935', padding: 12, borderRadius: 8 }} disabled={loading} onPress={() => handleAction('reject')}>
+        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Reject</Text>
+      </TouchableOpacity>
+    </>
   );
 }
 

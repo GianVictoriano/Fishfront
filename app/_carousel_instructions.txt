@@ -1,0 +1,12 @@
+# To enable a sliding carousel for recent articles in React Native, you need a carousel/swiper library.
+# The most popular is 'react-native-snap-carousel'. Install it with:
+#
+# npm install react-native-snap-carousel
+#
+# or
+#
+# yarn add react-native-snap-carousel
+#
+# Then, import Carousel from 'react-native-snap-carousel' in your component.
+#
+# If you want, I can add the code for the carousel usage after you install the dependency.

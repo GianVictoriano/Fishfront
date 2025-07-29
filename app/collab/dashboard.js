@@ -75,6 +75,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingLeft: 24, // Add space from sidebar
+    paddingRight: 24,
   },
   header: {
     marginBottom: 30,
@@ -136,7 +137,7 @@ const styles = StyleSheet.create({
   },
   quickActionsGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    marginHorizontal: -8,
   },
   quickAction: {
     flexDirection: 'row',
@@ -144,12 +145,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 16,
     borderRadius: 12,
-    width: '48%',
+    width: '46%',
+    margin: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 5,
-    gap: 0,
+    elevation: 2,
   },
   quickActionText: {
     marginLeft: 12,

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Image, Modal, Linking, ScrollView } from 'react-native';
+import { pickImage } from './imageUtils';
 import apiClient, { sendMessage, getMessages } from '../../utils/api';
 import modalStyles from './modalStyles.js';
 import { useRouter } from 'expo-router';
+import axios from 'axios'; 
 
 export default function CollaborateScreen() {
   const [uploadedFile, setUploadedFile] = useState(null);
@@ -27,6 +29,29 @@ export default function CollaborateScreen() {
   // Use a ref to hold the current selectedGroupId to avoid stale closures in the listener
   const selectedGroupIdRef = useRef(selectedGroupId);
   const isScanningRef = useRef(false); // Ref to track scanning state
+
+// Make sure you import axios
+
+  const handleChooseImageWeb = async (file) => {
+    try {
+      if (!file) return;
+      // Get CSRF cookie from the root endpoint
+      await axios.get('http://127.0.0.1:8000/sanctum/csrf-cookie', { withCredentials: true });
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('group_id', selectedGroupId);
+      formData.append('user_id', currentUser.id);
+      // Upload to review-images endpoint
+      await apiClient.post('/review-images', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        withCredentials: true,
+      });
+      setShowUploadMenu(false);
+    } catch (err) {
+      console.error('Error uploading image (web):', err);
+      setShowUploadMenu(false);
+    }
+  };
 
   useEffect(() => {
     selectedGroupIdRef.current = selectedGroupId;
@@ -136,15 +161,25 @@ export default function CollaborateScreen() {
   const handleChooseFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'text/plain',
+        type: [
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain',
+          'text/rtf',
+          'application/vnd.ms-powerpoint',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ],
+        copyToCacheDirectory: true
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        // Directly call the plagiarism check with the selected file asset
         handlePlagiarismCheck('file', result.assets[0]);
         setUploadedFile(result.assets[0]);
       } else {
-        setShowUploadMenu(false); // Hide menu if user cancels
+        setShowUploadMenu(false);
       }
     } catch (err) { 
       console.error('Error picking document:', err);
@@ -152,7 +187,34 @@ export default function CollaborateScreen() {
     }
   };
 
-  const handlePlagiarismCheck = useCallback(async (type, data) => {
+  const handleChooseImage = async () => {
+  try {
+    const image = await pickImage();
+    if (image) {
+      // Send as chat message with image
+      const formData = new FormData();
+      formData.append('image', {
+        uri: Platform.OS === 'android' ? image.uri : image.uri.replace('file://', ''),
+        name: image.fileName || image.uri.split('/').pop() || 'photo.jpg',
+        type: image.mimeType || 'image/jpeg',
+      });
+      formData.append('group_id', selectedGroupId);
+      formData.append('user_id', currentUser.id);
+      // Upload to review-images endpoint
+      const response = await apiClient.post('/review-images', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setShowUploadMenu(false);
+    } else {
+      setShowUploadMenu(false);
+    }
+  } catch (err) {
+    console.error('Error picking/sending image:', err);
+    setShowUploadMenu(false);
+  }
+};
+
+const handlePlagiarismCheck = useCallback(async (type, data) => {
     if (type === 'file' && data) {
       setUploadedFile(data);
     }
@@ -236,8 +298,12 @@ if (Platform.OS === 'web') {
         }
       }, 5000);
     } catch (error) {
-      console.error('Plagiarism check submission failed:', error.response?.data || error.message);
-      setScanResult('Failed to submit for plagiarism check. Please try again.');
+      let backendMsg = error?.response?.data;
+      if (typeof backendMsg === 'object') {
+        backendMsg = JSON.stringify(backendMsg);
+      }
+      console.error('Plagiarism check submission failed:', backendMsg || error.message, error);
+      setScanResult('Failed to submit for plagiarism check. ' + (backendMsg || error.message));
       setIsScanning(false);
       if (pollInterval) clearInterval(pollInterval);
     } finally {
@@ -318,18 +384,34 @@ if (Platform.OS === 'web') {
   const renderMessage = ({ item }) => {
     // System message: centered, gray, italic
     if (item.system) {
+      let bgColor = '#fff9c4'; // yellow default for 'sent'
+      let borderColor = '#ffe082';
+      let textColor = '#795548';
+      if (item.type === 'approve') {
+        bgColor = '#c8e6c9'; // green
+        borderColor = '#81c784';
+        textColor = '#256029';
+      } else if (item.type === 'reject') {
+        bgColor = '#ffcdd2'; // red
+        borderColor = '#e57373';
+        textColor = '#b71c1c';
+      } else if (item.type === 'sent') {
+        bgColor = '#fff9c4'; // yellow
+        borderColor = '#ffe082';
+        textColor = '#795548';
+      }
       return (
         <View style={{ alignItems: 'center', marginVertical: 8 }}>
           <View style={{
-            backgroundColor: '#e0e0e0',
+            backgroundColor: bgColor,
             paddingVertical: 6,
             paddingHorizontal: 14,
             borderRadius: 16,
             borderWidth: 1,
-            borderColor: '#bdbdbd',
+            borderColor: borderColor,
             maxWidth: '80%',
           }}>
-            <Text style={{ color: '#616161', fontStyle: 'italic', fontSize: 13, textAlign: 'center' }}>
+            <Text style={{ color: textColor, fontStyle: 'italic', fontSize: 13, textAlign: 'center' }}>
               {item.message}
             </Text>
           </View>
@@ -443,11 +525,18 @@ if (Platform.OS === 'web') {
                 {showUploadMenu && (
                   <View style={styles.uploadMenu}>
   {Platform.OS === 'web' ? (
-    <label style={styles.uploadMenuItem}>
-      <Text style={styles.uploadMenuText}>Upload .txt File</Text>
+  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 160 }}>
+    {/* Any file upload */}
+    <label
+      style={{
+        display: 'flex', alignItems: 'center', padding: '10px 18px', cursor: 'pointer', borderBottom: '1px solid #eee', background: '#fff', transition: 'background 0.2s',
+      }}
+      onMouseOver={e => (e.currentTarget.style.background = '#f5f5f5')}
+      onMouseOut={e => (e.currentTarget.style.background = '#fff')}
+    >
+      <span style={{ flex: 1, fontSize: 15 }}>Upload Any File</span>
       <input
         type="file"
-        accept=".txt"
         style={{ display: 'none' }}
         onChange={e => {
           if (e.target.files && e.target.files[0]) {
@@ -456,11 +545,37 @@ if (Platform.OS === 'web') {
         }}
       />
     </label>
-  ) : (
-    <TouchableOpacity style={styles.uploadMenuItem} onPress={handleChooseFile}>
-      <Text style={styles.uploadMenuText}>Upload .txt File</Text>
+    {/* Image upload */}
+    <label
+      style={{
+        display: 'flex', alignItems: 'center', padding: '10px 18px', cursor: 'pointer', background: '#fff', transition: 'background 0.2s',
+      }}
+      onMouseOver={e => (e.currentTarget.style.background = '#f5f5f5')}
+      onMouseOut={e => (e.currentTarget.style.background = '#fff')}
+    >
+      <span style={{ flex: 1, fontSize: 15 }}>Upload Image</span>
+      <input
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={e => {
+          if (e.target.files && e.target.files[0]) {
+            handleChooseImageWeb(e.target.files[0]);
+          }
+        }}
+      />
+    </label>
+  </div>
+) : (
+  <View>
+    <TouchableOpacity style={{ padding: 16 }} onPress={handleChooseFile}>
+      <Text>Upload File</Text>
     </TouchableOpacity>
-  )}
+    <TouchableOpacity style={{ padding: 16 }} onPress={handleChooseImage}>
+      <Text>Send Picture</Text>
+    </TouchableOpacity>
+  </View>
+)}  
 </View>
                 )}
               </View>
