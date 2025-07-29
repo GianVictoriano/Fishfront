@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Platform, Image, Pressable, ScrollView } from 'react-native';
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Slot, useRouter, useSegments, Tabs } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '~/context/AuthContext';
@@ -121,14 +121,11 @@ const Sidebar = ({ isMinimized }) => {
 
 export default function CollaboratorLayout() {
   const [isMinimized, setIsMinimized] = useState(false);
+  const { user, hasModule } = useAuth();
 
-  // Sidebar is only for web for now
-  if (Platform.OS !== 'web') {
-    // On mobile, we might want a different navigation like tabs or a drawer
-    return <Slot />;
-  }
-
-  return (
+  // Web layout with sidebar
+  if (Platform.OS === 'web') {
+    return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.layout}>
           <Sidebar isMinimized={isMinimized} />
@@ -142,9 +139,7 @@ export default function CollaboratorLayout() {
             <Scrollbars
               style={styles.contentScrollView} 
               autoHide
-              // Render an invisible thumb
               renderThumbVertical={props => <div {...props} style={{ ...props.style, backgroundColor: 'transparent' }}/>}
-              // Apply props to the content container
               renderView={props => <div {...props} style={{ ...props.style, flex: 1, display: 'flex', flexDirection: 'column' }}/>}
             >
               <Slot />
@@ -152,6 +147,66 @@ export default function CollaboratorLayout() {
           </View>
         </View>
       </SafeAreaView>
+    );
+  }
+
+  // Mobile layout with bottom tabs
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: '#111827',
+        tabBarInactiveTintColor: '#6B7280',
+        tabBarStyle: { backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E5E7EB' },
+        tabBarLabelStyle: { fontWeight: '600' },
+      }}
+    >
+      {hasModule('dashboard') && (
+        <Tabs.Screen
+          name="dashboard"
+          options={{
+            title: 'Dashboard',
+            tabBarIcon: ({ color, size }) => <Feather name="grid" size={size} color={color} />,
+          }}
+        />
+      )}
+      {hasModule('create-content') && (
+        <Tabs.Screen
+          name="create-content"
+          options={{
+            title: 'Create',
+            tabBarIcon: ({ color, size }) => <Feather name="plus-square" size={size} color={color} />,
+          }}
+        />
+      )}
+      {hasModule('review-content') && (
+        <Tabs.Screen
+          name="review-content"
+          options={{
+            title: 'Review',
+            tabBarIcon: ({ color, size }) => <Feather name="eye" size={size} color={color} />,
+          }}
+        />
+      )}
+       {hasModule('collaborate') && (
+        <Tabs.Screen
+          name="collaborate"
+          options={{
+            title: 'Collaborate',
+            tabBarIcon: ({ color, size }) => <Feather name="users" size={size} color={color} />,
+          }}
+        />
+      )}
+      {(user?.profile?.level === 2 || user?.profile?.level === 3) && (
+         <Tabs.Screen
+          name="more"
+          options={{
+            title: 'More',
+            tabBarIcon: ({ color, size }) => <Feather name="more-horizontal" size={size} color={color} />,
+          }}
+        />
+      )}
+    </Tabs>
   );
 }
 

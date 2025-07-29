@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } fr
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { useAuth } from '~/context/AuthContext';
 
 const API_URL = (process.env.EXPO_PUBLIC_API_URL ? process.env.EXPO_PUBLIC_API_URL : 'http://192.168.254.114:8000') + '/api';
 
@@ -15,6 +16,7 @@ export default function SignInCP() {
   const [loading, setLoading] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
   const router = useRouter();
+  const { signIn } = useAuth();
 
   useEffect(() => {
     fetch(`${API_URL}/users`)
@@ -70,10 +72,8 @@ export default function SignInCP() {
       }
       console.log('Login-as response:', res.status, data);
       if (res.ok && data.token) {
-        await AsyncStorage.setItem('token', data.token);
-        await AsyncStorage.setItem('user', JSON.stringify(data.user));
         Alert.alert('Success', `Signed in as ${data.user?.name || data.user?.email || 'user'}`);
-        router.replace('/home2');
+        await signIn(data);
       } else {
         Alert.alert('Login failed', data.error || 'Unknown error.');
         console.error('Login-as error:', data);

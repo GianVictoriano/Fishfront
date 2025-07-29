@@ -108,6 +108,19 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Helper function to check if the collaborator has a specific module
+  const signIn = async (data) => {
+    try {
+      const { token, user } = data;
+      await AsyncStorage.setItem('auth_token', token);
+      await AsyncStorage.setItem('user_data', JSON.stringify(user));
+      setAuth(user);
+      return { success: true };
+    } catch (error) {
+      console.error('SignIn failed:', error);
+      return { success: false, message: error.message || 'SignIn failed' };
+    }
+  };
+
   const hasModule = (moduleName) => {
       if (auth && auth.profile && auth.profile.modules) {
           return auth.profile.modules.some(module => module.name === moduleName);
@@ -123,6 +136,7 @@ export const AuthProvider = ({ children }) => {
     reloadUser,
     loginWithGoogleToken,
     setAuth,
+    signIn, // Expose the new signIn function
     hasModule, // Expose the new function
   };
 

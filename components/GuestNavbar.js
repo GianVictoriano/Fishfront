@@ -41,13 +41,20 @@ export default function GuestNavbar({ onLinkPress = () => {}, onClose }) {
           <Text style={linkStyle('/about2')}>About Us</Text>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={isWeb ? styles.signInButton : styles.sidebarSignInButton} onPress={() => {
-  if (Platform.OS === 'android') {
-    router.push('/collab/signin_cp');
-  } else {
-    router.push('/signin');
-  }
-}}>
+      <TouchableOpacity
+        style={isWeb ? styles.signInButton : styles.sidebarSignInButton}
+        onPress={() => {
+          try {
+            if (Platform.OS === 'android') {
+              router.push('/signin_cp');
+            } else {
+              router.push('/signin');
+            }
+          } finally {
+            onLinkPress();
+          }
+        }}>
+
         <Text style={isWeb ? styles.signInButtonText : styles.sidebarSignInButtonText}>Sign In</Text>
       </TouchableOpacity>
     </View>
