@@ -3,8 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } fr
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-
-const API_URL = (process.env.EXPO_PUBLIC_API_URL ? process.env.EXPO_PUBLIC_API_URL : 'http://192.168.254.114:8000') + '/api';
+import apiClient from '~/utils/api';
 
 export default function SignInCP() {
   useEffect(() => {
@@ -17,17 +16,10 @@ export default function SignInCP() {
   const router = useRouter();
 
   useEffect(() => {
-    fetch(`${API_URL}/users`)
-      .then(async res => {
-        if (!res.ok) {
-          const text = await res.text();
-          console.error('Fetch users failed:', res.status, text);
-          Alert.alert('Fetch error', `Status: ${res.status}\n${text}`);
-          throw new Error(`HTTP ${res.status}`);
-        }
-        return res.json();
-      })
-      .then(data => {
+    apiClient.get('/users')
+
+      .then(response => {
+        const data = response.data;
         if (Array.isArray(data)) {
           setUsers(data);
           if (data.length > 0) setSelectedUserId(data[0].id);
@@ -53,23 +45,11 @@ export default function SignInCP() {
     }
     setSigningIn(true);
     try {
-      const res = await fetch(`${API_URL}/login-as`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: selectedUserId })
-      });
-      let data;
-      try {
-        data = await res.json();
-      } catch (jsonErr) {
-        const text = await res.text();
-        console.error('Login-as non-JSON response:', text);
-        Alert.alert('Login failed', `Non-JSON response: ${text}`);
-        setSigningIn(false);
-        return;
-      }
-      console.log('Login-as response:', res.status, data);
-      if (res.ok && data.token) {
+      const response = await apiClient.post('/login-as', { user_id: selectedUserId });
+      const data = response.data;
+
+      console.log('Login-as response:', response.status, data);
+      if (response.status === 200 && data.token) {
         await AsyncStorage.setItem('token', data.token);
         await AsyncStorage.setItem('user', JSON.stringify(data.user));
         Alert.alert('Success', `Signed in as ${data.user?.name || data.user?.email || 'user'}`);

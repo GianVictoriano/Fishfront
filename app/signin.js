@@ -20,28 +20,47 @@ const clientId = WEB_CLIENT_ID; // Always use web client for Expo proxy
 
 export default function SignInScreen() {
   const router = useRouter();
-  const { loginWithGoogleToken } = useAuth();
+  const { loginWithGoogleAuthCode, user } = useAuth();
   const { logoUrl, backgroundUrl } = useBranding();
 
 
 
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+  const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: clientId,
     androidClientId: WEB_CLIENT_ID,
-
+    responseType: 'code',
+    scopes: ['openid', 'profile', 'email', 'https://www.googleapis.com/auth/documents', 'https://www.googleapis.com/auth/drive.file'],
+    redirectUri: makeRedirectUri({ useProxy: true }),
+    usePKCE: true,
+    shouldAutoExchangeCode: false, // Prevent auto token exchange
+    codeChallengeMethod: 'S256', // Explicitly set PKCE method
   });
 
   useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token } = response.params;
-      if (id_token) {
-        loginWithGoogleToken(id_token);
+    const handleAuthResponse = async () => {
+      if (response?.type === 'success') {
+        const { code } = response.params;
+        console.log('Redirect URI used:', makeRedirectUri({ useProxy: true }));
+        if (code && request?.codeVerifier) {
+          console.log('Sending to backend:', { code, codeVerifier: request.codeVerifier });
+          await loginWithGoogleAuthCode(code, request.codeVerifier);
+        } else {
+          console.error('Missing code or codeVerifier:', { code, codeVerifier: request?.codeVerifier });
+        }
+      } else if (response?.type === 'error') {
+        console.error('[AUTH] Google Sign-In Error:', response.error);
+        Alert.alert('Google Sign-In Error', response.error?.message || 'An unknown error occurred.');
       }
-    } else if (response?.type === 'error') {
-      console.error('[AUTH] Response type is error.', response.error);
-      Alert.alert('Google Sign-In Error', response.error?.message || 'An unknown error occurred.');
-    }
+    };
+
+    handleAuthResponse();
   }, [response]);
+
+  useEffect(() => {
+    if (user) {
+      router.replace('/(tabs)/home');
+    }
+  }, [user]);
 
   return (
     <ImageBackground source={backgroundUrl} style={styles.background} resizeMode="cover">

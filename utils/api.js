@@ -2,11 +2,8 @@ import axios from 'axios';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const API_URL = 'http://192.168.254.114:8000';
-
-
 const apiClient = axios.create({
-  baseURL: 'http://192.168.254.114:8000/api',
+  baseURL: `${process.env.EXPO_PUBLIC_API_URL}/api`,
   withCredentials: true,
   headers: {
     'Accept': 'application/json',

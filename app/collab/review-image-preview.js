@@ -57,7 +57,7 @@ export default function ReviewImagePreviewScreen() {
           </View>
         </View>
       )}
-      <Image source={{ uri: `http://192.168.254.114:8000/storage/${imageData.file}` }} style={styles.image} resizeMode="contain" />
+      <Image source={{ uri: `${API_URL}/storage/${imageData.file}` }} style={styles.image} resizeMode="contain" />
       <Text>Status: <Text style={styles.status}>{imageData.status}</Text></Text>
       <Text>Uploaded by: {imageData.user_id}</Text>
       <Text>Uploaded at: {imageData.uploaded_at ? new Date(imageData.uploaded_at).toLocaleString() : 'N/A'}</Text>

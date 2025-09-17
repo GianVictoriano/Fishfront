@@ -16,30 +16,47 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const loadUser = async () => {
-      const storedToken = await AsyncStorage.getItem('token');
-      // LOG THE TOKEN FROM STORAGE
+      const storedToken = await AsyncStorage.getItem('auth_token');
       console.log('[AuthContext] Loading token from storage:', storedToken);
-      // ... rest of the function
+      if (storedToken) {
+        apiClient.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+        const userData = await AsyncStorage.getItem('user_data');
+        if (userData) {
+          setAuth(JSON.parse(userData));
+        }
+      }
     };
     loadUser();
   }, []);
-  const loginWithGoogleToken = async (idToken) => {
+  const loginWithGoogleAuthCode = async (authCode, codeVerifier) => {
     setLoading(true);
     try {
-      const response = await apiClient.post('/auth/google', { token: idToken });
-      const { token, user } = response.data;
+      const response = await apiClient.post('/google/access-token', { auth_code: authCode, code_verifier: codeVerifier });
+      const {
+        api_token,
+        user,
+        google_access_token,
+        google_refresh_token,
+      } = response.data;
 
-      console.log('[AuthContext] Received token from backend:', token);
-      console.log('[AuthContext] Received user from backend:', user);
-      await AsyncStorage.setItem('auth_token', token);
+      // Store all relevant data
+      await AsyncStorage.setItem('auth_token', api_token);
       await AsyncStorage.setItem('user_data', JSON.stringify(user));
-      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      await AsyncStorage.setItem('google_access_token', google_access_token);
+      if (google_refresh_token) {
+        await AsyncStorage.setItem('google_refresh_token', google_refresh_token);
+      }
+
+      // Configure API client and update auth state
+      apiClient.defaults.headers.common['Authorization'] = `Bearer ${api_token}`;
       setAuth(user);
-      console.log('[AuthContext] Received token from backend:', token);
-      console.log('[AuthContext] Received user from backend:', user);
+
+      console.log('[AuthContext] Google login successful. API and Google tokens stored.');
+
     } catch (error) {
-      console.error('[AuthContext] Error during Google login:', error.response?.data || error.message);
-      await AsyncStorage.removeItem('auth_token');
+      console.error('[AuthContext] Error during Google auth code exchange:', error.response?.data || error.message);
+      // Clear all potentially stored tokens on failure
+      await AsyncStorage.multiRemove(['auth_token', 'user_data', 'google_access_token', 'google_refresh_token']);
       delete apiClient.defaults.headers.common['Authorization'];
       setAuth(null);
     } finally {
@@ -134,7 +151,7 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     reloadUser,
-    loginWithGoogleToken,
+    loginWithGoogleAuthCode,
     setAuth,
     signIn, // Expose the new signIn function
     hasModule, // Expose the new function

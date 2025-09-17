@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useAuth } from '~/context/AuthContext';
 
-const API_URL = (process.env.EXPO_PUBLIC_API_URL ? process.env.EXPO_PUBLIC_API_URL : 'http://192.168.254.114:8000') + '/api';
+const API_URL = (process.env.EXPO_PUBLIC_API_URL ? process.env.EXPO_PUBLIC_API_URL : 'http://172.20.10.2:8000') + '/api';
 
 export default function SignInCP() {
   useEffect(() => {

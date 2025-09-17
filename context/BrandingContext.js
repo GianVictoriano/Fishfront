@@ -25,7 +25,7 @@ export const BrandingProvider = ({ children }) => {
 
   const fetchBranding = useCallback(async () => {
     setLoading(true);
-    console.log('[BrandingContext] Fetching branding... Attempting to use API_URL:', API_URL);
+    console.log('[BrandingContext] Fetching branding... Attempting to use API_URL:', process.env.EXPO_PUBLIC_API_URL);
     try {
       const response = await apiClient.get('/branding');
       const { logo_url, background_url } = response.data;

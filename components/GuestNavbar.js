@@ -62,100 +62,111 @@ export default function GuestNavbar({ onLinkPress = () => {}, onClose }) {
 }
 
 const styles = StyleSheet.create({
+  // --- Shared Styles ---
   brandContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: Platform.OS === 'web' ? 0 : 24,
+    gap: 14,
+    marginBottom: Platform.OS === 'web' ? 0 : 32,
   },
   avatar: {
-    ...Platform.select({
-      web: {
-        width: 36,
-        height: 36,
-      },
-      default: {
-        width: 56,
-        height: 56,
-      },
-    }),
-    borderRadius: 28,
-    marginRight: 6,
+    width: Platform.OS === 'web' ? 44 : 64,
+    height: Platform.OS === 'web' ? 44 : 64,
+    borderRadius: 32,
     borderWidth: 2,
     borderColor: '#1a237e',
     backgroundColor: '#fff',
   },
+  brand: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#1a237e',
+  },
+
+  // --- Web-Specific Styles (Navbar) ---
   navbar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    backgroundColor: '#ffffff',
+    paddingVertical: 20,
+    paddingHorizontal: 40,
+    backgroundColor: '#f8f9fa',
     ...Platform.select({
-      web: {
-        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-      },
-      native: {
-        borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
-        elevation: 2,
-      },
+      web: { boxShadow: '0 4px 8px rgba(0,0,0,0.06)' },
     }),
-  },
-  brand: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1a237e',
   },
   navLinks: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 150,
+    gap: 100,
   },
   navLink: {
+    fontWeight: '500',
+    fontSize: 18,
+    color: '#37474f',
+    paddingVertical: 12,
+  },
+  navLinkActive: {
+    color: '#1976d2',
+    borderBottomWidth: 3,
+    borderBottomColor: '#1976d2',
+  },
+  signInButton: {
+    backgroundColor: '#1976d2',
+    paddingVertical: 14,
+    paddingHorizontal: 30,
+    borderRadius: 12,
+    shadowColor: '#1976d2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+  },
+  signInButtonText: {
+    color: '#ffffff',
     fontWeight: '600',
-    color: '#333',
-    fontSize: 16,
-    paddingVertical: 8,
+    fontSize: 18,
+  },
+
+  // --- Mobile-Specific Styles (Sidebar) ---
+  sidebar: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    padding: 24,
+    paddingTop: 56,
+  },
+  sidebarDivider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 24,
+  },
+  sidebarLinks: {
+    marginBottom: 16,
+  },
+  linkRow: {
+    marginBottom: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  activeLinkRow: {
+    backgroundColor: '#eef4ff',
   },
   sidebarLink: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#1a237e',
-    paddingVertical: 14,
-    paddingHorizontal: 4,
   },
-  navLinkActive: {
-    color: '#007BFF',
-    borderBottomWidth: 2,
-    borderBottomColor: '#007BFF',
-  },
-  navLinkRow: {
-    paddingVertical: 8,
-  },
-  signInButton: {
+  sidebarSignInButton: {
+    marginTop: 'auto',
     backgroundColor: '#007BFF',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderRadius: 8,
-    elevation: 2,
-    shadowColor: '#007BFF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  signInButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
+    alignItems: 'center',
   },
   sidebarSignInButtonText: {
-    color: '#1a237e',
+    color: '#ffffff',
     fontWeight: 'bold',
-    fontSize: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 4,
+    fontSize: 18,
   },
   closeButton: {
     position: 'absolute',
@@ -163,5 +174,10 @@ const styles = StyleSheet.create({
     top: 16,
     zIndex: 10,
     padding: 4,
+  },
+  brand: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#1a237e',
   },
 });

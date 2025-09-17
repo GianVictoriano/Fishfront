@@ -27,7 +27,9 @@ const ManageUsersScreen = () => {
             setError(null);
         } catch (err) {
             console.error('Failed to fetch collaborators:', err);
-            setError('Failed to load collaborators. Please try again later.');
+            // Check if the error response has a specific message from the server
+            const message = err.response?.data?.message || 'Failed to load collaborators. Please try again later.';
+            setError(message);
         } finally {
             setLoading(false);
         }

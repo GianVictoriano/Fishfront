@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Platform, Image, Pressable, ScrollView } from '
 import { Slot, useRouter, useSegments, Tabs } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { useWindowDimensions } from 'react-native';
 import { useAuth } from '~/context/AuthContext';
 import { useBranding } from '~/context/BrandingContext';
 import { Scrollbars } from 'react-custom-scrollbars-2';
@@ -54,6 +55,63 @@ const SidebarLink = ({ href, text, iconName, isMinimized, onPress }) => {
 };
 
 // The main sidebar component
+const CustomTabBar = ({ state, descriptors, navigation }) => {
+  return (
+    <SafeAreaView edges={['bottom']} style={{ backgroundColor: '#FFFFFF' }}>
+      <View style={styles.tabBarContainer}>
+        {state.routes.slice(0, 3).map((route, index) => { // Take only the first 3 routes
+          const { options } = descriptors[route.key];
+          const label =
+            options.tabBarLabel !== undefined
+              ? options.tabBarLabel
+              : options.title !== undefined
+              ? options.title
+              : route.name;
+
+          const isFocused = state.index === index;
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name, route.params);
+            }
+          };
+
+          const onLongPress = () => {
+            navigation.emit({
+              type: 'tabLongPress',
+              target: route.key,
+            });
+          };
+
+          return (
+            <Pressable
+              key={route.key}
+              accessibilityRole="button"
+              accessibilityState={isFocused ? { selected: true } : {}}
+              accessibilityLabel={options.tabBarAccessibilityLabel}
+              testID={options.tabBarTestID}
+              onPress={onPress}
+              onLongPress={onLongPress}
+              style={styles.tabBarItem}
+            >
+              {typeof options.tabBarIcon === 'function' && options.tabBarIcon({ focused: isFocused, color: isFocused ? '#111827' : '#A0A0A0', size: 24 })}
+              <Text style={{ color: isFocused ? '#111827' : '#A0A0A0', fontSize: 12, fontWeight: '500' }}>
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </SafeAreaView>
+  );
+};
+
 const Sidebar = ({ isMinimized }) => {
   const { user, logout, hasModule } = useAuth();
   const { logoUrl, loading: brandingLoading } = useBranding();
@@ -150,15 +208,80 @@ export default function CollaboratorLayout() {
     );
   }
 
-  // Mobile layout with bottom tabs
+  // Android-specific layout with scrollable tabs
+  if (Platform.OS === 'android') {
+    return (
+      <Tabs tabBar={(props) => <CustomTabBar {...props} />}>
+        {hasModule('dashboard') && (
+          <Tabs.Screen
+            name="dashboard"
+            options={{
+              title: 'Dashboard',
+              tabBarIcon: ({ color, size }) => <Feather name="grid" size={size} color={color} />,
+            }}
+          />
+        )}
+        {hasModule('create-content') && (
+          <Tabs.Screen
+            name="create-content"
+            options={{
+              title: 'Create',
+              tabBarIcon: ({ color, size }) => <Feather name="plus-square" size={size} color={color} />,
+            }}
+          />
+        )}
+        {hasModule('review-content') && (
+          <Tabs.Screen
+            name="review-content"
+            options={{
+              title: 'Review',
+              tabBarIcon: ({ color, size }) => <Feather name="eye" size={size} color={color} />,
+            }}
+          />
+        )}
+        {hasModule('collaborate') && (
+          <Tabs.Screen
+            name="collaborate"
+            options={{
+              title: 'Collaborate',
+              tabBarIcon: ({ color, size }) => <Feather name="users" size={size} color={color} />,
+            }}
+          />
+        )}
+        {(user?.profile?.level === 2 || user?.profile?.level === 3) && (
+          <Tabs.Screen
+            name="more"
+            options={{
+              title: 'More',
+              tabBarIcon: ({ color, size }) => <Feather name="more-horizontal" size={size} color={color} />,
+            }}
+          />
+        )}
+      </Tabs>
+    );
+  }
+
+  // Mobile layout (iOS) with bottom tabs
   return (
     <Tabs
+      tabBar={Platform.OS === 'android' ? (props) => <CustomTabBar {...props} /> : undefined}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#111827',
-        tabBarInactiveTintColor: '#6B7280',
-        tabBarStyle: { backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E5E7EB' },
-        tabBarLabelStyle: { fontWeight: '600' },
+        tabBarStyle: {
+          display: isMobile ? (Platform.OS === 'android' ? 'none' : 'flex') : 'none',
+          height: 70,
+          paddingBottom: 10,
+          paddingTop: 5,
+          backgroundColor: '#FFFFFF', // White background for the tab bar
+          borderTopWidth: 1,
+          borderTopColor: '#E5E7EB', // Light grey top border
+        },
+        tabBarActiveTintColor: '#111827', // Dark text for active tab
+        tabBarInactiveTintColor: '#A0A0A0', // Grey text for inactive tab
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
       }}
     >
       {hasModule('dashboard') && (
@@ -211,6 +334,20 @@ export default function CollaboratorLayout() {
 }
 
 const styles = StyleSheet.create({
+  tabBarContainer: {
+    flexDirection: 'row',
+    height: 70,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  tabBarItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 5, // Adjust as needed
+    paddingTop: 5,
+  },
   sidebarHeader: {
     flexDirection: 'row',
     alignItems: 'center',
