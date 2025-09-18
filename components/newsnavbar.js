@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity,TextInput } from 'react-native';
 
 // This NewsNavbar is exclusive to news.js and appears under the main Navbar
-export default function NewsNavbar({ onSectionChange, activeSection }) {
+export default function NewsNavbar({ onGenreChange, activeGenre }) {
   // Example sections: All, Latest, Trending, Editorial, Literary, Sports
   const sections = ['News', 'Articles', 'Opinion', 'Sports', 'Editorial', 'Artworks'];
 
@@ -12,10 +12,10 @@ export default function NewsNavbar({ onSectionChange, activeSection }) {
         {sections.map(section => (
           <TouchableOpacity
             key={section}
-            style={[styles.tab, activeSection === section && styles.activeTab]}
-            onPress={() => onSectionChange && onSectionChange(section)}
+            style={[styles.tab, activeGenre === section && styles.activeTab]}
+            onPress={() => onGenreChange && onGenreChange(section)}
           >
-            <Text style={[styles.tabText, activeSection === section && styles.activeTabText]}>{section}</Text>
+            <Text style={[styles.tabText, activeGenre === section && styles.activeTabText]}>{section}</Text>
           </TouchableOpacity>
         ))}
       </View>

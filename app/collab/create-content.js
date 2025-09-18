@@ -154,8 +154,8 @@ export default function CreateContentScreen() {
         <CreateOptionCard 
           icon="arrow-up-bold-box-outline"
           title="Publish"
-          description="Upload content to display on the news page."
-          onPress={() => handlePress('PublishOnTop')}
+          description="Create and publish a new article."
+          onPress={() => router.push('/collab/create-article')}
         />
       </View>
       {/* Scrum Panel Modal */}

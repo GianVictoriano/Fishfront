@@ -1,5 +1,5 @@
-import { Link } from 'expo-router';
-import React, { useState } from 'react';
+import { Link, useRouter } from 'expo-router';
+import React, { useState, useEffect } from 'react';
 import { Text, View, StyleSheet, SafeAreaView, Platform, TouchableOpacity, Modal, FlatList, Image, ScrollView } from 'react-native';
 import Navbar from '../components/Navbar';
 import NewsNavbar from '../components/newsnavbar';
@@ -117,34 +117,82 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 0,
-    marginBottom: 14,
+    borderRadius: 16,
     overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.10,
-    shadowRadius: 6,
-    flex: 1,
-    minWidth: 220,
-    maxWidth: 340,
-    marginHorizontal: 4,
+    marginBottom: 28,
+    boxShadow: '0 4px 24px 0 rgba(60,72,88,0.09)',
+    border: '1.5px solid #e4e8ee',
+    transition: 'box-shadow 0.25s cubic-bezier(.4,2,.6,1), transform 0.18s cubic-bezier(.4,2,.6,1)',
+    cursor: 'pointer',
+    minWidth: 250,
+    maxWidth: 280,
+    width: '100%',
   },
-  compactCard: {
-    minHeight: 160,
-    maxHeight: 200,
+  cardHover: {
+    boxShadow: '0 10px 32px 0 rgba(60,72,88,0.18)',
+    transform: 'translateY(-4px) scale(1.025)',
+    borderColor: '#d0d6e0',
   },
   cardImage: {
     width: '100%',
-    height: 110,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
+    minWidth: 350,
+    maxWidth: 520,
+    height: 150,
+    objectFit: 'cover',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    transition: 'filter 0.2s',
+  },
+  cardImageHover: {
+    // No additional styles needed here
+  },
+  cardOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0,
+    transition: 'opacity 0.2s ease',
+  },
+  cardOverlayHover: {
+    opacity: 1,
+  },
+  cardReadMore: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  compactCard: {
+    flexDirection: 'row',
+    height: 90,
+    marginBottom: 10,
+    alignItems: 'flex-start',
   },
   compactImage: {
-    height: 90,
+    width: 120,
+    height: '100%',
   },
   cardContent: {
-    padding: 10,
+    padding: 20,
+    backgroundColor: '#fff',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    minHeight: 92,
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    gap: 8,
   },
   cardCategory: {
     fontSize: 12,
@@ -278,179 +326,324 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#ececec',
     marginVertical: 4,
-  }
+  },
+  featuredCard: {
+    width: '100%',
+    marginBottom: 25,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+    position: 'relative',
+  },
+  featuredCardImage: {
+    width: '100%',
+    height: 280,
+    borderRadius: 12,
+    transition: 'filter 0.3s ease',
+  },
+  featuredCardImageHover: {
+    filter: 'brightness(0.85)',
+  },
+  featuredContent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 25,
+    paddingTop: 40,
+    background: 'linear-gradient(transparent, rgba(0,0,0,0.2), rgba(0,0,0,0.9))',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+  featuredCategory: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 10,
+    textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 2px 10px rgba(0,0,0,0.6)',
+  },
+  featuredTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    marginBottom: 12,
+    lineHeight: 32,
+    color: '#fff',
+    textShadow: '0 1px 1px rgba(0,0,0,0.8), 0 2px 8px rgba(0,0,0,0.8)',
+  },
+  featuredExcerpt: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.95)',
+    lineHeight: 24,
+    marginBottom: 15,
+    textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 2px 6px rgba(0,0,0,0.7)',
+    fontWeight: '500',
+  },
+  featuredMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  featuredDate: {
+    color: 'rgba(255,255,255,0.95)',
+    fontSize: 13,
+    textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+    fontWeight: '500',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  readMoreContainer: {
+    position: 'absolute',
+    right: 0,
+    top: '50%',
+    transform: [
+      { translateX: '100%' },
+      { translateY: '-50%' },
+      { perspective: 1000 },
+      { rotateY: '90deg' },
+      { rotateZ: '-2deg' },
+    ],
+    transformOrigin: 'left center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    paddingLeft: 30,
+    borderTopLeftRadius: 4,
+    borderBottomLeftRadius: 4,
+    opacity: 0,
+    transition: 'all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+    boxShadow: '-5px 0 15px rgba(0,0,0,0.1)',
+  },
+  readMore: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+    marginRight: 10,
+    textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+    letterSpacing: 0.5,
+    transition: 'all 0.3s ease',
+  },
+  readMoreIcon: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 2,
+    marginLeft: 2,
+    transition: 'all 0.3s ease',
+  },
 });
 
 // --- COMPONENT CODE MUST BE BELOW STYLES ---
 
-// Placeholder data for news articles
-const newsData = [
+import apiClient from '../utils/api';
+
+// Fallback static data
+const fallbackNewsData = [
   {
     id: '1',
-    title: 'New Fishing Regulations Announced for the Summer Season',
-    excerpt: 'Authorities have released new guidelines for recreational and commercial fishing to ensure sustainability...',
-    image: 'https://images.unsplash.com/photo-1524704796725-9fc3044a58b2?q=80&w=2070',
-    date: 'July 15, 2024',
-    category: 'Nation',
-  },
-  {
-    id: '2',
-    title: 'The Annual Fishing Derby Breaks All Records',
-    excerpt: 'This year\'s derby saw record participation and a new champion crowned in the heavyweight category...',
-    image: 'https://images.unsplash.com/photo-1555815944-43f55a116503?q=80&w=2070',
-    date: 'July 12, 2024',
-    category: 'Sports',
-  },
-  {
-    id: '3',
-    title: 'Tech in Fishing: How GPS and Sonar are Changing the Game',
-    excerpt: 'Modern technology is giving anglers an unprecedented edge, from finding the best spots to tracking fish...',
-    image: 'https://images.unsplash.com/photo-1553697388-9955731b1c73?q=80&w=2070',
-    date: 'July 10, 2024',
-    category: 'Tech',
-  },
-  {
-    id: '4',
-    title: 'Fishermen Rescue Stranded Dolphins',
-    excerpt: 'Local fishermen became heroes after saving a pod of dolphins stranded near the shore...',
+    title: 'Welcome to Fisherman News',
+    excerpt: 'Stay tuned for the latest updates and articles...',
     image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
-    date: 'July 8, 2024',
-    category: 'Environment',
-  },
-  {
-    id: '5',
-    title: 'Seafood Prices Drop Amid Bumper Catch',
-    excerpt: 'Market prices for seafood have dropped this week as local fishers report record hauls...',
-    image: 'https://images.unsplash.com/photo-1464983953574-0892a716854b?q=80&w=2070',
-    date: 'July 6, 2024',
-    category: 'Business',
-  },
-  {
-    id: '6',
-    title: 'Kids Learn to Fish at Summer Camp',
-    excerpt: 'A new summer camp is teaching children the basics of fishing and environmental stewardship...',
-    image: 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?q=80&w=2070',
-    date: 'July 4, 2024',
-    category: 'Lifestyle',
-  },
-  {
-    id: '7',
-    title: 'Local Boat Builder Wins National Award',
-    excerpt: 'A craftsman from the coastal village receives recognition for innovative boat designs...',
-    image: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?q=80&w=2070',
-    date: 'July 2, 2024',
-    category: 'Community',
-  },
-  {
-    id: '8',
-    title: 'Rare Fish Species Spotted in River',
-    excerpt: 'Biologists are excited after a rare fish species was spotted in the local river for the first time in decades...',
-    image: 'https://images.unsplash.com/photo-1464983953574-0892a716854b?q=80&w=2070',
-    date: 'June 30, 2024',
-    category: 'Science',
-  },
-  {
-    id: '9',
-    title: 'Weather Update: Storm Watch Issued for Coastal Areas',
-    excerpt: 'Authorities urge residents to prepare as a tropical storm approaches...',
-    image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
-    date: 'June 28, 2024',
-    category: 'Weather',
-  },
-  {
-    id: '10',
-    title: 'Fisherfolk Receive New Equipment from NGO',
-    excerpt: 'A non-profit organization has distributed modern fishing gear to local communities...',
-    image: 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?q=80&w=2070',
-    date: 'June 26, 2024',
-    category: 'Community',
-  },
-  {
-    id: '11',
-    title: 'Marine Protected Area Expansion Announced',
-    excerpt: 'Government announces new boundaries for marine conservation...',
-    image: 'https://images.unsplash.com/photo-1464983953574-0892a716854b?q=80&w=2070',
-    date: 'June 24, 2024',
-    category: 'Environment',
-  },
-  {
-    id: '12',
-    title: 'Fish Market Festival Attracts Tourists',
-    excerpt: 'The annual festival draws crowds with fresh seafood and cultural shows...',
-    image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
-    date: 'June 22, 2024',
-    category: 'Events',
-  },
-  {
-    id: '13',
-    title: 'Aquaculture Farms See Growth in Exports',
-    excerpt: 'Local aquaculture businesses report a surge in overseas demand...',
-    image: 'https://images.unsplash.com/photo-1553697388-9955731b1c73?q=80&w=2070',
-    date: 'June 20, 2024',
-    category: 'Business',
-  },
-  {
-    id: '14',
-    title: 'Youth Group Leads Coastal Cleanup',
-    excerpt: 'Volunteers collect over 500kg of trash from the shoreline...',
-    image: 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?q=80&w=2070',
-    date: 'June 18, 2024',
-    category: 'Community',
-  },
-  {
-    id: '15',
-    title: 'Expert Tips: Sustainable Fishing Practices',
-    excerpt: 'Learn how to fish responsibly and protect marine life...',
-    image: 'https://images.unsplash.com/photo-1464983953574-0892a716854b?q=80&w=2070',
-    date: 'June 16, 2024',
-    category: 'Advice',
-  },
+    date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    category: 'News'
+  }
 ];
 
-const NewsCard = ({ item, compact, bigTrending }) => (
-  <View style={[
-    styles.card,
-    compact && styles.compactCard,
-    bigTrending && styles.trendingCard,
-  ]}>
-    <Image source={{ uri: item.image }} style={[
-      styles.cardImage,
-      compact && styles.compactImage,
-      bigTrending && styles.trendingImage,
-    ]} />
-    <View style={[
-      styles.cardContent,
-      bigTrending && styles.trendingContent,
-    ]}>
-      <Text style={[
-        styles.cardCategory,
-        compact && styles.compactCategory,
-        bigTrending && styles.trendingCategory,
-      ]}>{item.category}</Text>
-      <Text
-        style={[
-          styles.cardTitle,
-          compact && styles.compactTitle,
-          bigTrending && styles.trendingTitle,
-        ]}
-        numberOfLines={bigTrending ? 3 : 2}
+const NewsCard = ({ item, compact, bigTrending, isFirst }) => {
+  const router = useRouter();
+  // Default image if none is provided
+  const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+  
+  // Ensure the image URL is properly formatted
+  const getImageUrl = (url) => {
+    if (!url) return defaultImage;
+    // If it's already a full URL, use it as is
+    if (url.startsWith('http')) return url;
+    // If it's a local path, prepend the API URL
+    return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${url}`;
+  };
+  
+  const [imageUri, setImageUri] = useState(getImageUrl(item?.image));
+  
+  // Update imageUri when item changes
+  useEffect(() => {
+    setImageUri(getImageUrl(item?.image));
+  }, [item?.image]);
+  
+  const handleImageError = () => {
+    // If image fails to load, use default image
+    setImageUri(defaultImage);
+  };
+  
+  const [isHovered, setIsHovered] = useState(false);
+
+  if (isFirst) {
+    return (
+      <TouchableOpacity 
+        style={styles.featuredCard} 
+        activeOpacity={0.9}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onPress={() => router.push(`/news/article/${item.id}`)}
       >
-        {item.title}
-      </Text>
-    </View>
-  </View>
-);
+        <View style={{ position: 'relative' }}>
+          <Image 
+            source={{ uri: imageUri }} 
+            style={[
+              styles.featuredCardImage,
+              isHovered && styles.featuredCardImageHover
+            ]}
+            onError={handleImageError}
+            defaultSource={{ uri: defaultImage }}
+            resizeMode="cover"
+          />
+        </View>
+        <View style={styles.featuredContent}>
+          <Text style={styles.featuredCategory}>{item?.category || 'Featured'}</Text>
+          <Text style={styles.featuredTitle}>
+            {item?.title || 'Untitled Article'}
+          </Text>
+          <Text style={styles.featuredExcerpt} numberOfLines={2}>
+            {item?.excerpt || ''}
+          </Text>
+          <View style={styles.featuredMeta}>
+            <Text style={styles.featuredDate}>
+              {item?.date || new Date().toLocaleDateString()}
+            </Text>
+            <View style={[styles.readMoreContainer, isHovered && { 
+              opacity: 1, 
+              transform: [
+                { translateX: 0 },
+                { translateY: '-50%' },
+                { perspective: 1000 },
+                { rotateY: '0deg' },
+                { rotateZ: '0deg' },
+              ],
+              boxShadow: '-5px 0 15px rgba(0,0,0,0.3)',
+              shadowColor: '#000',
+              shadowOffset: { width: -5, height: 0 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 5,
+            }]}>
+              <Text style={[styles.readMore, isHovered && { letterSpacing: '1px' }]}>
+                Read Full Story
+              </Text>
+              <Text style={[styles.readMoreIcon, isHovered && { transform: [{ translateX: 3 }] }]}>
+                →
+              </Text>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.card,
+        isHovered && styles.cardHover,
+        bigTrending && styles.trendingCard,
+      ]}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onPress={() => router.push(`/news/article/${item.id}`)}
+      activeOpacity={0.9}
+    >
+      <View style={{ position: 'relative' }}>
+        <Image
+          source={{ uri: imageUri }}
+          style={[
+            styles.cardImage,
+            isHovered && styles.cardImageHover,
+            bigTrending && styles.trendingImage,
+          ]}
+          onError={handleImageError}
+          defaultSource={{ uri: defaultImage }}
+          resizeMode="cover"
+        />
+        <View style={[
+          styles.cardOverlay,
+          isHovered && styles.cardOverlayHover
+        ]}>
+          <Text style={styles.cardReadMore}>Read Full Story</Text>
+        </View>
+      </View>
+      <View style={[
+        styles.cardContent,
+        bigTrending && styles.trendingContent,
+      ]}>
+        <Text style={[
+          styles.cardCategory,
+          compact && styles.compactCategory,
+          bigTrending && styles.trendingCategory,
+        ]}>{item?.category || 'General'}</Text>
+        <Text
+          style={[
+            styles.cardTitle,
+            compact && styles.compactTitle,
+            bigTrending && styles.trendingTitle,
+          ]}
+          numberOfLines={bigTrending ? 3 : 2}
+        >
+          {item?.title || 'Untitled Article'}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 const HeadlineCard = ({ item }) => (
   <View style={styles.headlineCard}>
-    <Text style={styles.headlineCategory}>{item.category}</Text>
-    <Text style={styles.headlineText} numberOfLines={2}>{item.title}</Text>
+    <Text style={styles.headlineCategory}>{item?.category || 'News'}</Text>
+    <Text style={styles.headlineText} numberOfLines={2}>{item?.title || 'No title available'}</Text>
   </View>
 );
 
 export default function NewsScreen() {
   const [navVisible, setNavVisible] = useState(false);
-  const trendingStory = newsData[0];
+  const [newsData, setNewsData] = useState(fallbackNewsData);
+  const [activeGenre, setActiveGenre] = useState('News');
+
+  useEffect(() => {
+    let isMounted = true;
+    const url = activeGenre === 'News' ? '/public/articles' : `/public/articles?genre=${activeGenre.toLowerCase()}`;
+    console.log(`Fetching articles from ${url}...`);
+    apiClient.get(url)
+      .then(res => {
+        console.log('Articles API response:', res.data);
+        if (Array.isArray(res.data?.data)) {
+          // Map backend data to match UI expectations
+          const mapped = res.data.data.map(article => ({
+            id: article.id?.toString() || '',
+            title: article.title,
+            excerpt: article.content?.slice(0, 120) + (article.content?.length > 120 ? '...' : ''),
+            image: article.media && article.media.length > 0 
+              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}` 
+              : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+            date: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
+            category: article.category || (article.user?.name ? 'By ' + article.user.name : 'General'),
+          }));
+          if (isMounted) setNewsData(mapped);
+        }
+      })
+      .catch(() => {
+        // fallback static data
+        if (isMounted) setNewsData(fallbackNewsData);
+      });
+    return () => { isMounted = false; };
+  }, [activeGenre]);
+
+  const featuredStory = newsData[0];
   const gridStories = newsData.slice(1, 10);
   const headlineStories = newsData.slice(10);
 
@@ -459,7 +652,7 @@ export default function NewsScreen() {
       {Platform.OS === 'web' ? (
         <>
           <Navbar />
-          <NewsNavbar />
+          <NewsNavbar activeGenre={activeGenre} onGenreChange={setActiveGenre} />
         </>
       ) : (
         <>
@@ -475,7 +668,7 @@ export default function NewsScreen() {
             <TouchableOpacity style={styles.modalOverlayNav} activeOpacity={1} onPressOut={() => setNavVisible(false)}>
               <View style={styles.modalViewNav}>
                 <Navbar onLinkPress={() => setNavVisible(false)} />
-                <NewsNavbar />
+                <NewsNavbar activeGenre={activeGenre} onGenreChange={setActiveGenre} />
               </View>
             </TouchableOpacity>
           </Modal>
@@ -486,7 +679,11 @@ export default function NewsScreen() {
           <View style={styles.leftColWrapper}>
             <Text style={styles.latestContentTitle}>Latest Content</Text>
             <View style={styles.trendingCardWrapper}>
-              <NewsCard item={trendingStory} bigTrending />
+              {featuredStory && (
+                <TouchableOpacity style={styles.trendingContainer}>
+                  <NewsCard item={featuredStory} isFirst={true} />
+                </TouchableOpacity>
+              )}
             </View>
             <FlatList
               data={gridStories}

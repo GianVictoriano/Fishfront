@@ -4,6 +4,7 @@ import { useBranding } from '../context/BrandingContext';
 import HeroCarousel from './components/HeroCarousel';
 import Navbar from '../components/Navbar';
 import SvgWave from './components/SvgWave';
+import { useRouter } from 'expo-router';
 
 
 const { width } = Dimensions.get('window');
@@ -78,6 +79,7 @@ const publications = {
 const HomeScreen = () => {
   const [navVisible, setNavVisible] = useState(false);
   const { backgroundUrl } = useBranding();
+  const router = useRouter();
   const [carouselIndex, setCarouselIndex] = useState(0);
 
   const renderCarouselItem = ({ item }) => (
@@ -199,7 +201,7 @@ const HomeScreen = () => {
       <Text style={styles.sectionSubtitle}>
         Interested? Apply now and become a part of our mission!
       </Text>
-      <TouchableOpacity style={styles.readButton}>
+      <TouchableOpacity style={styles.readButton} onPress={() => router.push('/registration')}>
         <Text style={styles.readButtonText}>Apply Now</Text>
       </TouchableOpacity>
     </View>
