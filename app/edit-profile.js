@@ -1,9 +1,24 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Button, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, SafeAreaView, StyleSheet, Text, TextInput, View, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Feather } from '@expo/vector-icons';
 import { apiClient } from '../utils/api';
+
+const InputField = ({ icon, placeholder, value, onChangeText, multiline = false }) => (
+  <View style={styles.inputContainer}>
+    <Feather name={icon} size={20} color="#888" style={styles.inputIcon} />
+    <TextInput
+      style={[styles.input, multiline && styles.textArea]}
+      placeholder={placeholder}
+      value={value}
+      onChangeText={onChangeText}
+      multiline={multiline}
+      placeholderTextColor="#aaa"
+    />
+  </View>
+);
 
 export default function EditProfileScreen() {
   const [user, setUser] = useState(null);
@@ -37,25 +52,20 @@ export default function EditProfileScreen() {
 
   const handleUpdateProfile = async () => {
     setSaving(true);
-
     try {
-      // Use the apiClient which has the base URL and auth headers configured
-      const response = await apiClient.put('/profile', {
-        name,
-        program,
-        section,
-        description,
-      });
-
-      // Update the user data in AsyncStorage with the fresh data from the server
+      const response = await apiClient.put('/profile', { name, program, section, description });
       const updatedUser = response.data.user;
       await AsyncStorage.setItem('user_data', JSON.stringify(updatedUser));
-
+      setUser(updatedUser);
       Alert.alert('Success', 'Your profile has been updated.');
-      router.back(); // Go back to the profile screen
+      if (Platform.OS === 'web') {
+        window.location.reload();
+      } else {
+        router.back();
+      }
     } catch (error) {
       console.error('Failed to update profile:', error.response?.data || error.message);
-      Alert.alert('Error', 'Could not update your profile. Please check the details and try again.');
+      Alert.alert('Error', 'Could not update your profile. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -64,49 +74,37 @@ export default function EditProfileScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#111827" />
       </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.form}>
-        <Text style={styles.label}>Name</Text>
-        <TextInput
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="Your nickname"
-        />
+      <LinearGradient colors={['#1F2937', '#111827']} style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Feather name="arrow-left" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Edit Profile</Text>
+      </LinearGradient>
 
-        <Text style={styles.label}>Program</Text>
-        <TextInput
-          style={styles.input}
-          value={program}
-          onChangeText={setProgram}
-          placeholder="e.g., BSIT"
-        />
+      <ScrollView contentContainerStyle={styles.formContainer}>
+        <InputField icon="user" placeholder="Your nickname" value={name} onChangeText={setName} />
+        <InputField icon="book-open" placeholder="e.g., BSIT" value={program} onChangeText={setProgram} />
+        <InputField icon="grid" placeholder="e.g., 3201" value={section} onChangeText={setSection} />
+        <InputField icon="align-left" placeholder="Tell us a little about yourself" value={description} onChangeText={setDescription} multiline />
 
-        <Text style={styles.label}>Section</Text>
-        <TextInput
-          style={styles.input}
-          value={section}
-          onChangeText={setSection}
-          placeholder="e.g., 3201"
-        />
-
-        <Text style={styles.label}>Description</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Tell us a little about yourself"
-          multiline
-        />
-
-        <Button title={saving ? 'Saving...' : 'Save Changes'} onPress={handleUpdateProfile} disabled={saving} />
-      </View>
+        <TouchableOpacity style={[styles.saveButton, saving && styles.saveButtonDisabled]} onPress={handleUpdateProfile} disabled={saving}>
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Feather name="check-circle" size={18} color="#fff" />
+              <Text style={styles.saveButtonText}>Save Changes</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -114,31 +112,84 @@ export default function EditProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F7F8FA',
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  form: {
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: Platform.OS === 'android' ? 40 : 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  backButton: {
+    position: 'absolute',
+    left: 20,
+    top: Platform.OS === 'android' ? 40 : 20,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  formContainer: {
     padding: 20,
   },
-  label: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 5,
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 20,
+    paddingHorizontal: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  inputIcon: {
+    marginRight: 10,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 10,
-    borderRadius: 5,
-    marginBottom: 20,
+    flex: 1,
+    paddingVertical: 15,
     fontSize: 16,
+    color: '#333',
   },
   textArea: {
-    height: 100,
+    height: 120,
     textAlignVertical: 'top',
+    paddingTop: 15,
+  },
+  saveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10B981', // A modern, friendly green
+    borderRadius: 12,
+    paddingVertical: 15,
+    marginTop: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#6B7280', // Gray when disabled
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 10,
   },
 });

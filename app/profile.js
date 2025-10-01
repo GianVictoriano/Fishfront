@@ -1,68 +1,34 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import { Link, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Button, Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { API_URL } from '../utils/api';
+import { useState } from 'react';
+import { ActivityIndicator, Image, Modal, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Feather } from '@expo/vector-icons';
+import Navbar from '~/components/Navbar';
+import { useAuth } from '~/context/AuthContext';
+
+const InfoCard = ({ icon, label, value }) => (
+  <View style={styles.infoCard}>
+    <Feather name={icon} size={24} color="#374151" />
+    <View style={styles.infoTextContainer}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value || 'Not set'}</Text>
+    </View>
+  </View>
+);
 
 export default function ProfileScreen() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [navVisible, setNavVisible] = useState(false);
+  const { user, loading, logout } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    const loadUserFromStorage = async () => {
-      setLoading(true);
-      const token = await AsyncStorage.getItem('auth_token');
-      const userDataString = await AsyncStorage.getItem('user_data');
-
-      if (!token || !userDataString) {
-        // If there's no token or user data, the user is not properly logged in.
-        router.replace('/');
-        return;
-      }
-
-      try {
-        const userData = JSON.parse(userDataString);
-        setUser(userData);
-      } catch (e) {
-        console.error('Failed to parse user data from storage:', e);
-        // If data is corrupted, clear it and send user to login.
-        await AsyncStorage.clear();
-        router.replace('/');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadUserFromStorage();
-  }, []);
-
   const handleLogout = async () => {
-    setLoading(true);
-    const token = await AsyncStorage.getItem('auth_token');
-    try {
-      if (token) {
-        await axios.post(`${API_URL}/api/logout`, {}, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-      }
-    } catch (error) {
-      console.error('Failed to logout from server:', error.response?.data || error.message);
-      // We proceed to log out on the client-side regardless of server response
-    } finally {
-      await AsyncStorage.removeItem('auth_token');
-      await AsyncStorage.removeItem('user_data');
-      router.replace('/');
-    }
+    await logout();
   };
 
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#111827" />
       </View>
     );
   }
@@ -70,44 +36,69 @@ export default function ProfileScreen() {
   if (!user) {
     return (
       <View style={styles.centered}>
-        <Text>Could not load profile. Please try logging in again.</Text>
-        <Button title="Go to Login" onPress={() => router.replace('/')} />
+        <Text>Could not load profile.</Text>
+        <TouchableOpacity style={styles.button} onPress={() => router.replace('/')}>
+          <Text style={styles.buttonText}>Go to Login</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.profileContainer}>
-        {user.profile?.avatar && (
-          <Image source={{ uri: user.profile.avatar }} style={styles.avatar} />
-        )}
-        <Text style={styles.name}>{user.name}</Text>
-        <Text style={styles.email}>{user.email}</Text>
+      {Platform.OS === 'web' ? (
+        <Navbar />
+      ) : (
+        <>
+          <TouchableOpacity style={styles.menuButton} onPress={() => setNavVisible(true)}>
+            <Feather name="menu" size={28} color="#fff" />
+          </TouchableOpacity>
+          <Modal
+            animationType="slide"
+            transparent
+            visible={navVisible}
+            onRequestClose={() => setNavVisible(false)}
+          >
+            <TouchableOpacity style={styles.modalOverlayNav} activeOpacity={1} onPressOut={() => setNavVisible(false)}>
+              <View style={styles.modalViewNav}>
+                <Navbar onLinkPress={() => setNavVisible(false)} />
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        </>
+      )}
 
-        <View style={styles.infoBox}>
-          <Text style={styles.infoLabel}>Program:</Text>
-          <Text style={styles.infoValue}>{user.profile?.program || 'Not set'}</Text>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <LinearGradient
+          colors={['#1F2937', '#111827']}
+          style={styles.headerContainer}
+        >
+          <Image 
+            source={{ uri: user.profile?.avatar || `https://ui-avatars.com/api/?name=${user.name.replace(' ', '+')}&background=random` }}
+            style={styles.avatar} 
+          />
+          <Text style={styles.name}>{user.name}</Text>
+          <Text style={styles.email}>{user.email}</Text>
+        </LinearGradient>
+
+        <View style={styles.profileContent}>
+          <InfoCard icon="book-open" label="Program" value={user.profile?.program} />
+          <InfoCard icon="grid" label="Section" value={user.profile?.section} />
+          <InfoCard icon="align-left" label="Description" value={user.profile?.description} />
+
+          <Link href="/edit-profile" asChild>
+            <TouchableOpacity style={styles.button}>
+              <Feather name="edit-2" size={18} color="#fff" />
+              <Text style={styles.buttonText}>Edit Profile</Text>
+            </TouchableOpacity>
+          </Link>
+
+          <TouchableOpacity style={[styles.button, styles.logoutButton]} onPress={handleLogout}>
+            <Feather name="log-out" size={18} color="#fff" />
+            <Text style={styles.buttonText}>Logout</Text>
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.infoBox}>
-          <Text style={styles.infoLabel}>Section:</Text>
-          <Text style={styles.infoValue}>{user.profile?.section || 'Not set'}</Text>
-        </View>
-
-        <View style={styles.infoBox}>
-          <Text style={styles.infoLabel}>Description:</Text>
-          <Text style={styles.infoValue}>{user.profile?.description || 'Not set'}</Text>
-        </View>
-
-        <Link href="/edit-profile" asChild>
-          <Button title="Edit Profile" />
-        </Link>
-
-        <View style={styles.logoutButtonContainer}>
-          <Button title="Logout" onPress={handleLogout} color="#dc3545" />
-        </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -115,57 +106,105 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F7F8FA',
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  profileContainer: {
+  headerContainer: {
     alignItems: 'center',
-    padding: 20,
+    paddingTop: Platform.OS === 'web' ? 20 : 60,
+    paddingBottom: 40,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
   avatar: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    marginBottom: 20,
-    borderWidth: 3,
-    borderColor: '#007BFF',
+    marginBottom: 15,
+    borderWidth: 4,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   name: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
+    color: '#fff',
     marginBottom: 5,
   },
   email: {
     fontSize: 16,
-    color: 'gray',
-    marginBottom: 30,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
-  infoBox: {
+  profileContent: {
+    padding: 20,
+    marginTop: -20, // Pulls the content up to overlap slightly with the header radius
+  },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
-    width: '100%',
+    borderRadius: 12,
+    padding: 20,
     marginBottom: 15,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  infoTextContainer: {
+    marginLeft: 15,
   },
   infoLabel: {
     fontSize: 14,
-    color: 'gray',
+    color: '#888',
   },
   infoValue: {
     fontSize: 16,
-    marginTop: 5,
+    color: '#333',
+    marginTop: 4,
   },
-  logoutButtonContainer: {
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    paddingVertical: 15,
     marginTop: 20,
-    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 10,
+  },
+  logoutButton: {
+    backgroundColor: '#991B1B',
+    marginTop: 10,
+  },
+  menuButton: {
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    zIndex: 10,
+    padding: 10,
+  },
+  modalOverlayNav: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalViewNav: {
+    width: '75%',
+    height: '100%',
+    backgroundColor: '#fff',
   },
 });

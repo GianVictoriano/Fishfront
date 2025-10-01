@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "fishfront",
-    "slug": "fishfront",
+    "name": "Fishfront",
+    "slug": "Fishfront",
     "owner": "gianvictoriano",
-    "scheme": "fishfront",
+    "scheme": "Fishfront",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
