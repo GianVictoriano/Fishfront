@@ -19,15 +19,18 @@ const StatCard = ({ title, value, iconName, color, isMobile, cardStyle }) => (
 const ActivityItem = ({ text, time, iconName, isMobile }) => (
   <View style={styles.activityItem}>
     <Feather name={iconName} size={isMobile ? 18 : 24} color="#555" />
-    <Text style={styles.activityText}>{text}</Text>
-    <Text style={styles.activityTime}>{time}</Text>
+    <Text style={[styles.activityText, isMobile && { fontSize: 13 }]}>{text}</Text>
+    <Text style={[styles.activityTime, isMobile && { fontSize: 11 }]}>{time}</Text>
   </View>
 );
 
 const QuickAction = ({ title, iconName, href, isMobile }) => {
   const router = useRouter();
   return (
-    <TouchableOpacity style={[styles.quickAction, isMobile && styles.quickActionMobile]} onPress={() => router.push(href)}>
+    <TouchableOpacity
+      style={[styles.quickAction, isMobile ? styles.quickActionMobile : styles.quickActionDesktop]}
+      onPress={() => router.push(href)}
+    >
       <Feather name={iconName} size={isMobile ? 16 : 22} color="#303F9F" />
       <Text style={[styles.quickActionText, isMobile && styles.quickActionTextMobile]}>{title}</Text>
     </TouchableOpacity>
@@ -54,24 +57,32 @@ export default function DashboardScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, isMobile && styles.mobileContainer]}>
+        {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.title}>Welcome, {user?.profile?.name || 'Collaborator'}!</Text>
-            <Text style={styles.subtitle}>Here's a summary of your workspace.</Text>
+            <Text style={[styles.title, isMobile && { fontSize: 22 }]}>
+              Welcome, {user?.profile?.name || 'Collaborator'}!
+            </Text>
+            <Text style={[styles.subtitle, isMobile && { fontSize: 14 }]}>
+              Here's a summary of your workspace.
+            </Text>
           </View>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-            <Feather name="log-out" size={24} color="#1A202C" />
+            <Feather name="log-out" size={isMobile ? 20 : 24} color="#1A202C" />
           </TouchableOpacity>
         </View>
 
+        {/* Stats */}
         {isMobile ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.statsContainerHorizontal}
           >
-            {stats.map(stat => <StatCard key={stat.title} {...stat} isMobile={isMobile} cardStyle={{ width: width * 0.75 }} />)}
+            {stats.map(stat => (
+              <StatCard key={stat.title} {...stat} isMobile={isMobile} cardStyle={{ width: width * 0.75 }} />
+            ))}
           </ScrollView>
         ) : (
           <View style={styles.statsContainer}>
@@ -79,6 +90,7 @@ export default function DashboardScreen() {
           </View>
         )}
 
+        {/* Quick Actions */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={[styles.quickActionsGrid, isMobile && styles.mobileQuickActionsGrid]}>
@@ -87,6 +99,7 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        {/* Recent Activity */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
           <View style={styles.activityList}>
@@ -103,7 +116,10 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     padding: 24,
-    paddingBottom: 48, // Ensure space at the bottom
+    paddingBottom: 48,
+  },
+  mobileContainer: {
+    padding: 16,
   },
   header: {
     flexDirection: 'row',
@@ -150,7 +166,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   statCardMobile: {
-    padding: 8,
+    padding: 10,
     margin: 6,
     borderRadius: 8,
   },
@@ -210,10 +226,14 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 2,
   },
+  quickActionDesktop: {
+    maxWidth: '48%',
+  },
   quickActionMobile: {
-    padding: 10,
+    padding: 12,
     borderRadius: 10,
     margin: 6,
+    flexBasis: '100%',
   },
   quickActionText: {
     marginLeft: 12,
@@ -247,7 +267,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#A0AEC0',
   },
-
   mobileQuickActionsGrid: {
     flexDirection: 'column',
   },

@@ -130,7 +130,7 @@ const Sidebar = ({ isMinimized }) => {
         ) : (
           <Image source={{ uri: logoUrl }} style={styles.logo} resizeMode="contain" />
         )}
-        {!isMinimized && <Text style={styles.sidebarTitle}>Fisherman</Text>}
+        {!isMinimized && <Text style={styles.sidebarTitle}>1isherman</Text>}
       </View>
       {!isMinimized ? (
         <Scrollbars
@@ -477,5 +477,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
+  },
+   mobileToggle: {
+    padding: 10,
+    margin: 10,
+    borderRadius: 6,
+    backgroundColor: '#E5E7EB',
+    alignSelf: 'flex-start',
   },
 });
