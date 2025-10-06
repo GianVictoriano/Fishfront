@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image, Alert, Platform } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image, Alert, Platform, Modal, FlatList, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -14,8 +14,24 @@ export default function CreateArticleScreen() {
   const [content, setContent] = useState('');
   const [genre, setGenre] = useState('');
   const [images, setImages] = useState([]);
+  const [browseVisible, setBrowseVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const scrollViewRef = useRef();
+
+  // insert selected approved content
+  const handleInsertContent = ({ title: groupTitle, content: draftText, image }) => {
+    if (groupTitle) setTitle(groupTitle);
+    if (draftText) setContent(draftText);
+    if (image) {
+      setImages(prev => [...prev, { uri: image, type: 'image', local: false }]);
+    }
+    // scroll to content field
+    setTimeout(() => {
+      if (scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({ y: 250, animated: true });
+      }
+    }, 100);
+  };
 
   const pickImage = async () => {
     try {
@@ -239,15 +255,26 @@ export default function CreateArticleScreen() {
           <Ionicons name="arrow-back" size={24} color="#1a237e" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create Article</Text>
-        <TouchableOpacity 
-          style={[styles.publishButton, isSubmitting && styles.publishButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={isSubmitting}
-        >
-          <Text style={styles.publishButtonText}>
-            {isSubmitting ? 'Publishing...' : 'Publish'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtonsContainer}>
+          <TouchableOpacity 
+            style={[styles.publishButton, styles.browseButton, isSubmitting && styles.browseButtonDisabled]}
+            onPress={() => setBrowseVisible(true)}
+            disabled={isSubmitting}
+          >
+            <Text style={styles.publishButtonText}>
+              Browse Works
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.publishButton, isSubmitting && styles.publishButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={isSubmitting}
+          >
+            <Text style={styles.publishButtonText}>
+              {isSubmitting ? 'Publishing...' : 'Publish'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView 
@@ -319,18 +346,161 @@ export default function CreateArticleScreen() {
       <View style={styles.footer}>
         <TouchableOpacity style={styles.footerButton} onPress={pickImage}>
           <Ionicons name="image" size={24} color="#1a237e" />
-          <Text style={styles.footerButtonText}>Add Image</Text>
+          <Text style={styles.footerButtonText}>Select Image</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.footerButton} onPress={pickDocument}>
           <Ionicons name="document-attach" size={24} color="#1a237e" />
           <Text style={styles.footerButtonText}>Add File</Text>
         </TouchableOpacity>
       </View>
+          {/* Browse Works Modal */}
+      <Modal
+        visible={browseVisible}
+        animationType="slide"
+        onRequestClose={() => setBrowseVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Approved Works</Text>
+            <TouchableOpacity onPress={() => setBrowseVisible(false)}>
+              <Ionicons name="close" size={28} color="#1a237e" />
+            </TouchableOpacity>
+          </View>
+          <ApprovedWorksList onSelect={handleInsertContent} onClose={() => setBrowseVisible(false)} />
+        </View>
+      </Modal>
     </View>
   );
 }
 
+/**
+ * Component to list approved drafts/images for quick preview inside modal
+ */
+function ApprovedWorksList({ onClose, onSelect }) {
+  const [content, setContent] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    const fetchApproved = async () => {
+      try {
+        const params = new URLSearchParams({ status: 'approved' });
+        const [draftsRes, imagesRes] = await Promise.all([
+          apiClient.get(`/review-content?${params}`),
+          apiClient.get(`/review-images?${params}`),
+        ]);
+        const drafts = draftsRes.data.map((d) => ({ ...d, _type: 'draft' }));
+        const images = imagesRes.data.map((i) => ({ ...i, _type: 'image' }));
+        setContent([...drafts, ...images]);
+      } catch (e) {
+        console.error('Failed to load approved content', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchApproved();
+  }, []);
+
+  const handleSelect = async (item) => {
+    setLoading(true);
+    // close modal then navigate to preview screen
+    if(item._type==='draft'){
+      try{
+        const res = await apiClient.get(`/review-content/preview/${item.id}`);
+        const text = res.data.text || '';
+        onSelect({
+          title: item.group?.name || '',
+          content: text
+        });
+      }catch(e){
+        console.error('Failed fetching draft content',e);
+      }
+    } else if(item._type==='image'){
+      onSelect({
+        title: item.group?.name || '',
+        image: `${process.env.EXPO_PUBLIC_API_URL}/storage/${item.file}`
+      });
+    }
+    onClose();
+  };
+
+  if (loading) {
+    return <ActivityIndicator size="large" color="#303F9F" style={{ marginTop: 40 }} />;
+  }
+
+  if (content.length === 0) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ color: '#666' }}>No approved content available.</Text>
+      </View>
+    );
+  }
+
+  const renderItem = ({ item }) => (
+    <TouchableOpacity style={styles.approvedItem} onPress={() => handleSelect(item)}>
+      {item._type === 'image' ? (
+        <Image source={{ uri: `${process.env.EXPO_PUBLIC_API_URL}/storage/${item.file}` }} style={styles.approvedThumb} />
+      ) : (
+        <Ionicons name="document-text" size={48} color="#1a237e" />
+      )}
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <Text numberOfLines={2} style={styles.approvedTitle}>{item.group?.name || 'Unnamed Group'}</Text>
+        <Text style={styles.approvedMeta}>{item.status}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  return (
+    <FlatList
+      data={content.sort((a,b)=> new Date(b.uploaded_at)-new Date(a.uploaded_at))}
+      renderItem={renderItem}
+      keyExtractor={(item) => `${item._type}-${item.id}`}
+      contentContainerStyle={{ padding: 16 }}
+    />
+  );
+}
+
+
+
 const styles = StyleSheet.create({
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1a237e',
+  },
+  approvedItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  approvedThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  approvedTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  approvedMeta: {
+    fontSize: 12,
+    color: '#666',
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',
@@ -350,15 +520,23 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#1a237e',
+    flex: 1,
+    textAlign: 'center',
+    marginRight: 100, 
+  },
+  headerButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'absolute',
+    right: 10,
+    gap: 10,
   },
   publishButton: {
     backgroundColor: '#1a237e',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 4,
-  },
-  publishButtonDisabled: {
-    backgroundColor: '#9fa8da',
+    marginLeft: 10,
   },
   publishButtonText: {
     color: '#fff',

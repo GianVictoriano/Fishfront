@@ -11,7 +11,7 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import apiClient from '../../utils/api';
@@ -60,7 +60,8 @@ export default function ReviewContentScreen() {
   const [selectedGroupId, setSelectedGroupId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('pending');
+  const { status: initialStatus } = useLocalSearchParams();
+  const [statusFilter, setStatusFilter] = useState(initialStatus ?? 'pending');
 
   const { width } = useWindowDimensions();
   const isMobile = width < 768;

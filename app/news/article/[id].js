@@ -53,9 +53,10 @@ const styles = StyleSheet.create({
   body: {
     fontSize: 18,
     color: '#232323',
-    lineHeight: 1.8,
+    lineHeight: 28,
     marginBottom: 12,
-    whiteSpace: 'pre-line',
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'break-word',
     textAlign: 'left',
     width: '100%',
   },

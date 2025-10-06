@@ -203,7 +203,10 @@ export default function CollaborateScreen() {
     try {
       const formData = new FormData();
       if (Platform.OS === 'web') {
-        formData.append('file', data);
+        // On web, the `data` object from DocumentPicker is an asset containing the `File` object in a `file` property.
+        // We must append the actual file, not the asset object.
+        const fileToUpload = data.file || data;
+        formData.append('file', fileToUpload);
       } else {
         const uri = data.uri;
         if (!uri) {
@@ -261,7 +264,9 @@ export default function CollaborateScreen() {
       if (uploadedFile) {
         const formData = new FormData();
         if (Platform.OS === 'web') {
-          formData.append('file', uploadedFile);
+          // On web, the `uploadedFile` asset contains the `File` object in a `file` property.
+          const fileToUpload = uploadedFile.file || uploadedFile;
+          formData.append('file', fileToUpload);
         } else {
           formData.append('file', { uri: uploadedFile.uri, name: uploadedFile.name, type: uploadedFile.mimeType });
         }
@@ -473,7 +478,9 @@ export default function CollaborateScreen() {
                 {plagiarismResult ? (
                   <View>
                     <Text style={modalStyles.modalText}>File: {uploadedFile?.name}</Text>
-                    <Text style={getScoreStyle(plagiarismResult.score)}>Plagiarism Score: {plagiarismResult.score.toFixed(2)}%</Text>
+                    <Text style={getScoreStyle(plagiarismResult?.score || 0)}>
+                      Plagiarism Score: {plagiarismResult?.score ? plagiarismResult.score.toFixed(2) : 'N/A'}%
+                    </Text>
                     {plagiarismResult.url && 
                       <TouchableOpacity onPress={() => Linking.openURL(plagiarismResult.url)}>
                         <Text style={modalStyles.linkText}>View Report</Text>
