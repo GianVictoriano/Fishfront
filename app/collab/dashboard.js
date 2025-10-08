@@ -49,7 +49,7 @@ export default function DashboardScreen() {
   };
 
   const stats = [
-    { title: "In Review", value: "1", iconName: "file-text", color: "#FFA726" },
+    { title: "In Review5", value: "1", iconName: "file-text", color: "#FFA726" },
     { title: "Approved", value: "1", iconName: "check-square", color: "#66BB6A" },
     { title: "Pending Tasks", value: "2", iconName: "alert-circle", color: "#EF5350" },
     { title: "Team Members", value: "2", iconName: "users", color: "#5C6BC0" },

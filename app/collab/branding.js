@@ -1,151 +1,23 @@
-
-import React, { useState, useEffect } from 'react';
-import { View, Text, Button, Image, StyleSheet, ActivityIndicator, Alert, Platform, TouchableOpacity } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import React from 'react';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { useBranding } from '~/context/BrandingContext';
-import { useAuth } from '~/context/AuthContext';
-import apiClient from '../../utils/api';
 
-export default function BrandingManagementScreen() {
-  const { logoUrl, backgroundUrl, refreshBranding } = useBranding();
-  const { token } = useAuth(); // Get auth token
-  const [newLogo, setNewLogo] = useState(null);
-  const [newBackground, setNewBackground] = useState(null);
-  const [loading, setLoading] = useState(false);
 
-  // Request permissions on component mount for non-web platforms
-  useEffect(() => {
-    (async () => {
-      if (Platform.OS !== 'web') {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permission Denied', 'Sorry, we need camera roll permissions to make this work!');
-        }
-      }
-    })();
-  }, []);
-
-  const pickImage = async (type) => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'Images',
-      allowsEditing: true,
-      aspect: type === 'logo' ? [1, 1] : [16, 9],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      if (type === 'logo') {
-        setNewLogo(result.assets[0]);
-      } else {
-        setNewBackground(result.assets[0]);
-      }
-    }
-  };
-
-  const handleUpload = async () => {
-    if (!newLogo && !newBackground) {
-      Alert.alert('No Image Selected', 'Please select a logo or background to upload.');
-      return;
-    }
-
-    setLoading(true);
-
-    const formData = new FormData();
-
-    // Handle file uploads differently for web vs. native
-    if (newLogo) {
-      if (Platform.OS === 'web') {
-        const response = await fetch(newLogo.uri);
-        const blob = await response.blob();
-        formData.append('logo', blob, `logo.${blob.type.split('/')[1]}`);
-      } else {
-        const uriParts = newLogo.uri.split('.');
-        const fileType = uriParts[uriParts.length - 1];
-        formData.append('logo', {
-          uri: newLogo.uri,
-          name: `logo.${fileType}`,
-          type: `image/${fileType}`,
-        });
-      }
-    }
-
-    if (newBackground) {
-      if (Platform.OS === 'web') {
-        const response = await fetch(newBackground.uri);
-        const blob = await response.blob();
-        formData.append('background', blob, `background.${blob.type.split('/')[1]}`);
-      } else {
-        const uriParts = newBackground.uri.split('.');
-        const fileType = uriParts[uriParts.length - 1];
-        formData.append('background', {
-          uri: newBackground.uri,
-          name: `background.${fileType}`,
-          type: `image/${fileType}`,
-        });
-      }
-    }
-
-    try {
-      // By using apiClient, the base URL and Authorization header are already configured.
-      await apiClient.post('/branding', formData, {
-        headers: {
-          // The Content-Type header is crucial for file uploads.
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      Alert.alert('Success', 'Branding has been updated successfully!');
-      setNewLogo(null);
-      setNewBackground(null);
-      refreshBranding(); // Refresh context to show new images
-    } catch (error) {
-      console.error('Upload Error:', error.response ? error.response.data : error.message);
-      Alert.alert('Upload Failed', 'There was an error uploading the images. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+export default function BrandingScreen() {
+  const { logoUrl, loading } = useBranding();
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Branding Management</Text>
-      <Text style={styles.subtitle}>Update your website's logo and background for a fresh look.</Text>
-
-      <View style={styles.cardRow}>
-        {/* Logo Section */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Logo</Text>
-          <Image source={newLogo ? { uri: newLogo.uri } : logoUrl} style={styles.previewImage} />
-          <Text style={styles.helperText}>Recommended: Square image, PNG/JPG, 150x150px+</Text>
-          <TouchableOpacity style={styles.selectButton} onPress={() => pickImage('logo')}>
-            <Text style={styles.selectButtonText}>{newLogo ? 'Change Logo' : 'Select Logo'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Background Section */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Background</Text>
-          <Image source={newBackground ? { uri: newBackground.uri } : backgroundUrl} style={styles.previewImage} />
-          <Text style={styles.helperText}>Recommended: 16:9 image, PNG/JPG, 1280x720px+</Text>
-          <TouchableOpacity style={styles.selectButton} onPress={() => pickImage('background')}>
-            <Text style={styles.selectButtonText}>{newBackground ? 'Change Background' : 'Select Background'}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.uploadButtonContainer}>
-        {loading ? (
-          <ActivityIndicator size="large" color="#007BFF" />
-        ) : (
-          <TouchableOpacity
-            style={[styles.uploadButton, (!newLogo && !newBackground) && styles.uploadButtonDisabled]}
-            onPress={handleUpload}
-            disabled={!newLogo && !newBackground}
-          >
-            <Text style={styles.uploadButtonText}>Upload Changes</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <Text style={styles.title}>Branding</Text>
+      {loading ? (
+        <View style={styles.logoPlaceholder} />
+      ) : (
+        <Image source={{ uri: logoUrl }} style={styles.logo} resizeMode="contain" />
+      )}
+      <Text style={styles.description}>
+        Welcome to the Branding page. Here you can manage your organization's logo and branding assets.
+      </Text>
+      {/* Add more branding-related UI here */}
     </View>
   );
 }
@@ -153,109 +25,34 @@ export default function BrandingManagementScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#F7F8FA',
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 10,
-    textAlign: 'center',
-    color: '#2d3748',
+    marginBottom: 24,
+    color: '#111827',
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#555',
-    textAlign: 'center',
-    marginBottom: 28,
-  },
-  cardRow: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
-    justifyContent: 'center',
-    alignItems: 'stretch',
-    gap: 32,
-    marginBottom: 28,
-  },
-  card: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    marginHorizontal: Platform.OS === 'web' ? 12 : 0,
-    marginBottom: Platform.OS === 'web' ? 0 : 18,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-    minWidth: 240,
-    maxWidth: 340,
-    borderWidth: 1,
-    borderColor: '#f1f1f1',
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 12,
-    color: '#222',
-  },
-  previewImage: {
+  logo: {
     width: 120,
     height: 120,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e2e2',
-    marginBottom: 12,
-    backgroundColor: '#f8f8f8',
-    resizeMode: 'cover',
+    borderRadius: 16,
+    marginBottom: 24,
+    backgroundColor: '#E0E0E0',
   },
-  helperText: {
-    fontSize: 12,
-    color: '#888',
-    marginBottom: 10,
+  logoPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 16,
+    backgroundColor: '#E0E0E0',
+    marginBottom: 24,
+  },
+  description: {
+    fontSize: 16,
+    color: '#374151',
     textAlign: 'center',
-  },
-  selectButton: {
-    backgroundColor: '#edf2fa',
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 8,
-    marginTop: 2,
-    marginBottom: 2,
-    borderWidth: 1,
-    borderColor: '#90cdf4',
-  },
-  selectButtonText: {
-    color: '#2b6cb0',
-    fontWeight: 'bold',
-    fontSize: 15,
-    letterSpacing: 0.2,
-  },
-  uploadButtonContainer: {
-    marginTop: 18,
-    alignItems: 'center',
-  },
-  uploadButton: {
-    backgroundColor: '#3182ce',
-    paddingVertical: 13,
-    paddingHorizontal: 32,
-    borderRadius: 9,
-    alignItems: 'center',
-    width: 220,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
-  },
-  uploadButtonDisabled: {
-    backgroundColor: '#b8c2cc',
-  },
-  uploadButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 17,
-    letterSpacing: 0.5,
   },
 });
