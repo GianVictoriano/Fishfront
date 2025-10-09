@@ -1,0 +1,20 @@
+:root{--bg:#f8fafc;--card:#fff;--accent:#0ea5e9}
+*{box-sizing:border-box}
+body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial; margin:0; background:var(--bg); color:#0f172a}
+.app-root{max-width:980px;margin:28px auto;padding:16px}
+.header h2{margin:0 0 12px}
+.grid{display:flex;gap:12px}
+.card{background:var(--card);padding:12px;border-radius:8px;box-shadow:0 1px 3px rgba(2,6,23,0.06);flex:1}
+.btn{background:var(--accent);color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+
+.flipback-overlay{position:fixed;inset:0;background:rgba(2,6,23,0.6);display:flex;align-items:center;justify-content:center;z-index:60}
+.flipback-inner{position:relative;background:transparent;padding:20px}
+.close-btn{position:absolute;right:0;top:-10px;background:#fff;border-radius:6px;border:none;padding:6px 10px;cursor:pointer}
+.book-wrap{background:transparent;border-radius:6px;padding:6px}
+.book-page{padding:18px;background:#fff;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center}
+.book-page h1{font-size:18px;margin:0 0 8px}
+
+@media (max-width:480px){
+  .book-wrap { transform: scale(0.9); }
+  HTMLFlipBook{width:260px;height:360px}
+}

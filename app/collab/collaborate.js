@@ -6,7 +6,7 @@ import {
   Linking, ScrollView, useWindowDimensions
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { pickImage } from './imageUtils';
+import { pickImage } from '../../utils/imageUtils';
 import apiClient, { sendMessage, getMessages } from '../../utils/api';
 import modalStyles from './modalStyles.js';
 import { useRouter } from 'expo-router';

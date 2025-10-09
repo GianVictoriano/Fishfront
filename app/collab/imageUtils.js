@@ -1,14 +1,11 @@
-import * as ImagePicker from 'expo-image-picker';
+import React from 'react';
+import { View } from 'react-native';
+import { pickImage as _pickImage } from '../../utils/imageUtils';
 
-export async function pickImage() {
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    allowsEditing: false,
-    quality: 0.8,
-    base64: false,
-  });
-  if (!result.canceled && result.assets && result.assets.length > 0) {
-    return result.assets[0];
-  }
-  return null;
+// Keep named export for compatibility, but also export a default component so
+// Expo Router doesn't treat this file as a missing-page (default export).
+export const pickImage = _pickImage;
+
+export default function ImageUtilsPlaceholder() {
+  return <View />;
 }

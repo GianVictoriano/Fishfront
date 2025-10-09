@@ -1,8 +1,9 @@
 import { Slot, useRouter, useSegments } from 'expo-router';
-import { AuthProvider, useAuth } from '~/context/AuthContext';
-import { BrandingProvider } from '~/context/BrandingContext';
 import { useEffect } from 'react';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
+
+import { AuthProvider, useAuth } from '~/context/AuthContext';
+import { BrandingProvider } from '~/context/BrandingContext';
 
 const InitialLayout = () => {
   const { user, loading } = useAuth();
@@ -12,15 +13,21 @@ const InitialLayout = () => {
   useEffect(() => {
     if (loading) return;
 
-    // 🚀 FORCE REDIRECT TO application/user ALWAYS
-    router.replace('/application/user');
-    return; // Stop here so auth logic below doesn't interfere
+    if (loading) return;
 
-    // --- AUTH LOGIC BELOW IS KEPT FOR FUTURE USE IF NEEDED ---
+    // 🚀 FORCE REDIRECT TO /application/user ALWAYS
+    const targetRoute = '/application/user';
+    if (segments[0] !== 'application' || segments[1] !== 'user') {
+      router.replace(targetRoute);
+      return; // Stop further auth logic
+    }
 
-    // If the user is authenticated
+    // --- AUTH LOGIC BELOW (optional/future use) ---
     if (user) {
-      const isOnPublicOnlyPage = ['signin', 'signin_cp'].includes(segments[0]) || segments.length === 0;
+      // Authenticated user logic
+      const isOnPublicOnlyPage =
+        ['signin', 'signin_cp'].includes(segments[0]) || segments.length === 0;
+
       if (isOnPublicOnlyPage) {
         if (user.profile?.role === 'collaborator') {
           router.replace('/collab/dashboard');
@@ -28,22 +35,27 @@ const InitialLayout = () => {
           router.replace('/home');
         }
       }
-    } 
-    // If the user is not authenticated (is a guest)
-    else {
-      // Define public routes that guests can access. The root '/' is handled by `segments.length === 0`.
-      const publicRoutes = ['home', 'news', 'about', 'signin', 'forgot-password', 'home2', 'news2', 'about2', 'signup', 'signin_cp'];
-      // A route is protected if it's not the root and not in the public list.
+    } else {
+      // Guest user logic
+      const publicRoutes = [
+        'home',
+        'news',
+        'about',
+        'signin',
+        'forgot-password',
+        'signup',
+        'signin_cp',
+      ];
+
       const isProtectedRoute = segments.length > 0 && !publicRoutes.includes(segments[0]);
       if (isProtectedRoute) {
-        // Redirect guests from protected routes to the root page
         router.replace('/');
       }
     }
   }, [user, loading, segments, router]);
 
   return <Slot />;
-}
+};
 
 export default function RootLayout() {
   return (
