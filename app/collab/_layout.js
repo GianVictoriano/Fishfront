@@ -145,6 +145,9 @@ const Sidebar = ({ isMinimized }) => {
           {hasModule('collaborate') && <SidebarLink href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} />}
           {hasModule('users') && <SidebarLink href="/collab/users" text="Users" iconName="user-check" isMinimized={isMinimized} />}
           {hasModule('branding') && <SidebarLink href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} />}
+          {hasModule('forum') && <SidebarLink href="/collab/manage-forum" text="Manage Forum" iconName="message-square" isMinimized={isMinimized} />}
+          {hasModule('folio') && <SidebarLink href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} />}
+          {hasModule('applicants') && <SidebarLink href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} />}
           {(user?.profile?.level === 2 || user?.profile?.level === 3) && (
               <SidebarLink href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} />
           )}
@@ -163,6 +166,9 @@ const Sidebar = ({ isMinimized }) => {
             if (hasModule('collaborate')) links.push(<SidebarLink key="collaborate" href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} />);
             if (hasModule('users')) links.push(<SidebarLink key="users" href="/collab/users" text="Users" iconName="user-check" isMinimized={isMinimized} />);
             if (hasModule('branding')) links.push(<SidebarLink key="branding" href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} />);
+            if (hasModule('forum')) links.push(<SidebarLink key="manage-forum" href="/collab/manage-forum" text="Manage Forum" iconName="message-square" isMinimized={isMinimized} />);
+            if (hasModule('folio')) links.push(<SidebarLink key="manage-folio" href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} />);
+            if (hasModule('applicants')) links.push(<SidebarLink key="manage-applicants" href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} />);
             if (user?.profile?.level === 2 || user?.profile?.level === 3) links.push(<SidebarLink key="manage-users" href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} />);
             if (user?.profile?.level === 3) links.push(<SidebarLink key="my-modules" href={`/collab/manage-modules/${user.id}`} text="My Modules" iconName="settings" isMinimized={isMinimized} />);
             // Only show first 7 when minimized

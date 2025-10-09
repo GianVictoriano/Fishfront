@@ -2,4 +2,4 @@
 import { Platform } from 'react-native';
 
 // This automatically loads the correct platform file
-export { default } from './screens/user/news/news';
+export { default } from '../screens/collab/manage-applicants/manage-applicants';

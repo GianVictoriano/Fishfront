@@ -1,7 +1,7 @@
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '~/context/AuthContext';
 import { BrandingProvider } from '~/context/BrandingContext';
-import { useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 
@@ -9,35 +9,42 @@ const InitialLayout = () => {
   const { user, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const redirected = useRef(false);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || redirected.current) return;
 
-    // If the user is authenticated
     if (user) {
       const isOnPublicOnlyPage = ['signin', 'signin_cp'].includes(segments[0]) || segments.length === 0;
       if (isOnPublicOnlyPage) {
-        if (user.profile?.role === 'collaborator') {
-          router.replace('/collab/dashboard');
-        } else {
-          router.replace('/home');
-        }
+        redirected.current = true;
+        router.replace(user.profile?.role === 'collaborator' ? '/collab/dashboard' : '/user/home');
       }
-    } 
-    // If the user is not authenticated (is a guest)
-    else {
-      // Define public routes that guests can access. The root '/' is handled by `segments.length === 0`.
-      const publicRoutes = ['home', 'news', 'about', 'signin', 'forgot-password', 'home2', 'news2', 'about2', 'signup', 'signin_cp'];
-      // A route is protected if it's not the root and not in the public list.
-      const isProtectedRoute = segments.length > 0 && !publicRoutes.includes(segments[0]);
+    } else {
+      const publicRoutes = ['user/home', 'user/news', 'user/about', 'signin', 'forgot-password', 'signup', 'signin_cp'];
+      const isProtectedRoute = segments.length > 0 && !publicRoutes.includes(segments.join('/'));
       if (isProtectedRoute) {
-        // Redirect guests from protected routes to the root page
+        redirected.current = true;
         router.replace('/');
       }
     }
   }, [user, loading, segments, router]);
 
-  return <Slot />;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="user/home" />
+      <Stack.Screen name="user/news" />
+      <Stack.Screen name="user/about" />
+      <Stack.Screen name="user/forum" />
+      <Stack.Screen name="contribute" />
+      <Stack.Screen name="collab/dashboard" />
+      <Stack.Screen name="signin" />
+      <Stack.Screen name="signup" />
+      <Stack.Screen name="forgot-password" />
+      <Stack.Screen name="signin_cp" />
+    </Stack>
+  );
 }
 
 export default function RootLayout() {

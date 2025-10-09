@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, SafeAreaView, Platform, TouchableOpacity, Modal, Image } from 'react-native';
-import GuestNavbar from '../components/GuestNavbar';
+import { ScrollView, StyleSheet, Text, View, SafeAreaView, Platform, TouchableOpacity, Modal, ImageBackground, Image } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import AppNavbar from '../../../../components/AppNavbar';
+import { useBranding } from '../../../../context/BrandingContext';
 
 const Section = ({ title, underlineWidth, children }) => (
   <View style={styles.section}>
     <View style={styles.headingContainer}>
       <Text style={styles.heading}>{title}</Text>
-      <View style={[styles.headingUnderline, { width: underlineWidth }]} />
+      <View 
+        style={[styles.headingUnderline, { width: underlineWidth }]} 
+      />
     </View>
     {children}
   </View>
@@ -18,8 +22,9 @@ const CoreValue = ({ text }) => (
   </View>
 );
 
-export default function AboutScreen2() {
+export default function AboutScreen() {
   const [navVisible, setNavVisible] = useState(false);
+  const { logoUrl } = useBranding();
 
   const coreValues1 = [
     { id: '1', text: 'Patriotism' },
@@ -36,11 +41,11 @@ export default function AboutScreen2() {
   return (
     <SafeAreaView style={styles.safeArea}>
       {Platform.OS === 'web' ? (
-        <GuestNavbar />
+        <Navbar />
       ) : (
         <>
           <TouchableOpacity style={styles.menuButton} onPress={() => setNavVisible(true)}>
-            <Text style={styles.menuButtonText}>☰</Text>
+            <Feather name="menu" size={28} color="#fff" />
           </TouchableOpacity>
           <Modal
             animationType="slide"
@@ -50,7 +55,6 @@ export default function AboutScreen2() {
           >
             <TouchableOpacity style={styles.modalOverlayNav} activeOpacity={1} onPressOut={() => setNavVisible(false)}>
               <View style={styles.modalViewNav}>
-                <GuestNavbar onLinkPress={() => setNavVisible(false)} />
               </View>
             </TouchableOpacity>
           </Modal>
@@ -161,6 +165,14 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     marginTop: 0,
   },
+  imagePlaceholder: {
+    width: 260,
+    height: 170,
+    borderRadius: 12,
+    backgroundColor: '#e0e7ef',
+    marginBottom: 0,
+    marginTop: 0,
+  },
   textCol: {
     flex: 2,
     paddingLeft: Platform.OS === 'web' ? 32 : 0,
@@ -222,23 +234,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f7ff',
     borderColor: '#b6d4fe',
   },
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  content: {
-    paddingHorizontal: Platform.OS === 'web' ? 24 : 16,
-    paddingVertical: Platform.OS === 'web' ? 32 : 24,
-    flexGrow: 1,
-    maxWidth: 896,
-    marginLeft: 'auto',
-    marginRight: 'auto',
-    backgroundColor: '#f4f6f8',
-  },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -247,51 +242,77 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     marginTop: 10,
   },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff', // Plain white background
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#fff', // Plain white background
+  },
+  // overlay removed for white background
+  content: {
+    paddingHorizontal: Platform.OS === 'web' ? 24 : 16,
+    paddingVertical: Platform.OS === 'web' ? 32 : 24,
+    flexGrow: 1,
+    maxWidth: 896,
+    marginLeft: 'auto',
+    marginRight: 'auto',
+    backgroundColor: '#f4f6f8', // Soft bg
+  },
   section: {
     marginBottom: 0,
   },
   headingContainer: {
     position: 'relative',
-    alignSelf: 'flex-start',
-    marginBottom: 12,
+    alignSelf: 'flex-start', // Makes the container wrap the content
+    marginBottom: 12, // Corresponds to mb-3
   },
   heading: {
-    fontSize: 20,
+    fontSize: 20, // Matches Fisherman title in navbar
     fontWeight: 'bold',
-    color: '#222',
+    color: '#222', // Dark text for white bg
     position: 'relative',
     zIndex: 10,
   },
- 
+  headingUnderline: {
+    position: 'absolute',
+    bottom: 8, // Reduce for smaller heading
+    left: -8, // Corresponds to -ml-2
+    height: 16, // Smaller underline for smaller heading
+    backgroundColor: '#cbd5e1', // Lighter underline for white bg
+    zIndex: 5,
+  },
   paragraph: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: '#333',
+    fontSize: 13, // Smaller body text
+    lineHeight: 20, // Adjust for smaller font
+    color: '#333', // Darker text for white bg
   },
   valuesGrid: {
     flexDirection: 'row',
-    paddingLeft: 16,
+    paddingLeft: 16, // Corresponds to pl-4
   },
   valuesColumn: {
     flex: 1,
   },
   valueItem: {
-    marginBottom: 4,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  valueTitle: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#333',
-    marginRight: 8,
-    width: 90,
+    marginBottom: 4, // Corresponds to space-y-1
   },
   valueText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 20,
-    color: '#444',
+    fontSize: 13, // Smaller value text
+    lineHeight: 20, // Adjust for smaller font
+    color: '#444', // Darker text for white bg
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 18,
+    marginBottom: 20,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
   },
   menuButton: {
     position: 'absolute',
@@ -299,10 +320,6 @@ const styles = StyleSheet.create({
     left: 20,
     zIndex: 100,
     padding: 10,
-  },
-  menuButtonText: {
-    fontSize: 28,
-    color: '#0d47a1',
   },
   modalOverlayNav: {
     flex: 1,

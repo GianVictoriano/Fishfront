@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
-// Only import createPortal on web
-let createPortal;
-if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+// Import web-specific components
+let WebDropdown;
+if (typeof window !== 'undefined' && Platform.OS === 'web') {
   // eslint-disable-next-line global-require
-  createPortal = require('react-dom').createPortal;
+  WebDropdown = require('./WebDropdown').default;
 }
 import { usePathname, useRouter } from 'expo-router';
 import { View, Platform, StyleSheet, Text, TouchableOpacity, Modal, Image } from 'react-native';
@@ -11,21 +11,30 @@ import { useAuth } from '../context/AuthContext';
 import { useBranding } from '../context/BrandingContext';
 import { FontAwesome } from '@expo/vector-icons'; // Using FontAwesome for icons
 
-const NavLink = ({ href, text, iconName, pathname, onLinkPress }) => {
+const NavLink = ({ href, text, iconName, pathname, closeMenu, isActive: isActiveProp }) => {
   const router = useRouter();
-  const isActive = pathname.startsWith(href);
+  // Use the provided isActive prop if available, otherwise calculate it
+  const isActive = isActiveProp !== undefined ? isActiveProp : 
+                  (pathname === `/${href}` || pathname.startsWith(`/${href}/`));
   const linkStyle = [styles.navLink, isActive && styles.navLinkActive];
   const textStyle = [styles.navLinkText, isActive && styles.navLinkTextActive];
   const iconStyle = [styles.navIcon, isActive && styles.navIconActive];
 
+  const handlePress = () => {
+    router.push(href);
+    if (closeMenu) {
+      closeMenu();
+    }
+  };
   return (
-    <TouchableOpacity style={linkStyle} onPress={() => { router.push(href); onLinkPress(); }}>
+    <TouchableOpacity style={linkStyle} onPress={handlePress}>
+      {iconName && <FontAwesome name={iconName} style={iconStyle} />}
       <Text style={textStyle}>{text}</Text>
     </TouchableOpacity>
   );
 };
 
-const Navbar = ({ onLinkPress = () => {} }) => {
+const Navbar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -35,7 +44,6 @@ const Navbar = ({ onLinkPress = () => {} }) => {
   const handleLogout = () => {
     logout();
     router.push('/');
-    onLinkPress();
   };
 
   return (
@@ -46,17 +54,15 @@ const Navbar = ({ onLinkPress = () => {} }) => {
           <Text style={styles.brand}>The FISHERMAN</Text>
         </View>
         
-        {/* Links for web view */}
-        {Platform.OS === 'web' && (
           <View style={styles.navLinksContainer}>
-            <NavLink href="/home" text="Home" iconName="home" pathname={pathname} onLinkPress={onLinkPress} />
-            <NavLink href="/forum" text="Forum" iconName="comments" pathname={pathname} onLinkPress={onLinkPress} />
-            <NavLink href="/news" text="News" iconName="newspaper-o" pathname={pathname} onLinkPress={onLinkPress} />
-            <NavLink href="/about" text="About" iconName="info-circle" pathname={pathname} onLinkPress={onLinkPress} />
-          </View>
-        )}
-
-        <View style={styles.userMenuContainer}>
+            <NavLink href="home" text="Home" iconName="home" pathname={pathname} />
+            <NavLink href="news" text="News" iconName="newspaper-o" pathname={pathname} />
+            <NavLink href="about" text="About" iconName="info-circle" pathname={pathname} />
+            {user ? (
+              <>
+            <NavLink href="forum" text="Forum" iconName="comments" pathname={pathname} />
+            <NavLink href="contribute" text="Contribute" iconName="plus-circle" pathname={pathname} />
+            <View style={styles.userMenuContainer}>
           <TouchableOpacity style={styles.userMenuButton} onPress={() => setDropdownVisible(!dropdownVisible)}>
                         {user?.profile?.avatar ? (
               <Image source={{ uri: user.profile.avatar }} style={styles.userAvatar} />
@@ -67,41 +73,36 @@ const Navbar = ({ onLinkPress = () => {} }) => {
             <FontAwesome name={dropdownVisible ? 'angle-up' : 'angle-down'} size={15} color="#333" />
           </TouchableOpacity>
         </View>
-        {/* Dropdown menu using React Portal on web */}
-        {dropdownVisible && Platform.OS === 'web' && createPortal &&
-          createPortal(
-            <View style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9998, pointerEvents: 'box-none' }}>
-              {/* Overlay that only closes dropdown when clicking outside */}
-              <View
-                style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 9998, backgroundColor: 'transparent' }}
-                pointerEvents="auto"
-                onStartShouldSetResponder={() => { setDropdownVisible(false); return true; }}
-              />
-              <View style={styles.dropdownAbsolute} pointerEvents="auto">
-                <TouchableOpacity style={styles.dropdownItem} onPress={() => { router.push('/profile'); setDropdownVisible(false); onLinkPress(); }}>
-                  <FontAwesome name="user" size={13} style={styles.dropdownIcon} />
-                  <Text style={styles.dropdownText}>Profile</Text>
-                </TouchableOpacity>
-                {user?.profile?.role === 'admin' && (
-                  <TouchableOpacity style={styles.dropdownItem} onPress={() => { router.push('/admin/branding'); setDropdownVisible(false); onLinkPress(); }}>
-                    <FontAwesome name="desktop" size={13} style={styles.dropdownIcon} />
-                    <Text style={styles.dropdownText}>Manage Website</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity style={styles.dropdownItem} onPress={handleLogout}>
-                  <FontAwesome name="sign-out" size={13} style={styles.dropdownIcon} />
-                  <Text style={styles.dropdownText}>Logout</Text>
-                </TouchableOpacity>
-              </View>
-            </View>,
-            document.body
-          )
-        }
+          
+              </>
+          ) : (
+          // Show for guests
+          <NavLink 
+  href="/signin" 
+  text="Sign In" 
+  iconName="sign-in" 
+  pathname={pathname} 
+  isActive={pathname === '/signin'} 
+/>
+        )}
+
+
+        </View>
+        {/* Web Dropdown */}
+        {Platform.OS === 'web' && WebDropdown && (
+          <WebDropdown
+            isVisible={dropdownVisible}
+            onClose={() => setDropdownVisible(false)}
+            onLogout={handleLogout}
+            isAdmin={user?.profile?.role === 'admin'}
+            router={router}
+          />
+        )}
         {/* Native (non-web) dropdown fallback */}
         {dropdownVisible && Platform.OS !== 'web' && (
           <View style={{ position: 'absolute', right: 24, top: 60, zIndex: 9999 }}>
             <View style={styles.dropdownAbsolute}>
-              <TouchableOpacity style={styles.dropdownItem} onPress={() => { router.push('/profile'); setDropdownVisible(false); onLinkPress(); }}>
+              <TouchableOpacity style={styles.dropdownItem} onPress={() => { router.push('/profile'); setDropdownVisible(false); }}>
                 <FontAwesome name="user" size={16} style={styles.dropdownIcon} />
                 <Text style={styles.dropdownText}>Profile</Text>
               </TouchableOpacity>
@@ -117,10 +118,10 @@ const Navbar = ({ onLinkPress = () => {} }) => {
       {/* Links for mobile drawer */}
       {Platform.OS !== 'web' && (
         <View style={styles.mobileNavLinks}>
-          <NavLink href="/home" text="Home" iconName="home" pathname={pathname} onLinkPress={onLinkPress} />
-          <NavLink href="/forum" text="Forum" iconName="comments" pathname={pathname} onLinkPress={onLinkPress} />
-          <NavLink href="/news" text="News" iconName="newspaper-o" pathname={pathname} onLinkPress={onLinkPress} />
-          <NavLink href="/about" text="About" iconName="info-circle" pathname={pathname} onLinkPress={onLinkPress} />
+          <NavLink href="home" text="Home" iconName="home" pathname={pathname} />
+          <NavLink href="forum" text="Forum" iconName="comments" pathname={pathname} />
+          <NavLink href="news" text="News" iconName="newspaper-o" pathname={pathname} />
+          <NavLink href="about" text="About" iconName="info-circle" pathname={pathname} />
         </View>
       )}
     </View>
@@ -128,37 +129,24 @@ const Navbar = ({ onLinkPress = () => {} }) => {
 };
 
 const styles = StyleSheet.create({
-  dropdownOverlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    width: '100vw',
-    height: '100vh',
-    zIndex: 9998,
-  },
   dropdownAbsolute: {
-    ...(Platform.OS === 'web'
-      ? {
-          position: 'fixed',
-          right: 20, // adjust as needed for perfect alignment
-          top: 45,   // adjust as needed for perfect alignment
-        }
-      : {
-          position: 'absolute',
-          right: 0,
-          top: '110%',
-        }),
+    position: 'absolute',
+    right: 0,
+    top: '110%',
     backgroundColor: '#fff',
     borderRadius: 8,
-    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-    paddingVertical: 8,
-    minWidth: 215,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 5,
+    padding: 8,
+    minWidth: 200,
     zIndex: 9999,
   },
   brandContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
   },
   userAvatar: {
     width: 30,
@@ -201,7 +189,7 @@ const styles = StyleSheet.create({
   },
   navLinksContainer: {
     flexDirection: 'row',
-    gap: 60,
+    gap: 20,
   },
   mobileNavLinks: {
     marginTop: 30,
@@ -210,7 +198,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    transition: 'all 0.2s ease-in-out',
     ...Platform.select({
       default: {
         marginBottom: 6,
@@ -218,8 +208,18 @@ const styles = StyleSheet.create({
     }),
   },
   navLinkActive: {
+    backgroundColor: 'rgba(0, 123, 255, 0.1)',
     borderBottomWidth: 2,
     borderBottomColor: '#007BFF',
+    transform: 'translateY(-1px)',
+    ...Platform.select({
+      web: {
+        borderBottomColor: '#007BFF',
+      },
+      default: {
+        borderBottomColor: '#007BFF',
+      },
+    }),
   },
   navIcon: {
     color: '#555',
@@ -232,9 +232,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+    transition: 'all 0.2s ease-in-out',
   },
   navLinkTextActive: {
     color: '#007BFF',
+    fontWeight: '700',
+    letterSpacing: '0.3px',
   },
   userMenuContainer: {
     position: 'relative',

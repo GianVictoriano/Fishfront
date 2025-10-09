@@ -120,7 +120,7 @@ export const AuthProvider = ({ children }) => {
       console.error('Logout failed:', e);
     } finally {
       setLoading(false);
-      router.replace('/(auth)/login');
+      router.replace('/signin');
     }
   };
 

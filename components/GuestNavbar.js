@@ -31,14 +31,14 @@ export default function GuestNavbar({ onLinkPress = () => {}, onClose }) {
       </View>
       {!isWeb && <View style={styles.sidebarDivider} />}
       <View style={isWeb ? styles.navLinks : styles.sidebarLinks}>
-        <TouchableOpacity style={[styles.sidebarLinkRow, pathname === '/home2' && styles.activeSidebarLinkRow]} onPress={() => { router.push('/home2'); onLinkPress(); }}>
-          <Text style={linkStyle('/home2')}>Home</Text>
+        <TouchableOpacity style={[styles.sidebarLinkRow, pathname === '/home2' && styles.activeSidebarLinkRow]} onPress={() => { router.push('/home'); onLinkPress(); }}>
+          <Text style={linkStyle('/home')}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.sidebarLinkRow, pathname === '/news2' && styles.activeSidebarLinkRow]} onPress={() => { router.push('/news2'); onLinkPress(); }}>
-          <Text style={linkStyle('/news2')}>News</Text>
+        <TouchableOpacity style={[styles.sidebarLinkRow, pathname === '/news2' && styles.activeSidebarLinkRow]} onPress={() => { router.push('/news'); onLinkPress(); }}>
+          <Text style={linkStyle('/news')}>News</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.sidebarLinkRow, pathname === '/about2' && styles.activeSidebarLinkRow]} onPress={() => { router.push('/about2'); onLinkPress(); }}>
-          <Text style={linkStyle('/about2')}>About Us</Text>
+        <TouchableOpacity style={[styles.sidebarLinkRow, pathname === '/about2' && styles.activeSidebarLinkRow]} onPress={() => { router.push('/about'); onLinkPress(); }}>
+          <Text style={linkStyle('/about')}>About Us</Text>
         </TouchableOpacity>
       </View>
       <TouchableOpacity

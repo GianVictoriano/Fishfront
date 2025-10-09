@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity,TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 
 // This NewsNavbar is exclusive to news.js and appears under the main Navbar
 export default function NewsNavbar({ onGenreChange, activeGenre }) {
@@ -25,6 +26,7 @@ export default function NewsNavbar({ onGenreChange, activeGenre }) {
           placeholder="Search..."
           placeholderTextColor="#888"
         />
+        <MaterialIcons name="search" size={20} color="#666" style={styles.searchIcon} />
       </View>
     </View>
   );
@@ -71,19 +73,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginLeft: 16,
-    minWidth: 120,
-    maxWidth: 160,
+    minWidth: 500,
+    maxWidth: 500,
     flexShrink: 0,
   },
   searchInput: {
     height: 28,
-    borderRadius: 14,
     backgroundColor: '#fff',
     paddingHorizontal: 12,
     fontSize: 13,
     color: '#222',
     borderWidth: 1,
     borderColor: '#d1d1d1',
-    width: '100%',
+    flex: 1,
+  },
+  searchIcon: {
+    position: 'absolute',
+    right: 10,
+    top: '50%',
+    transform: [{ translateY: -10 }],
   },
 });
