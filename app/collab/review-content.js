@@ -57,7 +57,8 @@ const ReviewItem = ({ item, isMobile, onPreview }) => {
 export default function ReviewContentScreen() {
   const [reviewContent, setReviewContent] = useState([]);
   const [groupChats, setGroupChats] = useState([]);
-  const [selectedGroupId, setSelectedGroupId] = useState(null);
+  const [selectedGroupId, setSelectedGroupId] = useState('all');
+  const ALL_GROUPS_ID = 'all';
   const [loading, setLoading] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const { status: initialStatus } = useLocalSearchParams();
@@ -72,9 +73,6 @@ export default function ReviewContentScreen() {
       try {
         const response = await apiClient.get('/group-chats');
         setGroupChats(response.data);
-        if (response.data.length > 0) {
-          setSelectedGroupId(response.data[0].id);
-        }
       } catch (error) {
         console.error('Failed to fetch group chats:', error);
       } finally {
@@ -85,15 +83,18 @@ export default function ReviewContentScreen() {
   }, []);
 
   useEffect(() => {
-    if (!selectedGroupId) return;
-
     const fetchReviewContent = async () => {
       setLoading(true);
       try {
         const params = new URLSearchParams({
-            status: statusFilter,
-            group_id: selectedGroupId,
+          status: statusFilter,
         });
+        
+        // Only add group_id to params if a specific group is selected (not 'all')
+        if (selectedGroupId !== ALL_GROUPS_ID) {
+          params.append('group_id', selectedGroupId);
+        }
+        
         const url = `/review-content?${params.toString()}`;
         const imagesUrl = `/review-images?${params.toString()}`;
 
@@ -167,6 +168,7 @@ export default function ReviewContentScreen() {
               style={styles.picker}
               enabled={!loadingGroups}
             >
+              <Picker.Item label="All Groups" value={ALL_GROUPS_ID} />
               {groupChats.map(group => (
                 <Picker.Item key={group.id} label={group.name} value={group.id} />
               ))}

@@ -1,13 +1,22 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Create base axios instance without baseURL
 const apiClient = axios.create({
-  baseURL: `${process.env.EXPO_PUBLIC_API_URL}/api`,
+  baseURL: process.env.EXPO_PUBLIC_API_URL,
   withCredentials: true,
   headers: {
     'Accept': 'application/json',
     'Content-Type': 'application/json',
   }
+});
+
+// Add /api prefix only if the URL doesn't already have it and it's not an external URL
+apiClient.interceptors.request.use(config => {
+  if (!config.url.startsWith('http') && !config.url.startsWith('/api/')) {
+    config.url = `/api${config.url.startsWith('/') ? '' : '/'}${config.url}`;
+  }
+  return config;
 });
 
 // Helper to check if the data is FormData

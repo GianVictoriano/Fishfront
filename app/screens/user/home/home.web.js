@@ -34,12 +34,14 @@ const fallbackPublications = {
   ],
 };
 
+const CATEGORIES = ['News', 'Articles', 'Opinion', 'Sports', 'Editorial', 'Artworks'];
+
 const HomeScreen = () => {
   const { width } = useWindowDimensions();
   const { backgroundUrl } = useBranding();
   const router = useRouter();
   const isMobile = width < 768;
-  const [publications, setPublications] = useState(fallbackPublications);
+  const [publications, setPublications] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isViewAllHovered, setIsViewAllHovered] = useState(false);
@@ -47,36 +49,55 @@ const HomeScreen = () => {
   const [isJoinUsHovered, setIsJoinUsHovered] = useState(false);
 
   useEffect(() => {
-    const fetchRecentArticles = async () => {
+    const fetchArticlesByCategory = async () => {
       try {
-        const response = await apiClient.get('/public/articles?limit=6&sort=published_at:desc');
-        if (response.data?.data) {
-          // Ensure we only take 6 articles even if the API returns more
-          const articles = response.data.data.slice(0, 8);
-          const mappedArticles = articles.map(article => ({
-            id: article.id?.toString() || '',
-            title: article.title || 'Untitled Article',
-            summary: article.content ? 
-              (article.content.length > 120 ? article.content.substring(0, 117) + '...' : article.content) : 
-              'No summary available',
-            image: article.media && article.media.length > 0 
-              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`
-              : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
-            published_at: article.published_at || new Date().toISOString(),
-            link: `news/article/${article.slug || article.id}`,
-          }));
-          setPublications({ recent: mappedArticles });
+        setIsLoading(true);
+        
+        // First, fetch all articles with their genres
+        const response = await apiClient.get('/public/articles?sort=published_at:desc');
+        
+        if (!response.data?.data) {
+          setError('No articles found');
+          return;
         }
+        
+        const allArticles = response.data.data;
+        const categoryData = {};
+        
+        // Initialize each category with an empty array
+        CATEGORIES.forEach(category => {
+          categoryData[category] = [];
+        });
+        
+        // Categorize articles by their genre
+        allArticles.forEach(article => {
+          const articleGenre = article.genre || 'General';
+          const category = CATEGORIES.find(cat => cat.toLowerCase() === articleGenre.toLowerCase());
+          
+          if (category && categoryData[category]?.length < 4) {
+            categoryData[category].push({
+              id: article.id?.toString() || '',
+              title: article.title || 'Untitled Article',
+              summary: '', // Removed content display
+              image: article.media && article.media.length > 0 
+                ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`
+                : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+              link: `news/article/${article.slug || article.id}`,
+              genre: article.genre
+            });
+          }
+        });
+        
+        setPublications(categoryData);
       } catch (err) {
-        console.error('Error fetching recent articles:', err);
-        setError('Failed to load recent articles. Please try again later.');
-        setPublications(fallbackPublications);
+        console.error('Error fetching articles:', err);
+        setError('Failed to load articles. Please try again later.');
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchRecentArticles();
+    fetchArticlesByCategory();
   }, []);
 
   return (
@@ -121,76 +142,89 @@ const HomeScreen = () => {
           </div>
         </ImageBackground>
       </div>
-
       {/* Main Content */}
       <div style={styles.mainContent}>
-        {/* Publications Grid */}
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>Recently Published Articles</h2>
-          {isLoading ? (
-            <div style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#1a237e" />
-              <p style={styles.loadingText}>Loading articles...</p>
-            </div>
-          ) : error ? (
-            <div style={styles.errorContainer}>
-              <p style={styles.errorText}>{error}</p>
-              <button 
-                onClick={() => window.location.reload()}
-                style={styles.retryButton}
-              >
-                Retry
-              </button>
-            </div>
-          ) : (
-            <div style={styles.publicationGrid}>
-              {publications.recent.map((article) => (
-                <article key={article.id} style={styles.publicationCard}>
-                  <img 
-                    src={article.image} 
-                    alt={article.title}
-                    style={styles.publicationImage}
-                    onError={(e) => {
-                      e.target.src = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
-                    }}
-                  />
-                  <div style={styles.publicationContent}>
-                    <h3 style={styles.publicationTitle}>{article.title}</h3>
-                    <p style={styles.publicationSummary}>{article.summary}</p>
+        <h1 style={styles.mainTitle}>Recently Published</h1>
+        
+        {isLoading ? (
+          <div style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#1a237e" />
+            <p style={styles.loadingText}>Loading articles...</p>
+          </div>
+        ) : error ? (
+          <div style={styles.errorContainer}>
+            <p style={styles.errorText}>{error}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              style={styles.retryButton}
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <div>
+            {CATEGORIES.map((category) => (
+              publications[category]?.length > 0 && (
+                <section key={category} style={styles.categorySection}>
+                  <div style={styles.categoryHeader}>
+                    <h2 style={styles.categoryTitle}>{category}</h2>
                     <button 
-                      style={styles.readMoreButton}
-                      onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = '#eff6ff';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = 'transparent';
-                      }}
-                      onClick={() => router.push(article.link)}
+                      style={styles.viewAllLink}
+                      onClick={() => router.push(`/news?category=${category.toLowerCase()}`)}
                     >
-                      Read More
+                      View All
                     </button>
                   </div>
-                </article>
-              ))}
-            </div>
-          )}
-          {!isMobile && (
-            <div style={styles.viewAllContainer}>
-              <button 
-                style={{
-                  ...styles.viewAllButton,
-                  ...(isViewAllHovered ? styles.viewAllButtonHover : {})
-                }}
-                onMouseEnter={() => setIsViewAllHovered(true)}
-                onMouseLeave={() => setIsViewAllHovered(false)}
-                onClick={() => router.push('/publications')}
-              >
-                View All Publications
-              </button>
-            </div>
-          )}
-        </section>
-
+                  <div style={styles.scrollContainer}>
+                    <div style={{...styles.horizontalScroll, overflowX: 'auto'}}>
+                      {publications[category].map((article) => (
+                        <div 
+                          key={article.id}
+                          style={styles.publicationCard}
+                          onMouseEnter={(e) => {
+                            const card = e.currentTarget;
+                            const overlay = card.querySelector('[data-overlay]');
+                            const image = card.querySelector('img');
+                            if (overlay) overlay.style.opacity = '1';
+                            if (image) image.style.transform = 'scale(1.05)';
+                          }}
+                          onMouseLeave={(e) => {
+                            const card = e.currentTarget;
+                            const overlay = card.querySelector('[data-overlay]');
+                            const image = card.querySelector('img');
+                            if (overlay) overlay.style.opacity = '0';
+                            if (image) image.style.transform = 'scale(1)';
+                          }}
+                          onClick={() => router.push(article.link)}
+                          className="publication-card"
+                        >
+                          <div style={styles.imageContainer}>
+                            <img 
+                              src={article.image} 
+                              alt={article.title}
+                              style={styles.publicationImage}
+                              onError={(e) => {
+                                e.target.src = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+                              }}
+                            />
+                            <div style={styles.cardOverlay} data-overlay>
+                              <span style={styles.readMoreText}>Read More</span>
+                            </div>
+                          </div>
+                          <div style={styles.publicationContent}>
+                            <h3 style={styles.publicationTitle}>{article.title}</h3>
+                            <p style={styles.publicationSummary}>{article.summary}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              )
+            ))}
+          </div>
+        )}
+        
         {/* Recruitment Section */}
         <section style={{...styles.section, ...styles.recruitmentSection}}>
           <div style={styles.recruitmentContent}>
@@ -386,8 +420,23 @@ const styles = StyleSheet.create({
   mainContent: {
     width: '100%',
     flex: '1 0 auto',
-    padding: '0 5%',
+    padding: '20px 5% 40px 40px',
+    paddingLeft: '40px',
+    paddingRight: '40px',
     boxSizing: 'border-box',
+    maxWidth: '1400px',
+    margin: '0 auto',
+  },
+  mainTitle: {
+    fontSize: '2.2rem',
+    fontWeight: '700',
+    color: '#1a237e',
+    margin: '0 auto 30px',
+    paddingBottom: '15px',
+    borderBottom: '2px solid #e5e7eb',
+    textAlign: 'center',
+    maxWidth: '1200px',
+    paddingLeft: '20px',
   },
   section: {
     width: '100%',
@@ -406,69 +455,161 @@ const styles = StyleSheet.create({
     marginTop: '20px',
     textAlign: 'center',
   },
-  publicationGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-    gap: '24px',
-    marginBottom: '24px',
+  categorySection: {
+    margin: '30px 0',
+    padding: '20px 0 20px 30px',
+    borderBottom: '1px solid #e5e7eb',
+    ':last-child': {
+      borderBottom: 'none',
+    },
+  },
+  categoryHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '16px',
+    padding: '0 8px',
+  },
+  categoryTitle: {
+    fontSize: '1.5rem',
+    fontWeight: '600',
+    color: '#1a237e',
+    margin: 0,
+  },
+  viewAllLink: {
+    background: 'none',
+    border: 'none',
+    color: '#3b82f6',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    fontWeight: '500',
+    padding: '4px 8px',
+    borderRadius: '4px',
+    ':hover': {
+      textDecoration: 'underline',
+    },
+  },
+  scrollContainer: {
+    width: '100%',
+    overflowX: 'auto',
+    paddingBottom: '16px',
+    '&::-webkit-scrollbar': {
+      height: '6px',
+    },
+    '&::-webkit-scrollbar-track': {
+      background: '#f1f1f1',
+      borderRadius: '10px',
+    },
+    '&::-webkit-scrollbar-thumb': {
+      background: '#888',
+      borderRadius: '10px',
+    },
+    '&::-webkit-scrollbar-thumb:hover': {
+      background: '#555',
+    },
+  },
+  horizontalScroll: {
+    display: 'flex',
+    gap: '20px',
+    padding: '0 8px',
+    width: 'max-content',
+    minWidth: '100%',
   },
   publicationCard: {
-    backgroundColor: 'white',
-    borderRadius: '10px',
+    backgroundColor: '#fff',
     overflow: 'hidden',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-    transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-    display: 'flex',
-    flexDirection: 'column',
+    marginBottom: '16px',
+    boxShadow: '0 4px 24px 0 rgba(60,72,88,0.09)',
+    border: '1.5px solid #e4e8ee',
+    transition: 'box-shadow 0.25s cubic-bezier(.4,2,.6,1), transform 0.18s cubic-bezier(.4,2,.6,1)',
+    cursor: 'pointer',
+    width: '100%',
+    maxWidth: '260px',
+    minWidth: '250px',
+    height: 'auto',
+    flexShrink: 0,
     ':hover': {
-      transform: 'translateY(-5px)',
-      boxShadow: '0 10px 20px rgba(0, 0, 0, 0.1)',
+      boxShadow: '0 10px 32px 0 rgba(60,72,88,0.18)',
+      transform: 'translateY(-4px) scale(1.025)',
+      borderColor: '#d0d6e0',
     },
+  },
+  imageContainer: {
+    position: 'relative',
+    overflow: 'hidden',
+    width: '100%',
+    height: '160px',
   },
   publicationImage: {
     width: '100%',
-    height: '100px',
+    height: '100%',
     objectFit: 'cover',
+    transition: 'transform 0.3s ease',
+    ':hover': {
+      transform: 'scale(1.05)',
+    },
   },
   publicationContent: {
     padding: '20px',
-    flex: 1,
     display: 'flex',
     flexDirection: 'column',
-  },
-  publicationTitle: {
-    fontSize: '1.25rem',
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: '0px',
-    lineHeight: 1.3,
-  },
-  publicationSummary: {
-    fontSize: '0.95rem',
-    color: '#4b5563',
-
-    lineHeight: 1.6,
+    justifyContent: 'space-between',
     flex: 1,
   },
-  readMoreButton: {
-    backgroundColor: 'transparent',
-    color: '#3b82f6',
-    border: '1px solid #3b82f6',
-    borderRadius: '6px',
-    padding: '8px 16px',
-    fontSize: '0.9rem',
-    fontWeight: '500',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    alignSelf: 'flex-start',
+  publicationTitle: {
+    fontSize: '1rem',
+    fontWeight: '600',
+    color: '#1a1a1a',
+    margin: '0 0 8px',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    lineHeight: '1.4',
+    letterSpacing: '0.2px',
   },
-  readMoreButtonHover: {
-    backgroundColor: '#eff6ff',
+  publicationSummary: {
+    fontSize: '0.875rem',
+    color: '#666',
+    margin: '0 0 12px',
+    display: '-webkit-box',
+    WebkitLineClamp: 3,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    lineHeight: '1.5',
+    flex: 1,
+  },
+  cardOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0,
+    transition: 'opacity 0.2s ease',
+    display: 'flex',
+    zIndex: 2,
+  },
+  readMoreText: {
+    color: '#fff',
+    fontSize: '14px',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: '6px 12px',
+    borderRadius: '4px',
+    letterSpacing: '1px',
   },
   viewAllContainer: {
     display: 'flex',
     justifyContent: 'center',
-    marginTop: '40px',
+    marginTop: '24px',
   },
   viewAllButton: {
     backgroundColor: 'transparent',
@@ -533,16 +674,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#3a505b',
     color: 'white',
     padding: '40px 20px 20px',
-    marginTop: 'auto',
-    width: '100%',
+    marginTop: '60px',
     flexShrink: 0,
-    overflowY: 'scroll',
   },
   footerContent: {
     marginLeft: '30px',
     maxWidth: '1200px',
     margin: '0 auto',
-    padding: '0 12px',
     flexWrap: 'wrap',
     gap: '40px',
     marginBottom: '0px',

@@ -520,9 +520,7 @@ const NewsCard = ({ item, compact, bigTrending, isFirst }) => {
             {item?.excerpt || ''}
           </Text>
           <View style={styles.featuredMeta}>
-            <Text style={styles.featuredDate}>
-              {item?.date || new Date().toLocaleDateString()}
-            </Text>
+
             <View style={[styles.readMoreContainer, isHovered && { 
               opacity: 1, 
               transform: [
@@ -616,7 +614,26 @@ const HeadlineCard = ({ item }) => (
 
 export default function NewsScreen() {
   const [newsData, setNewsData] = useState(fallbackNewsData);
+  const [trendingStories, setTrendingStories] = useState([]);
   const [activeGenre, setActiveGenre] = useState('News');
+  const router = useRouter();
+
+  // fetch trending stories (most visited in last 3 days)
+  useEffect(() => {
+    apiClient.get('/public/trending-articles')
+      .then(res => {
+        if (Array.isArray(res.data?.data)) {
+          const mapped = res.data.data.map(a => ({
+            id: a.id?.toString() || '',
+            title: a.title,
+            category: a.genre || 'News',
+            published_at: a.published_at,
+          }));
+          setTrendingStories(mapped);
+        }
+      })
+      .catch(() => setTrendingStories([]));
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -628,12 +645,12 @@ export default function NewsScreen() {
           const mapped = res.data.data.map(article => ({
             id: article.id?.toString() || '',
             title: article.title,
-            excerpt: article.content?.slice(0, 120) + (article.content?.length > 120 ? '...' : ''),
+            excerpt: '', // Removed content display
             image: article.media && article.media.length > 0 
               ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`  
               : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
             date: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
-            category: article.category || (article.user?.name ? 'By ' + article.user.name : 'General'),
+            category: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Recent',
           }));
           setNewsData(mapped);
         }
@@ -676,40 +693,25 @@ export default function NewsScreen() {
           </View>
           <View style={styles.rightCol}>
             <ScrollView style={styles.rightColScroll} contentContainerStyle={{paddingBottom: 16}}>
-              {headlineStories.map(item => (
-                <HeadlineCard item={item} key={item.id} />
-              ))}
+
               <View style={styles.freshStoriesSection}>
-                <Text style={styles.freshStoriesHeader}>Fresh stories</Text>
-                <Text style={styles.freshStoriesSubheader}>TODAY: BROWSE OUR EDITOR'S HAND PICKED ARTICLES!</Text>
+                <Text style={styles.freshStoriesHeader}>Trending Stories</Text>
+                <Text style={styles.freshStoriesSubheader}>Most visited in last 3 days</Text>
                 <View style={styles.freshStoryList}>
-                  <View style={styles.freshStoryItem}>
-                    <Text style={styles.freshStoryTitle}><Text style={styles.freshStoryTitleBold}>LITERARY |</Text> gutom na rin ako, kaso pamasaha na lang ang meron ako</Text>
-                    <View style={styles.freshStoryMetaRow}>
-                      <Text style={styles.freshStoryCategory}>LITERARY</Text>
-                      <Text style={styles.freshStoryDate}>  March 21, 2025</Text>
-                    </View>
-                  </View>
-                  <View style={styles.freshStoryDivider} />
-                  <View style={styles.freshStoryItem}>
-                    <Text style={styles.freshStoryTitle}><Text style={styles.freshStoryTitleBold}>NEWS |</Text> BatStateU, SP strengthen global ties; propose community solutions</Text>
-                    <View style={styles.freshStoryMetaRow}>
-                      <Text style={styles.freshStoryCategory}>NEWS</Text>
-                      <Text style={styles.freshStoryDate}>  March 19, 2025</Text>
-                    </View>
-                  </View>
-                  <View style={styles.freshStoryDivider} />
-                  <View style={styles.freshStoryItem}>
-                    <Text style={styles.freshStoryTitle}><Text style={styles.freshStoryTitleBold}>EDITORIAL |</Text> Pulling Out the Thorns</Text>
-                    <View style={styles.freshStoryMetaRow}>
-                      <Text style={styles.freshStoryCategory}>EDITORIAL</Text>
-                      <Text style={styles.freshStoryDate}>  March 11, 2025</Text>
-                    </View>
-                  </View>
-                  <View style={styles.freshStoryDivider} />
-                  <View style={styles.freshStoryItem}>
-                    <Text style={styles.freshStoryTitle}>People Power is not a relic of the past. It is a reminder, a warning, and a call to action.</Text>
-                  </View>
+                  {trendingStories.map(item => (
+                    <TouchableOpacity key={item.id} onPress={() => router.push(`/news/article/${item.id}`)}>
+                      <View style={styles.freshStoryItem}>
+                        <Text style={styles.freshStoryTitle}>
+                          <Text style={styles.freshStoryTitleBold}>{item.category?.toUpperCase()} |</Text> {item.title}
+                        </Text>
+                        <View style={styles.freshStoryMetaRow}>
+                          <Text style={styles.freshStoryCategory}>{item.category?.toUpperCase()}</Text>
+                          <Text style={styles.freshStoryDate}>  {item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''}</Text>
+                        </View>
+                      </View>
+                      <View style={styles.freshStoryDivider} />
+                    </TouchableOpacity>
+                  ))}
                 </View>
               </View>
             </ScrollView>

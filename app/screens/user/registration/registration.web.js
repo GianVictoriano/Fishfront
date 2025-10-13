@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image, Platf
 import Tesseract from 'tesseract.js';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import apiClient from '../../../../utils/api';
 
 export default function RegistrationScreen() {
   const router = useRouter();
   const [corImage, setCorImage] = useState(null);
   const [ocrText, setOcrText] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
@@ -280,13 +282,71 @@ export default function RegistrationScreen() {
                     <Text style={styles.backButtonText}>Back</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
-                    style={styles.submitButton} 
-                    onPress={() => {
-                      console.log('Submit button pressed');
-                      Alert.alert('Request Submitted!', 'We will notify your account for future tryouts.');
+                    style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} 
+                    onPress={async () => {
+                      if (!selectedRole) {
+                        Alert.alert('Error', 'Please select a role');
+                        return;
+                      }
+                      
+                      try {
+                        setIsSubmitting(true);
+                        
+                        // Prepare the applicant data
+                        const applicantData = {
+                          full_name: formData.fullName,
+                          sr_code: formData.srCode,
+                          email: formData.email || updateEmailFromSrCode(formData.srCode),
+                          enrollment_year: formData.enrollmentYear,
+                          department: formData.department,
+                          desired_role: selectedRole.toLowerCase(),
+                        };
+                        
+                        console.log('Submitting application:', applicantData);
+                        
+                        // Send the data to the backend
+                        const response = await apiClient.post('/api/applications', applicantData);
+                        
+                        console.log('Application submitted successfully:', response.data);
+                        
+                        // Show success message
+                        Alert.alert(
+                          'Application Submitted!', 
+                          'Your application has been received. We will review it and get back to you soon.',
+                          [
+                            { 
+                              text: 'OK', 
+                              onPress: () => {
+                                // Reset the form and go back to the first step
+                                setFormData({
+                                  fullName: '',
+                                  srCode: '',
+                                  email: '',
+                                  enrollmentYear: '',
+                                  department: ''
+                                });
+                                setSelectedRole(null);
+                                setStep(1);
+                              }
+                            }
+                          ]
+                        );
+                        
+                      } catch (error) {
+                        console.error('Error submitting application:', error);
+                        const errorMessage = error.response?.data?.message || 'Failed to submit application. Please try again.';
+                        Alert.alert('Error', errorMessage);
+                      } finally {
+                        setIsSubmitting(false);
+                      }
                     }}
+                    disabled={isSubmitting}
                   >
-                    <Text style={styles.submitButtonText}>Submit</Text>
+                    {isSubmitting ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.submitButtonText}>Submit</Text>
+                    )}
                   </TouchableOpacity>
                 </View>
               </>
@@ -527,5 +587,3 @@ const styles = StyleSheet.create({
     color: '#6c757d',
   },
 });
-
-

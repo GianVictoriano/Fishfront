@@ -1,6 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { View, Text, Image, StyleSheet, ScrollView, ActivityIndicator, SafeAreaView, Platform, TouchableOpacity } from 'react-native';
+import { 
+  View, 
+  Text, 
+  Image, 
+  StyleSheet, 
+  ScrollView, 
+  ActivityIndicator, 
+  SafeAreaView, 
+  Platform, 
+  TouchableOpacity 
+} from 'react-native';
 import Navbar from '../../../components/Navbar';
 import NewsNavbar from '../../../components/newsnavbar';
 import apiClient from '../../../utils/api';
@@ -50,6 +60,37 @@ const styles = StyleSheet.create({
     textAlign: 'left',
     width: '100%',
   },
+  metricsContainer: {
+    marginTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  metricsText: {
+    fontSize: 14,
+    color: '#4b5563',
+    marginRight: 20,
+  },
+  reactionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  reactBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  reactLabel: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
   body: {
     fontSize: 18,
     color: '#232323',
@@ -81,24 +122,28 @@ const styles = StyleSheet.create({
   },
   storyItem: {
     marginBottom: 16,
-  },
+  }
 });
 
 export default function ArticleDetail() {
   const router = useRouter();
   const { id: articleId } = useLocalSearchParams();
   const [article, setArticle] = useState(null);
-  const [newsData, setNewsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [reactingType, setReactingType] = useState(null);
+  const [newsData, setNewsData] = useState([]);
 
+  // Fetch article data
   useEffect(() => {
     if (!articleId) return;
-    setLoading(true);
-    apiClient.get(`/public/articles/${articleId}`)
-      .then(res => {
-        // Laravel API Resource returns data under res.data.data
+    
+    const fetchArticle = async () => {
+      setLoading(true);
+      try {
+        const res = await apiClient.get(`/public/articles/${articleId}`);
         const raw = res.data?.data ? res.data.data : res.data;
+        
         // Map backend data to front-end expectations
         const mapped = {
           id: raw.id?.toString() || '',
@@ -110,20 +155,25 @@ export default function ArticleDetail() {
             ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${raw.media[0].file_path.replace('public/', '')}`
             : null,
           author: raw.user?.name || null,
+          metrics: raw.metrics ?? { visits: 0, like_count: 0, heart_count: 0, sad_count: 0, wow_count: 0 },
         };
         setArticle(mapped);
-      })
-      .catch(err => {
+      } catch (err) {
         console.error('Error fetching article:', err);
         setError('Failed to load article');
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchArticle();
   }, [articleId]);
 
   // Fetch list of articles for sidebar
   useEffect(() => {
-    apiClient.get('/public/articles')
-      .then(res => {
+    const fetchNews = async () => {
+      try {
+        const res = await apiClient.get('/public/articles');
         if (Array.isArray(res.data?.data)) {
           const mapped = res.data.data.map(item => ({
             id: item.id?.toString() || '',
@@ -132,32 +182,56 @@ export default function ArticleDetail() {
           })).filter(item => item.id !== articleId);
           setNewsData(mapped);
         }
-      })
-      .catch(err => console.error('Error fetching fresh stories:', err));
+      } catch (err) {
+        console.error('Error fetching fresh stories:', err);
+      }
+    };
+    
+    if (articleId) {
+      fetchNews();
+    }
   }, [articleId]);
 
-  if (loading) {
-    return <ActivityIndicator size="large" style={{ marginTop: 60 }} />;
-  }
-  if (!article) {
-    return <Text style={{ marginTop: 60, color: 'red' }}>Article not found.</Text>;
+  const react = async (type) => {
+    if (!article || reactingType) return; // Prevent multiple clicks
+    
+    try {
+      setReactingType(type);
+      console.log('Sending reaction:', type);
+      const response = await apiClient.post(`/public/articles/${articleId}/react`, { type });
+      
+      // Update UI with server response
+      if (response.data && response.data.metrics) {
+        setArticle(prev => ({
+          ...prev,
+          metrics: {
+            ...prev.metrics, // Keep existing metrics
+            ...response.data.metrics, // Update with server metrics
+            visits: prev.metrics?.visits || 0, // Preserve visits count
+          }
+        }));
+      }
+    } catch (e) {
+      console.error('Error reacting:', e);
+    } finally {
+      setReactingType(null);
+    }
+  };
+
+  if (loading || !article) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
   }
   const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
   const imageUrl = article.image || defaultImage;
 
   return (
     <SafeAreaView style={styles.container}>
-      {Platform.OS === 'web' ? (
-        <>
-          <Navbar />
-          <NewsNavbar />
-        </>
-      ) : (
-        <>
-          <Navbar />
-          <NewsNavbar />
-        </>
-      )}
+      <Navbar />
+      <NewsNavbar />
       <View style={styles.rowMain}>
         <ScrollView
           style={styles.articleContainer}
@@ -171,6 +245,34 @@ export default function ArticleDetail() {
                 By {article.author || 'Unknown'} | {article.published_at ? new Date(article.published_at).toLocaleDateString() : ''}
               </Text>
               <Text style={styles.body}>{article.content}</Text>
+
+              {/* Metrics & Reactions */}
+              <View style={styles.metricsContainer}>
+                <View style={styles.reactionRow}>
+                  <Text style={styles.metricsText}>Total Visitors: {article.metrics?.visits || 0}</Text>
+                  {[
+                    { type: 'like', emoji: '👍' },
+                    { type: 'heart', emoji: '❤️' },
+                    { type: 'sad', emoji: '😢' },
+                    { type: 'wow', emoji: '😲' }
+                  ].map(({ type, emoji }) => (
+                    <TouchableOpacity 
+                      key={type} 
+                      style={[styles.reactBtn, reactingType === type && { opacity: 0.7 }]} 
+                      onPress={() => react(type)} 
+                      disabled={!!reactingType}
+                    >
+                      {reactingType === type ? (
+                        <ActivityIndicator size="small" color="#000" />
+                      ) : (
+                        <Text style={styles.reactLabel}>
+                          {emoji} {article.metrics?.[`${type}_count`] || 0}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
             </View>
           </View>
         </ScrollView>

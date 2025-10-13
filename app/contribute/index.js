@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Image, Platform } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image, Alert, Platform, Modal, FlatList, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { MaterialIcons, FontAwesome } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../context/AuthContext';
 import AppNavbar from '../../components/AppNavbar';
+import apiClient from '../../utils/api';
 
 const SUBMISSION_TYPES = [
   {
@@ -13,13 +16,6 @@ const SUBMISSION_TYPES = [
     description: 'Share your creative writing, poetry, or visual artwork',
     icon: 'auto-stories',
     color: '#4f46e5',
-  },
-  {
-    id: 'story',
-    title: 'Share Your Story',
-    description: 'Tell us about your personal experiences or opinions',
-    icon: 'edit-note',
-    color: '#10b981',
   },
   {
     id: 'coverage',
@@ -40,8 +36,8 @@ const LITERATURE_CATEGORIES = [
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 const Contribute = () => {
-  const [step, setStep] = useState('select'); // 'select', 'form'
-  const [showForm, setShowForm] = useState(false);
+  const textInputRef = useRef(null);
+  const [step, setStep] = useState('select'); // 'select', 'category', 'form'
   const [formTitle, setFormTitle] = useState('Share Your Work');
   const [formSubtitle, setFormSubtitle] = useState('Contribute your content to our community');
   const [selectedImage, setSelectedImage] = useState(null);
@@ -53,21 +49,24 @@ const Contribute = () => {
   const [files, setFiles] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
-  const router = useRouter();
   const { user } = useAuth();
 
   const validateForm = () => {
     const newErrors = {};
     if (!title.trim()) newErrors.title = 'Title is required';
-    if (!content.trim()) newErrors.content = 'Content is required';
-    
-    // Only require category for literature/artwork submissions
+    const isArtwork = submissionType === 'literature' && category === 'artwork';
+
+    // Content is required unless it's a pure artwork submission
+    if (!isArtwork && !content.trim()) {
+      newErrors.content = 'Content is required';
+    }
+
+    // Category required only when selecting literature
     if (submissionType === 'literature' && !category) {
       newErrors.category = 'Please select a category';
     }
-    
-    // Only require files for literature/artwork submissions
-    if (submissionType === 'literature' && files.length === 0) {
+
+    if (isArtwork && files.length === 0) {
       newErrors.files = 'Please upload at least one file';
     }
     
@@ -77,12 +76,21 @@ const Contribute = () => {
   
   const handleSelectType = (type) => {
     setSubmissionType(type);
-    setCategory('');
-    setStep('form');
+    if (type === 'literature') {
+      setStep('category');
+    } else {
+      setStep('form');
+      setFormTitle(type === 'story' ? 'Share Your Story' : 'Request Coverage');
+      setFormSubtitle(
+        type === 'story' 
+          ? 'Tell us about your personal experiences or opinions' 
+          : 'Suggest a topic or event you\'d like us to cover'
+      );
+    }
   };
   
   const handleBack = () => {
-    if (step === 'form') {
+    if (step === 'form' || step === 'category') {
       setStep('select');
     } else {
       router.back();
@@ -126,33 +134,61 @@ const Contribute = () => {
     setIsSubmitting(true);
     
     try {
+      // Get auth token first
+      const token = await AsyncStorage.getItem('auth_token');
+      if (!token) {
+        Alert.alert('Authentication Required', 'Please sign in first');
+        setIsSubmitting(false);
+        return;
+      }
+
       const formData = new FormData();
       formData.append('title', title);
       formData.append('content', content);
-      formData.append('category', category);
-      formData.append('userId', user.id);
       
-      files.forEach((file, index) => {
-        formData.append('files', {
-          uri: file.uri,
-          type: file.type,
-          name: file.name || `file-${index}`,
+      // Map submission types to valid category values from the backend validation
+      const categoryMap = {
+        'literature': 'fiction',  // Map 'literature' to 'fiction' as per backend
+        'artwork': 'artwork',
+        'story': 'story',
+        'coverage': 'coverage',
+        'poetry': 'poetry',      // Added poetry
+        'essay': 'essay'         // Added essay
+      };
+      
+      // Default to 'fiction' if the submission type doesn't match any valid category
+      const selectedCategory = categoryMap[submissionType] || 'fiction';
+      
+      formData.append('category', selectedCategory);
+      formData.append('type', submissionType);
+      formData.append('user_id', user.id);  // Changed userId to user_id to match backend
+
+      // Only append files if they exist
+      if (files.length > 0) {
+        files.forEach((file, index) => {
+          formData.append('files[]', {
+            uri: file.uri,
+            type: file.type,
+            name: file.name || `file-${index}`,
+          });
         });
-      });
+      }
 
       const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/contributions`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${user.token}`,
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+          // Let browser set Content-Type with boundary
         },
         body: formData,
       });
 
+      const resData = await response.json();
       if (!response.ok) {
-        throw new Error('Failed to submit contribution');
+        throw new Error(resData.message || 'Submission failed');
       }
-
+      
       Alert.alert('Success', 'Your contribution has been submitted for review!');
       router.push('/home');
     } catch (error) {
@@ -190,49 +226,14 @@ const Contribute = () => {
       </View>
     </View>
   );
-  
-  const handleImageUpload = async () => {
-    try {
-      setIsUploading(true);
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-
-      if (!result.canceled) {
-        setSelectedImage(result.assets[0].uri);
-      }
-    } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to select image. Please try again.');
-    } finally {
-      setIsUploading(false);
-    }
-  };
 
   const handleCategorySelect = (selectedCategory) => {
     setCategory(selectedCategory);
-    setShowForm(true);
+    setStep('form');
     
-    // Reset selected image when changing categories
-    if (selectedCategory !== 'artwork') {
-      setSelectedImage(null);
-    }
-    
-    // Update form title and subtitle based on category
-    if (submissionType === 'literature') {
-      const categoryName = LITERATURE_CATEGORIES.find(cat => cat.id === selectedCategory)?.name || 'Content';
-      setFormTitle(`Submit ${categoryName}`);
-      setFormSubtitle(`Share your ${categoryName.toLowerCase()} with our community`);
-    } else if (submissionType === 'story') {
-      setFormTitle('Share Your Story');
-      setFormSubtitle('Tell us about your personal experiences or opinions');
-    } else if (submissionType === 'coverage') {
-      setFormTitle('Request Coverage');
-      setFormSubtitle('Suggest a topic or event you\'d like us to cover');
-    }
+    const categoryName = LITERATURE_CATEGORIES.find(cat => cat.id === selectedCategory)?.name || 'Content';
+    setFormTitle(`Submit ${categoryName}`);
+    setFormSubtitle(`Share your ${categoryName.toLowerCase()} with our community`);
   };
   
   const renderCategorySelection = () => (
@@ -256,394 +257,152 @@ const Contribute = () => {
       </View>
     </View>
   );
-  
-  const renderForm = () => {
-    if (!showForm) {
-      return renderCategorySelection();
-    }
-    
-    return (
-      <View style={styles.formWrapper}>
-        <View style={styles.formHeader}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <MaterialIcons name="arrow-back" size={24} color="#4f46e5" />
-            <Text style={styles.backButtonText}>Back to Selection</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>{formTitle}</Text>
-          <Text style={styles.subtitle}>{formSubtitle}</Text>
-        </View>
-        
-        <View style={styles.formContainer}>
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Title</Text>
-            <TextInput
-              style={[styles.input, errors.title && styles.inputError]}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Enter a title for your submission"
-              placeholderTextColor="#94a3b8"
-            />
-            {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
-          </View>
 
-          {submissionType === 'literature' && (
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Category</Text>
-              <View style={styles.categoryContainer}>
-                {LITERATURE_CATEGORIES.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      styles.categoryButton,
-                      category === item.id && styles.categoryButtonActive,
-                    ]}
-                    onPress={() => setCategory(item.id)}
-                  >
-                    <MaterialIcons
-                      name={item.icon}
-                      size={20}
-                      color={category === item.id ? '#fff' : '#3b82f6'}
-                    />
-                    <Text
-                      style={[
-                        styles.categoryText,
-                        category === item.id && styles.categoryTextActive,
-                      ]}
-                    >
-                      {item.name}
+  const renderForm = () => (
+    <View style={styles.formWrapper}>
+      <View style={styles.formHeader}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+          <MaterialIcons name="arrow-back" size={24} color="#4f46e5" />
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>{formTitle}</Text>
+        <Text style={styles.subtitle}>{formSubtitle}</Text>
+      </View>
+
+      <View style={styles.formContainer}>
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Title</Text>
+          <TextInput
+            style={[styles.input, errors.title && styles.inputError]}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Enter a title for your submission"
+            placeholderTextColor="#94a3b8"
+          />
+          {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
+        </View>
+
+        {submissionType === 'literature' && (
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Category</Text>
+            <View style={styles.selectedCategory}>
+              <MaterialIcons 
+                name={LITERATURE_CATEGORIES.find(cat => cat.id === category)?.icon || 'category'} 
+                size={20} 
+                color="#3b82f6" 
+              />
+              <Text style={styles.selectedCategoryText}>
+                {LITERATURE_CATEGORIES.find(cat => cat.id === category)?.name || 'Select a category'}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>
+            {submissionType === 'literature' ? 'Content' : 
+             submissionType === 'story' ? 'Your Story' : 'Your Request'}
+          </Text>
+          <TextInput
+            ref={textInputRef}
+            style={[styles.textArea, errors.content && styles.inputError]}
+            value={content}
+            onChangeText={setContent}
+            placeholder={
+              submissionType === 'literature' ? 'Enter your content here...' :
+              submissionType === 'story' ? 'Tell us your story...' :
+              'Tell us what you\'d like us to cover...'
+            }
+            placeholderTextColor="#94a3b8"
+            multiline
+            numberOfLines={8}
+          />
+          {errors.content && <Text style={styles.errorText}>{errors.content}</Text>}
+        </View>
+
+        {submissionType === 'literature' && (
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Attachments</Text>
+            <TouchableOpacity 
+              style={styles.uploadButton}
+              onPress={pickImage}
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <>
+                  <MaterialIcons name="cloud-upload" size={24} color="#ffffff" />
+                  <Text style={styles.uploadButtonText}>Upload Files</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            {files.length > 0 && (
+              <View style={styles.fileList}>
+                {files.map((file, index) => (
+                  <View key={index} style={styles.fileItem}>
+                    <MaterialIcons name="insert-drive-file" size={20} color="#64748b" />
+                    <Text style={styles.fileName} numberOfLines={1}>
+                      {file.name}
                     </Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.removeFileButton}
+                      onPress={() => removeFile(index)}
+                    >
+                      <MaterialIcons name="close" size={16} color="#64748b" />
+                    </TouchableOpacity>
+                  </View>
                 ))}
               </View>
-              {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
-            </View>
-          )}
-          
-          {submissionType === 'literature' && category === 'artwork' && (
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Upload Artwork</Text>
-              {selectedImage ? (
-                <View style={styles.imagePreviewContainer}>
-                  <Image 
-                    source={{ uri: selectedImage }} 
-                    style={styles.imagePreview} 
-                    resizeMode="contain"
-                  />
-                  <TouchableOpacity 
-                    style={styles.removeImageButton}
-                    onPress={() => setSelectedImage(null)}
-                  >
-                    <MaterialIcons name="close" size={20} color="#fff" />
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <TouchableOpacity 
-                  style={styles.uploadButton}
-                  onPress={handleImageUpload}
-                  disabled={isUploading}
-                >
-                  {isUploading ? (
-                    <ActivityIndicator color="#4f46e5" />
-                  ) : (
-                    <>
-                      <MaterialIcons name="cloud-upload" size={32} color="#4f46e5" />
-                      <Text style={styles.uploadButtonText}>Tap to upload artwork</Text>
-                      <Text style={styles.uploadSubtext}>JPG, PNG, or GIF (max 5MB)</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
-              {errors.files && <Text style={styles.errorText}>{errors.files}</Text>}
-            </View>
-          )}
-          
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>
-              {submissionType === 'literature' 
-                ? category === 'artwork' ? 'Artwork Description' : 'Content'
-                : submissionType === 'story' ? 'Your Story' : 'Details'}
-            </Text>
-            <TextInput
-              style={[styles.input, styles.textArea, errors.content && styles.inputError]}
-              value={content}
-              onChangeText={setContent}
-              placeholder={
-                submissionType === 'literature'
-                  ? 'Enter your content here...'
-                  : submissionType === 'story'
-                  ? 'Tell us your story...'
-                  : 'Provide details about your request...'
-              }
-              placeholderTextColor="#94a3b8"
-              multiline
-              textAlignVertical="top"
-              scrollEnabled={false}
-              onContentSizeChange={(e) => {
-                if (e.nativeEvent.contentSize.height > 0 && 
-                    e.nativeEvent.contentSize.height < 600) {
-                  textInputRef.current?.setNativeProps({
-                    style: { height: Math.max(120, e.nativeEvent.contentSize.height) }
-                  });
-                }
-              }}
-              ref={textInputRef}
-            />
-            {errors.content && <Text style={styles.errorText}>{errors.content}</Text>}
-          </View>
-          
-          <TouchableOpacity 
-            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.submitButtonText}>Submit for Review</Text>
             )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
-
-  // Main component return statement
-  return (
-    <View style={{ flex: 1 }}>
-      <AppNavbar />
-      <ScrollView style={styles.container}>
-        {step === 'select' ? (
-          renderSelectionScreen()
-        ) : (
-          <>
-            <View style={styles.formHeader}>
-              {showForm ? (
-                <TouchableOpacity 
-                  onPress={() => setShowForm(false)}
-                  style={styles.backButton}
-                >
-                  <MaterialIcons name="arrow-back" size={24} color="#4f46e5" />
-                  <Text style={styles.backButtonText}>Back to Categories</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity 
-                  onPress={() => setStep('select')}
-                  style={styles.backButton}
-                >
-                  <MaterialIcons name="arrow-back" size={24} color="#4f46e5" />
-                  <Text style={styles.backButtonText}>Back to Selection</Text>
-                </TouchableOpacity>
-              )}
-              <Text style={styles.title}>
-                {showForm ? formTitle : 'Select a Category'}
-              </Text>
-              <Text style={styles.subtitle}>
-                {showForm ? formSubtitle : 'Choose the type of content you\'re submitting'}
-              </Text>
-            </View>
-            {renderForm()}
-          </>
+            {errors.files && <Text style={styles.errorText}>{errors.files}</Text>}
+          </View>
         )}
+
+        <TouchableOpacity 
+          style={styles.submitButton}
+          onPress={handleSubmit}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color="#ffffff" />
+          ) : (
+            <Text style={styles.submitButtonText}>Submit for Review</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <AppNavbar />
+      <ScrollView style={styles.scrollView}>
+        {step === 'select' && renderSelectionScreen()}
+        {step === 'category' && renderCategorySelection()}
+        {step === 'form' && renderForm()}
       </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  formWrapper: {
-    flex: 1,
-    padding: 16,
-  },
-  formContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  formGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1f2937',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#111827',
-  },
-  inputError: {
-    borderColor: '#ef4444',
-  },
-  errorText: {
-    color: '#ef4444',
-    fontSize: 14,
-    marginTop: 4,
-  },
-  textArea: {
-    minHeight: 150,
-    textAlignVertical: 'top',
-  },
-  uploadButton: {
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  uploadButtonText: {
-    color: '#4f46e5',
-    fontWeight: '500',
-    marginTop: 8,
-  },
-  uploadSubtext: {
-    color: '#9ca3af',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  imagePreviewContainer: {
-    position: 'relative',
-    marginBottom: 16,
-  },
-  imagePreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
-  },
-  removeImageButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButton: {
-    backgroundColor: '#4f46e5',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  submitButtonDisabled: {
-    opacity: 0.7,
-  },
-  submitButtonText: {
-    color: '#ffffff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  // ... existing styles ...
-  submitButton: {
-    backgroundColor: '#4f46e5',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
-  },
-  submitButtonDisabled: {
-    opacity: 0.7,
-  },
-  submitButtonText: {
-    color: '#ffffff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  scrollView: {
+    flex: 1,
+  },
   selectionContainer: {
-    flex: 1,
-    padding: 16,
-  },
-  cardsContainer: {
-    marginTop: 16,
-    gap: 16,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4f46e5',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-    minHeight: 80,
-    justifyContent: 'center',
-  },
-  cardIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 4,
-  },
-  cardDescription: {
-    fontSize: 13,
-    color: '#64748b',
-    lineHeight: 18,
-  },
-  cardArrow: {
-    position: 'absolute',
-    right: 20,
-    top: '50%',
-    marginTop: -8,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    color: '#4f46e5',
-    fontSize: 16,
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  formWrapper: {
-    flex: 1,
-  },
-  formHeader: {
     padding: 16,
   },
   header: {
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    marginBottom: 24,
   },
   title: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: 'bold',
     color: '#1e293b',
     marginBottom: 8,
   },
@@ -651,190 +410,51 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#64748b',
   },
-  formContainer: {
-    padding: 16,
-    paddingTop: 0,
+  cardsContainer: {
+    gap: 16,
   },
-  formGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 8,
-    marginTop: 12,
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#1e293b',
-  },
-  inputError: {
-    borderColor: '#ef4444',
-  },
-  textArea: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#1e293b',
-    minHeight: 150,
-    textAlignVertical: 'top',
-  },
-  categoryContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
-    gap: 8,
-    marginBottom: 8,
-  },
-  categoryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  categoryButtonActive: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
-  },
-  categoryText: {
-    marginLeft: 6,
-    color: '#3b82f6',
-    fontWeight: '500',
-  },
-  categoryTextActive: {
-    color: '#fff',
-  },
-  uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderStyle: 'dashed',
-    borderRadius: 8,
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
     padding: 20,
-    marginBottom: 12,
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  uploadButtonText: {
-    marginLeft: 8,
-    color: '#3b82f6',
-    fontWeight: '500',
-  },
-  fileList: {
-    marginBottom: 12,
-  },
-  fileItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-  },
-  fileName: {
-    flex: 1,
-    marginLeft: 8,
-    color: '#475569',
-  },
-  removeFileButton: {
-    padding: 4,
-  },
-  fileHint: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 4,
-  },
-  submitButton: {
-    backgroundColor: '#3b82f6',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  submitButtonDisabled: {
-    opacity: 0.7,
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  errorText: {
-    color: '#ef4444',
-    fontSize: 14,
-    marginTop: 4,
-  },
-  // Form styles
-  uploadButton: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    padding: 24,
-    alignItems: 'center',
+  cardIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
     justifyContent: 'center',
-    backgroundColor: '#f8fafc',
-  },
-  uploadButtonText: {
-    marginTop: 8,
-    color: '#4f46e5',
-    fontWeight: '500',
-  },
-  uploadSubtext: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 4,
-  },
-  imagePreviewContainer: {
-    position: 'relative',
     alignItems: 'center',
     marginBottom: 16,
   },
-  imagePreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 8,
   },
-  removeImageButton: {
+  cardDescription: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 16,
+  },
+  cardArrow: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  formHeader: {
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    right: 16,
+    top: '50%',
+    marginTop: -8,
   },
   categorySelection: {
     padding: 16,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: 'bold',
     color: '#1e293b',
     marginBottom: 8,
   },
@@ -846,23 +466,25 @@ const styles = StyleSheet.create({
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginHorizontal: -8,
+    gap: 16,
   },
   categoryCard: {
-    width: '48%',
-    backgroundColor: '#fff',
+    width: '47%',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    padding: 20,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   categoryIcon: {
     width: 56,
     height: 56,
-    borderRadius: 12,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -873,54 +495,122 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     textAlign: 'center',
   },
+  formWrapper: {
+    flex: 1,
+    padding: 16,
+  },
+  formHeader: {
+    marginBottom: 24,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  backButtonText: {
+    color: '#4f46e5',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  formContainer: {
+    gap: 20,
+  },
   formGroup: {
-    marginBottom: 20,
-    paddingHorizontal: 16,
+    gap: 8,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#475569',
   },
   input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
     color: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  textArea: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    minHeight: 160,
+    textAlignVertical: 'top',
   },
   inputError: {
     borderColor: '#ef4444',
   },
-  textArea: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#1e293b',
-    minHeight: 150,
-    textAlignVertical: 'top',
+  errorText: {
+    color: '#ef4444',
+    fontSize: 12,
+    marginTop: 4,
   },
-  categoryButton: {
+  selectedCategory: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  categoryButtonActive: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
+  selectedCategoryText: {
+    marginLeft: 8,
+    color: '#1e293b',
+    fontSize: 16,
   },
-  categoryText: {
-    marginLeft: 6,
-    color: '#3b82f6',
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4f46e5',
+    borderRadius: 8,
+    padding: 12,
+    gap: 8,
+  },
+  uploadButtonText: {
+    color: '#ffffff',
     fontWeight: '500',
+    fontSize: 16,
   },
-  categoryTextActive: {
-    color: '#fff',
+  fileList: {
+    marginTop: 12,
+    gap: 8,
+  },
+  fileItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  fileName: {
+    flex: 1,
+    marginLeft: 12,
+    color: '#475569',
+  },
+  removeFileButton: {
+    padding: 4,
+  },
+  submitButton: {
+    backgroundColor: '#4f46e5',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  submitButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });
 
