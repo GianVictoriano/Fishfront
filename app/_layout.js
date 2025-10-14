@@ -18,10 +18,10 @@ const InitialLayout = () => {
       const isOnPublicOnlyPage = ['signin', 'signin_cp'].includes(segments[0]) || segments.length === 0;
       if (isOnPublicOnlyPage) {
         redirected.current = true;
-        router.replace(user.profile?.role === 'collaborator' ? '/collab/dashboard' : '/user/home');
+        router.replace(user.profile?.role === 'collaborator' ? '/collab' : '/home');
       }
     } else {
-      const publicRoutes = ['user/home', 'user/news', 'user/about', 'signin', 'forgot-password', 'signup', 'signin_cp'];
+      const publicRoutes = ['home', 'news', 'about', 'forum', 'contribute/index', 'signin', 'forgot-password', 'registration', 'signin_cp'];
       const isProtectedRoute = segments.length > 0 && !publicRoutes.includes(segments.join('/'));
       if (isProtectedRoute) {
         redirected.current = true;
@@ -33,14 +33,14 @@ const InitialLayout = () => {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
-      <Stack.Screen name="user/home" />
-      <Stack.Screen name="user/news" />
-      <Stack.Screen name="user/about" />
-      <Stack.Screen name="user/forum" />
-      <Stack.Screen name="contribute" />
-      <Stack.Screen name="collab/dashboard" />
+      <Stack.Screen name="home" />
+      <Stack.Screen name="news" />
+      <Stack.Screen name="about" />
+      <Stack.Screen name="forum" />
+      <Stack.Screen name="contribute/index" />
+      <Stack.Screen name="collab" />
       <Stack.Screen name="signin" />
-      <Stack.Screen name="signup" />
+      <Stack.Screen name="registration" />
       <Stack.Screen name="forgot-password" />
       <Stack.Screen name="signin_cp" />
     </Stack>

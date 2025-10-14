@@ -1,12 +1,324 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, forwardRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image, Alert, Platform, Modal, FlatList, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 import apiClient from '../../utils/api';
+
+// --- Platform-Aware Rich Text Editor --- //
+
+// Conditionally require the rich text editor only on native platforms
+let RichEditor, RichToolbar, actions;
+if (Platform.OS !== 'web') {
+  try {
+    const editorModule = require('react-native-pell-rich-editor');
+    RichEditor = editorModule.RichEditor;
+    RichToolbar = editorModule.RichToolbar;
+    actions = editorModule.actions;
+  } catch (e) {
+    console.error('Failed to load react-native-pell-rich-editor:', e);
+  }
+}
+
+const EditorPlaceholder = () => <View style={styles.editorPlaceholder} />;
+
+const NativeRichEditor = forwardRef((props, ref) => {
+  // This component will only be rendered on native, so direct use is safe.
+  if (!RichEditor) return <EditorPlaceholder />;
+  return <RichEditor ref={ref} {...props} />;
+});
+
+const NativeRichToolbar = ({ editor }) => {
+  if (!RichToolbar || !actions) return null;
+  return (
+    <RichToolbar
+      editor={editor}
+      actions={Object.values(actions)}
+      style={styles.richToolbar}
+      iconTint="#1a237e"
+      selectedIconTint="#3949ab"
+    />
+  );
+};
+
+// --- Custom Web Rich Text Editor (Dependency-Free) --- //
+
+const SimpleWebEditor = ({ value, onChange }) => {
+  const editorRef = useRef(null);
+  const [activeStyles, setActiveStyles] = useState(new Set());
+
+  const updateActiveStyles = () => {
+    const styles = new Set();
+    
+    // Check inline styles
+    const commands = ['bold', 'italic', 'underline', 'strikethrough', 'insertOrderedList', 'insertUnorderedList', 'justifyCenter'];
+    commands.forEach(command => {
+      if (document.queryCommandState(command)) {
+        styles.add(command);
+      }
+    });
+
+    // Check block format
+    const block = document.queryCommandValue('formatBlock').toLowerCase();
+    if (block === 'h1') styles.add('h1');
+    else if (block === 'h2') styles.add('h2');
+    
+    // If no block styles or inline styles are active, consider it 'normal' text
+    const hasNoStyles = styles.size === 0 || 
+                       (block === 'p' && !['h1', 'h2', ...commands].some(style => styles.has(style)));
+
+    setActiveStyles(styles);
+  };
+
+  useEffect(() => {
+    const node = editorRef.current;
+    if (!node) return;
+
+    node.contentEditable = 'true';
+    const handleInput = () => {
+      if (onChange) onChange(node.innerHTML);
+      updateActiveStyles();
+    };
+
+    node.addEventListener('input', handleInput);
+    document.addEventListener('selectionchange', updateActiveStyles);
+
+    // Apply H1 format on mount
+    const applyH1 = () => {
+      if (!node) return;
+      
+      // Set initial content with H1
+      node.innerHTML = '<h1><br></h1>';
+      
+      // Focus and set cursor position
+      node.focus();
+      const range = document.createRange();
+      const selection = window.getSelection();
+      range.selectNodeContents(node.firstChild);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      
+      if (onChange) {
+        onChange(node.innerHTML);
+      }
+    };
+    
+    // Use requestAnimationFrame to ensure DOM is ready
+    requestAnimationFrame(applyH1);
+
+    return () => {
+      node.removeEventListener('input', handleInput);
+      document.removeEventListener('selectionchange', updateActiveStyles);
+    };
+  }, [onChange]);
+
+  useEffect(() => {
+    const node = editorRef.current;
+    if (node && value !== node.innerHTML) {
+      node.innerHTML = value || '';
+    }
+  }, [value]);
+
+  const applyStyle = (command, value = null) => {
+    // Make sure the editor has focus
+    editorRef.current.focus();
+    
+    // Save the current selection
+    const selection = window.getSelection();
+    if (selection.rangeCount === 0) return;
+    
+    const range = selection.getRangeAt(0);
+    const isCollapsed = range.collapsed;
+    
+    try {
+      // For the Normal button - clear all formatting
+      if (command === 'formatBlock' && value === '<p>') {
+        // First, apply paragraph format
+        document.execCommand('formatBlock', false, '<p>');
+        
+        // Remove all inline styles
+        const inlineStyles = ['bold', 'italic', 'underline', 'strikethrough', 'justifyCenter'];
+        inlineStyles.forEach(style => {
+          if (document.queryCommandState(style)) {
+            document.execCommand(style, false, null);
+          }
+        });
+        
+        // Remove any list formatting
+        if (document.queryCommandState('insertOrderedList') || document.queryCommandState('insertUnorderedList')) {
+          document.execCommand('insertUnorderedList', false, null); // Toggle off list
+        }
+      } 
+      // For block-level formatting (headings)
+      else if (command === 'formatBlock') {
+        // Check if we're clicking the same heading that's already active
+        const currentBlock = document.queryCommandValue('formatBlock').toLowerCase();
+        const targetBlock = value.toLowerCase();
+        
+        if (currentBlock === targetBlock) {
+          // If clicking the same heading that's already active, convert to normal text
+          document.execCommand('formatBlock', false, '<p>');
+        } else {
+          // Otherwise, apply the selected heading
+          document.execCommand('formatBlock', false, value);
+        }
+      } 
+      // For text alignment
+      else if (command === 'justifyCenter') {
+        const isCentered = document.queryCommandState('justifyCenter');
+        document.execCommand(isCentered ? 'justifyLeft' : 'justifyCenter', false, null);
+      } 
+      // For inline styles (bold, italic, etc.)
+      else {
+        // If the selection is collapsed, we need to insert a temporary span
+        if (isCollapsed) {
+          const span = document.createElement('span');
+          span.innerHTML = '\u200B'; // Zero-width space
+          range.deleteContents();
+          range.insertNode(span);
+          
+          // Select the new span
+          const newRange = document.createRange();
+          newRange.selectNodeContents(span);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+        }
+        
+        // Toggle the style
+        document.execCommand(command, false, null);
+        
+        // Clean up any temporary spans if we created one
+        if (isCollapsed) {
+          const container = range.startContainer;
+          if (container.nodeType === Node.TEXT_NODE && container.textContent === '\u200B') {
+            container.parentNode.removeChild(container);
+          }
+        }
+      }
+      
+      // Trigger change event
+      if (onChange) {
+        onChange(editorRef.current.innerHTML);
+      }
+      
+      // Update the active styles
+      updateActiveStyles();
+      
+    } catch (error) {
+      console.error('Error applying style:', error);
+    }
+    
+    // Restore focus to the editor
+    editorRef.current.focus();
+  };
+
+  return (
+    <View style={styles.editorContainer}>
+      <View style={styles.webToolbar}>
+        {/* Normal text button - removes all formatting */}
+        <TouchableOpacity 
+          onPress={() => applyStyle('formatBlock', '<p>')} 
+          style={[
+            styles.toolbarButton, 
+            (!activeStyles.has('h1') && 
+             !activeStyles.has('h2') && 
+             !['bold','italic','underline','strikethrough', 'insertOrderedList', 'insertUnorderedList', 'justifyCenter'].some(s => activeStyles.has(s))) && 
+            styles.toolbarButtonActive
+          ]}
+        >
+          <Text style={{ fontSize: 14 }}>Normal</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.separator} />
+        
+        {/* Inline styles */}
+        <TouchableOpacity 
+          onPress={() => applyStyle('bold')} 
+          style={[styles.toolbarButton, activeStyles.has('bold') && styles.toolbarButtonActive]}
+        >
+          <Text style={{ fontWeight: 'bold' }}>B</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => applyStyle('italic')} 
+          style={[styles.toolbarButton, activeStyles.has('italic') && styles.toolbarButtonActive]}
+        >
+          <Text style={{ fontStyle: 'italic' }}>I</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => applyStyle('underline')} 
+          style={[styles.toolbarButton, activeStyles.has('underline') && styles.toolbarButtonActive]}
+        >
+          <Text style={{ textDecorationLine: 'underline' }}>U</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => applyStyle('strikethrough')} 
+          style={[styles.toolbarButton, activeStyles.has('strikethrough') && styles.toolbarButtonActive]}
+        >
+          <Text style={{ textDecorationLine: 'line-through' }}>S</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.separator} />
+        
+        {/* Headings */}
+        <TouchableOpacity 
+          onPress={() => applyStyle('formatBlock', activeStyles.has('h1') ? '<p>' : '<h1>')} 
+          style={[styles.toolbarButton, activeStyles.has('h1') && styles.toolbarButtonActive]}
+        >
+          <Text style={[styles.headingText, activeStyles.has('h1') && styles.headingTextActive]}>H1</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => applyStyle('formatBlock', activeStyles.has('h2') ? '<p>' : '<h2>')} 
+          style={[styles.toolbarButton, activeStyles.has('h2') && styles.toolbarButtonActive]}
+        >
+          <Text style={[styles.headingText, activeStyles.has('h2') && styles.headingTextActive]}>H2</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.separator} />
+        
+        {/* Lists and alignment */}
+        <TouchableOpacity 
+          onPress={() => applyStyle('insertUnorderedList')} 
+          style={[styles.toolbarButton, activeStyles.has('insertUnorderedList') && styles.toolbarButtonActive]}
+        >
+          <MaterialIcons name="format-list-bulleted" size={18} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => applyStyle('insertOrderedList')} 
+          style={[styles.toolbarButton, activeStyles.has('insertOrderedList') && styles.toolbarButtonActive]}
+        >
+          <MaterialIcons name="format-list-numbered" size={18} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => applyStyle('justifyCenter')} 
+          style={[styles.toolbarButton, activeStyles.has('justifyCenter') && styles.toolbarButtonActive]}
+        >
+          <MaterialIcons name="format-align-center" size={18} />
+        </TouchableOpacity>
+      </View>
+      
+      <View
+        ref={editorRef}
+        style={styles.contentInput}
+        accessibilityRole="textbox"
+        aria-multiline="true"
+        onMouseUp={updateActiveStyles}
+        onKeyUp={updateActiveStyles}
+      />
+    </View>
+  );
+};
+
+// --- Main Screen Component --- //
 
 export default function CreateArticleScreen() {
   const router = useRouter();
@@ -17,15 +329,19 @@ export default function CreateArticleScreen() {
   const [browseVisible, setBrowseVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const scrollViewRef = useRef();
+  const richText = useRef();
 
-  // insert selected approved content
   const handleInsertContent = ({ title: groupTitle, content: draftText, image }) => {
     if (groupTitle) setTitle(groupTitle);
-    if (draftText) setContent(draftText);
+    if (draftText) {
+      setContent(draftText);
+      if (Platform.OS !== 'web' && richText.current) {
+        richText.current.setContentHTML(draftText);
+      }
+    }
     if (image) {
       setImages(prev => [...prev, { uri: image, type: 'image', local: false }]);
     }
-    // scroll to content field
     setTimeout(() => {
       if (scrollViewRef.current) {
         scrollViewRef.current.scrollTo({ y: 250, animated: true });
@@ -37,39 +353,101 @@ export default function CreateArticleScreen() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission required', 'Please allow access to your photo library to upload images.');
+        Alert.alert('Permission required', 'Please allow access to your photo library.');
         return;
       }
-
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
       });
-
       if (!result.canceled) {
         setImages(prev => [...prev, { uri: result.assets[0].uri, type: 'image', local: true }]);
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      Alert.alert('Error', 'Failed to pick image.');
     }
   };
 
   const pickDocument = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        copyToCacheDirectory: true,
+      console.log('Starting document picker...');
+      const result = await DocumentPicker.getDocumentAsync({ 
+        type: '*/*', 
+        copyToCacheDirectory: Platform.OS !== 'web' // Only copy to cache on native
       });
-
-      if (result.type === 'success') {
-        setImages(prev => [...prev, { uri: result.uri, name: result.name, type: 'file', local: true }]);
+      console.log('Document picker result:', result);
+      
+      const isSuccess = Platform.OS === 'web' ? (!result.canceled && result.assets && result.assets.length > 0) : result.type === 'success';
+      if (isSuccess) {
+        // Gather common file info
+        let fileUri, fileName, fileAsset;
+        if (Platform.OS === 'web') {
+          fileAsset = result.assets[0];
+          fileUri = fileAsset.uri;
+          fileName = fileAsset.name;
+        } else {
+          fileUri = result.uri;
+          fileName = result.name;
+        }
+        console.log('Selected file:', fileName, 'URI:', fileUri);
+        // Keep a reference to the file (e.g., for upload)
+        setImages(prev => [...prev, { uri: fileUri, name: fileName, type: 'file', local: true }]);
+        
+        try {
+          let fileText = '';
+          if (Platform.OS === 'web') {
+            console.log('Web platform: using FileReader');
+            // On web, access the File object from the first asset
+            const webAsset = result.assets?.[0];
+            if (!webAsset) {
+              throw new Error('No file asset found');
+            }
+            const webFile = webAsset.file || webAsset;
+            // Create a promise to handle FileReader async operation
+            fileText = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (e) => resolve(e.target.result);
+              reader.onerror = () => reject(new Error('Failed to read file'));
+              reader.readAsText(webFile);
+            });
+            console.log('File read successfully, length:', fileText.length);
+          } else {
+            console.log('Native platform: using FileSystem');
+            // First check if file exists and is readable
+            const fileInfo = await FileSystem.getInfoAsync(result.uri);
+            console.log('File info:', fileInfo);
+            
+            if (!fileInfo.exists) {
+              throw new Error('File does not exist or is not accessible');
+            }
+            
+            fileText = await FileSystem.readAsStringAsync(result.uri, {
+              encoding: FileSystem.EncodingType.UTF8,
+            });
+            console.log('File read successfully, length:', fileText.length);
+          }
+          
+          // Append to existing content, converting newlines to <br> on web
+          console.log('Setting content...');
+          const converted = Platform.OS === 'web' ? fileText.replace(/\n/g, '<br>') : fileText;
+          setContent(prev => {
+            const separator = prev ? (Platform.OS === 'web' ? '<br><br>' : '\n\n') : '';
+            return prev + separator + converted;
+          });
+          console.log('Content set successfully');
+          
+        } catch (e) {
+          console.error('Failed reading document content:', e);
+          Alert.alert('Error', `Unable to read file content: ${e.message}`);
+        }
       }
     } catch (error) {
-      console.error('Error picking document:', error);
-      Alert.alert('Error', 'Failed to pick document. Please try again.');
+      console.error('Error in document picker:', error);
+      Alert.alert('Error', `Failed to pick document: ${error.message}`);
+      Alert.alert('Error', 'Failed to pick document.');
     }
   };
 
@@ -77,95 +455,102 @@ export default function CreateArticleScreen() {
     setImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  // In your handleSubmit function
   const handleSubmit = async () => {
-    if (!title || !content) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
+    console.log('Publish button clicked'); // Debug log
+    
+    // Validate required fields
+    if (!title.trim() || !content.trim()) {
+      console.log('Validation failed - missing title or content');
+      return Alert.alert('Error', 'Title and content are required fields');
     }
 
     setIsSubmitting(true);
-    
-    // Get the token and verify it exists
-    const token = await AsyncStorage.getItem('auth_token');
-    console.log('Retrieved token:', token ? 'Token exists' : 'No token found');
-    
-    if (!token) {
-      Alert.alert('Authentication Required', 'Please sign in to create an article');
-      router.push('/signin');
-      setIsSubmitting(false);
-      return;
-    }
-  
-    const formData = new FormData();
-  
-    // Add text fields
-    formData.append('title', title);
-    formData.append('content', content);
-    // Use the genre as is since we're now using the correct values
-    formData.append('genre', genre);
-    formData.append('status', 'draft'); // Make sure to set a status
-  
-    // Handle images (platform-aware, like branding.js)
-    if (images && images.length > 0) {
+    console.log('Submitting form...');
+
+    try {
+      // Get auth token
+      const token = await AsyncStorage.getItem('auth_token');
+      console.log('Auth token retrieved:', token ? 'present' : 'missing');
+      
+      if (!token) {
+        console.log('No auth token found, redirecting to signin');
+        Alert.alert('Authentication Required', 'Please sign in to create an article');
+        router.push('/signin');
+        return;
+      }
+
+      // Prepare form data
+      const formData = new FormData();
+      formData.append('title', title.trim());
+      formData.append('content', content.trim());
+      formData.append('genre', genre || 'articles'); // Default to 'articles' if not selected
+      formData.append('status', 'draft');
+
+      console.log('Form data prepared, processing images...');
+      
+      // Process images if any
       for (let index = 0; index < images.length; index++) {
         const image = images[index];
         if (image.uri && image.type === 'image') {
-          const uriParts = image.uri.split('.');
-          const fileExt = uriParts[uriParts.length - 1].toLowerCase();
-          const mimeType = `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
-
+          console.log(`Processing image ${index + 1}/${images.length}:`, image.uri);
+          
           if (Platform.OS === 'web') {
-            // Fetch and convert to Blob
             try {
+              console.log('Fetching image for web upload...');
               const response = await fetch(image.uri);
+              if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`);
+              
               const blob = await response.blob();
+              console.log('Image blob created, size:', blob.size);
+              
+              const uriParts = image.uri.split('.');
+              const fileExt = uriParts[uriParts.length - 1].toLowerCase();
               formData.append('media[]', blob, `image_${Date.now()}_${index}.${fileExt}`);
             } catch (e) {
-              console.error('Failed to fetch image for web upload:', e);
+              console.error('Failed to process image for web upload:', e);
+              Alert.alert('Warning', `Could not process image ${index + 1}: ${e.message}`);
             }
           } else {
-            // Native: append file object directly
-            formData.append('media[]', {
-              uri: image.uri,
-              name: `image_${Date.now()}_${index}.${fileExt}`,
-              type: mimeType,
+            console.log('Processing image for native platform');
+            const uriParts = image.uri.split('.');
+            const fileExt = uriParts[uriParts.length - 1].toLowerCase();
+            const mimeType = `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
+            formData.append('media[]', { 
+              uri: image.uri, 
+              name: `image_${Date.now()}_${index}.${fileExt}`, 
+              type: mimeType 
             });
           }
         }
       }
-    }
-    
-    console.log('Submitting form data...');
-    console.log('FormData content:');
-    // Log form data keys (works in most browsers)
-    for (let pair of formData.entries()) {
-      console.log(pair[0], pair[1]);
-    }
-    
-    try {
-      // Log the request details
-      console.log('Sending request to /api/articles');
-      console.log('Token being sent:', token ? 'Token present' : 'No token');
-      
-      console.log('Sending request to:', `${process.env.EXPO_PUBLIC_API_URL}/api/articles`);
-      console.log('Request headers:', {
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${token ? '[TOKEN_PRESENT]' : 'NO_TOKEN'}`,
-      });
 
-      // For file uploads, we'll use a direct fetch request to have more control
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/articles`, {
+      // Get API URL and validate
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+      console.log('API URL from environment:', apiUrl);
+      
+      if (!apiUrl) {
+        const errorMsg = 'EXPO_PUBLIC_API_URL is not configured';
+        console.error(errorMsg);
+        throw new Error('Server configuration error. Please try again later.');
+      }
+
+      // Log request details (without sensitive data)
+      console.log('Sending request to:', `${apiUrl}/api/articles`);
+      console.log('Request method: POST');
+      console.log('Headers:', { 'Accept': 'application/json', 'Authorization': 'Bearer [token]' });
+      
+      // Make the API request
+      const response = await fetch(`${apiUrl}/api/articles`, {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json',
+        headers: { 
+          'Accept': 'application/json', 
           'Authorization': `Bearer ${token}`,
-          // Don't set Content-Type, let the browser set it with the correct boundary
+          // Note: Don't set Content-Type header - let the browser set it with the correct boundary
         },
         body: formData,
       });
 
-      console.log('Response status:', response.status, response.statusText);
+      console.log('Response status:', response.status);
       
       let responseData;
       try {
@@ -177,73 +562,60 @@ export default function CreateArticleScreen() {
       }
 
       if (!response.ok) {
-        console.error('Server responded with error:', {
-          status: response.status,
-          statusText: response.statusText,
-          data: responseData
-        });
-        
-        const errorMessage = responseData?.message || 
-                           responseData?.error || 
-                           `Server error: ${response.status} ${response.statusText}`;
-        
-        throw new Error(errorMessage);
+        console.error('Server responded with error:', response.status, responseData);
+        throw new Error(
+          responseData?.message || 
+          responseData?.error?.message || 
+          `Server error: ${response.status} ${response.statusText || ''}`.trim()
+        );
       }
 
-      // Show success confirmation with options
+      console.log('Article published successfully:', responseData);
+      
+      // Show success message
       Alert.alert(
         'Article Published Successfully!',
-        'Your article has been published successfully. What would you like to do next?',
+        'What would you like to do next?',
         [
-          {
-            text: 'View Article',
-            onPress: () => router.push(`/news/article/${responseData.data.id}`)
-          },
-          {
-            text: 'Create New Article',
+          { 
+            text: 'View Article', 
             onPress: () => {
-              // Reset form
-              setTitle('');
-              setContent('');
-              setGenre('');
+              console.log('Navigating to article:', responseData.data?.id);
+              router.push(`/news/article/${responseData.data?.id}`);
+            } 
+          },
+          { 
+            text: 'Create New Article', 
+            onPress: () => {
+              console.log('Resetting form for new article');
+              setTitle(''); 
+              setContent(''); 
+              setGenre(''); 
               setImages([]);
-              // Scroll to top
               if (scrollViewRef.current) {
                 scrollViewRef.current.scrollTo({ y: 0, animated: true });
               }
-            },
-            style: 'default'
+            }
           },
-          {
-            text: 'Back to Dashboard',
-            onPress: () => router.push('/collab'),
-            style: 'cancel'
+          { 
+            text: 'Back to Dashboard', 
+            onPress: () => {
+              console.log('Navigating to dashboard');
+              router.push('/collab');
+            }, 
+            style: 'cancel' 
           }
         ],
         { cancelable: false }
       );
-      
-      return responseData;
-      
     } catch (error) {
       console.error('Error in handleSubmit:', error);
-      
-      let errorMessage = error.message || 'Failed to publish article. Please try again.';
-      
-      // More specific error messages based on common issues
-      if (error.message.includes('Network Error')) {
-        errorMessage = 'Unable to connect to the server. Please check your internet connection.';
-      } else if (error.message.includes('401')) {
-        errorMessage = 'Your session has expired. Please sign in again.';
-        await AsyncStorage.removeItem('auth_token');
-        router.push('/signin');
-      }
-      
-      Alert.alert('Error', errorMessage);
-      
-      // Re-throw the error for any error boundaries
-      throw error;
+      Alert.alert(
+        'Publish Failed',
+        error.message || 'An unexpected error occurred while publishing your article. Please try again.'
+      );
     } finally {
+      console.log('Submission process completed');
       setIsSubmitting(false);
     }
   };
@@ -256,32 +628,39 @@ export default function CreateArticleScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create Article</Text>
         <View style={styles.headerButtonsContainer}>
+
           <TouchableOpacity 
-            style={[styles.publishButton, styles.browseButton, isSubmitting && styles.browseButtonDisabled]}
-            onPress={() => setBrowseVisible(true)}
+            style={[styles.actionButton, styles.publishButton, isSubmitting && styles.publishButtonDisabled]} 
+            onPress={handleSubmit} 
             disabled={isSubmitting}
           >
-            <Text style={styles.publishButtonText}>
-              Browse Works
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.publishButton, isSubmitting && styles.publishButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-          >
-            <Text style={styles.publishButtonText}>
+            <Text style={[styles.actionButtonText, styles.publishButtonText]}>
               {isSubmitting ? 'Publishing...' : 'Publish'}
             </Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView 
-        style={styles.contentContainer}
-        ref={scrollViewRef}
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+      <Modal
+        visible={browseVisible}
+        animationType="slide"
+        onRequestClose={() => setBrowseVisible(false)}
       >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Browse Approved Works</Text>
+            <TouchableOpacity onPress={() => setBrowseVisible(false)}>
+              <Ionicons name="close" size={28} color="#1a237e" />
+            </TouchableOpacity>
+          </View>
+          <ApprovedWorksList 
+            onClose={() => setBrowseVisible(false)}
+            onSelect={handleInsertContent}
+          />
+        </View>
+      </Modal>
+
+      <ScrollView style={styles.contentContainer} ref={scrollViewRef}>
         <TextInput
           style={styles.titleInput}
           placeholder="Article Title"
@@ -293,31 +672,33 @@ export default function CreateArticleScreen() {
         />
 
         <View style={styles.genreContainer}>
-          <Text style={styles.genreLabel}>Genre</Text>
+          <Text style={styles.genreLabel}>Genre: </Text>
           <View style={styles.genreOptions}>
             {['articles', 'opinions', 'sports', 'editorial', 'artworks'].map((g) => (
-              <TouchableOpacity
-                key={g}
-                style={[styles.genreButton, genre === g && styles.genreButtonSelected]}
-                onPress={() => setGenre(g)}
-              >
+              <TouchableOpacity key={g} style={[styles.genreButton, genre === g && styles.genreButtonSelected]} onPress={() => setGenre(g)}>
                 <Text style={[styles.genreButtonText, genre === g && styles.genreButtonTextSelected]}>
-                  {g === 'opinions' ? 'Opinions' : g.charAt(0).toUpperCase() + g.slice(1)}
+                  {g.charAt(0).toUpperCase() + g.slice(1)}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        <TextInput
-          style={styles.contentInput}
-          placeholder="Write your article here..."
-          placeholderTextColor="#666"
-          value={content}
-          onChangeText={setContent}
-          multiline
-          textAlignVertical="top"
-        />
+        {Platform.OS === 'web' ? (
+          <SimpleWebEditor value={content} onChange={setContent} />
+        ) : (
+          <View style={styles.editorContainer}>
+            <NativeRichEditor
+              ref={richText}
+              style={styles.richEditor}
+              initialContentHTML={content}
+              placeholder="Write your article here..."
+              onChange={text => setContent(text)}
+              editorStyle={{ backgroundColor: '#fff', color: '#333', placeholderColor: '#999' }}
+            />
+            <NativeRichToolbar editor={richText} />
+          </View>
+        )}
 
         <View style={styles.mediaContainer}>
           {images.map((media, index) => (
@@ -327,15 +708,10 @@ export default function CreateArticleScreen() {
               ) : (
                 <View style={styles.documentItem}>
                   <MaterialIcons name="insert-drive-file" size={40} color="#1a237e" />
-                  <Text style={styles.documentName} numberOfLines={1}>
-                    {media.name || 'Document'}
-                  </Text>
+                  <Text style={styles.documentName} numberOfLines={1}>{media.name || 'Document'}</Text>
                 </View>
               )}
-              <TouchableOpacity 
-                style={styles.removeMediaButton}
-                onPress={() => removeMedia(index)}
-              >
+              <TouchableOpacity style={styles.removeMediaButton} onPress={() => removeMedia(index)}>
                 <Ionicons name="close-circle" size={20} color="#ff4444" />
               </TouchableOpacity>
             </View>
@@ -348,17 +724,13 @@ export default function CreateArticleScreen() {
           <Ionicons name="image" size={24} color="#1a237e" />
           <Text style={styles.footerButtonText}>Select Image</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.footerButton} onPress={pickDocument}>
-          <Ionicons name="document-attach" size={24} color="#1a237e" />
-          <Text style={styles.footerButtonText}>Add File</Text>
+        <TouchableOpacity style={styles.footerButton} onPress={() => setBrowseVisible(true)}>
+          <Ionicons name="book" size={24} color="#1a237e" />
+          <Text style={styles.footerButtonText}>Browse Works</Text>
         </TouchableOpacity>
       </View>
-          {/* Browse Works Modal */}
-      <Modal
-        visible={browseVisible}
-        animationType="slide"
-        onRequestClose={() => setBrowseVisible(false)}
-      >
+
+      <Modal visible={browseVisible} animationType="slide" onRequestClose={() => setBrowseVisible(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Approved Works</Text>
@@ -373,13 +745,26 @@ export default function CreateArticleScreen() {
   );
 }
 
-/**
- * Component to list approved drafts/images for quick preview inside modal
- */
 function ApprovedWorksList({ onClose, onSelect }) {
   const [content, setContent] = useState([]);
+  const [filteredContent, setFilteredContent] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  const filterContent = (items, search) => {
+    if (!search) return items;
+    const term = search.toLowerCase();
+    return items.filter(item => 
+      (item.group?.name && item.group.name.toLowerCase().includes(term)) ||
+      (item.status && item.status.toLowerCase().includes(term)) ||
+      (item._type === 'draft' && item.text && item.text.toLowerCase().includes(term))
+    );
+  };
+
+  useEffect(() => {
+    setFilteredContent(filterContent(content, searchTerm));
+  }, [content, searchTerm]);
 
   useEffect(() => {
     const fetchApproved = async () => {
@@ -391,7 +776,9 @@ function ApprovedWorksList({ onClose, onSelect }) {
         ]);
         const drafts = draftsRes.data.map((d) => ({ ...d, _type: 'draft' }));
         const images = imagesRes.data.map((i) => ({ ...i, _type: 'image' }));
-        setContent([...drafts, ...images]);
+        const allContent = [...drafts, ...images];
+        setContent(allContent);
+        setFilteredContent(allContent);
       } catch (e) {
         console.error('Failed to load approved content', e);
       } finally {
@@ -403,23 +790,23 @@ function ApprovedWorksList({ onClose, onSelect }) {
 
   const handleSelect = async (item) => {
     setLoading(true);
-    // close modal then navigate to preview screen
-    if(item._type==='draft'){
-      try{
+    if (item._type === 'draft') {
+      try {
         const res = await apiClient.get(`/review-content/preview/${item.id}`);
-        const text = res.data.text || '';
-        onSelect({
-          title: item.group?.name || '',
-          content: text
-        });
-      }catch(e){
-        console.error('Failed fetching draft content',e);
+        const plainText = res.data.text || '';
+        const lines = plainText.split('\n');
+        let htmlContent = '';
+        if (lines.length > 0) {
+          const firstLine = lines[0].trim();
+          const rest = lines.slice(1).join('\n');
+          htmlContent = `<h1>${firstLine}</h1>${rest.replace(/\n/g, '<br />')}`;
+        }
+        onSelect({ title: item.group?.name || '', content: htmlContent });
+      } catch (e) {
+        console.error('Failed fetching draft content', e);
       }
-    } else if(item._type==='image'){
-      onSelect({
-        title: item.group?.name || '',
-        image: `${process.env.EXPO_PUBLIC_API_URL}/storage/${item.file}`
-      });
+    } else if (item._type === 'image') {
+      onSelect({ title: item.group?.name || '', image: `${process.env.EXPO_PUBLIC_API_URL}/storage/${item.file}` });
     }
     onClose();
   };
@@ -451,202 +838,508 @@ function ApprovedWorksList({ onClose, onSelect }) {
   );
 
   return (
-    <FlatList
-      data={content.sort((a,b)=> new Date(b.uploaded_at)-new Date(a.uploaded_at))}
-      renderItem={renderItem}
-      keyExtractor={(item) => `${item._type}-${item.id}`}
-      contentContainerStyle={{ padding: 16 }}
-    />
+    <View style={{ flex: 1 }}>
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputContainer}>
+          <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search works..."
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+            placeholderTextColor="#999"
+          />
+          {searchTerm ? (
+            <TouchableOpacity onPress={() => setSearchTerm('')} style={styles.clearSearchButton}>
+              <Ionicons name="close-circle" size={18} color="#999" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+      
+      <FlatList
+        data={filteredContent.sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at))}
+        renderItem={renderItem}
+        keyExtractor={(item) => `${item._type}-${item.id}`}
+        contentContainerStyle={{ padding: 16 }}
+        ListEmptyComponent={
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <Text style={{ color: '#666' }}>No matching works found.</Text>
+          </View>
+        }
+      />
+    </View>
   );
 }
 
+  /* DUPLICATE BLOCK START
+const filterAndSortContent = (data, search) => {
+    let result = [...data];
+    
+    // Apply search
+    if (search) {
+      const term = search.toLowerCase();
+      result = result.filter(item => 
+        (item.title && item.title.toLowerCase().includes(term)) ||
+        (item.content && item.content.toLowerCase().includes(term)) ||
+        (item.genre && item.genre.toLowerCase().includes(term))
+      );
+    }
+    
+    // Always sort newest first
+    result.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    
+    return result;
+  };
 
+  useEffect(() => {
+    const filtered = filterAndSortContent(content, searchTerm);
+    setFilteredContent(filtered);
+  }, [content, searchTerm]);
+
+  useEffect(() => {
+    const fetchApproved = async () => {
+      try {
+        const params = new URLSearchParams({ status: 'approved' });
+        const [draftsRes, imagesRes] = await Promise.all([
+          apiClient.get(`/review-content?${params}`),
+          apiClient.get(`/review-images?${params}`),
+        ]);
+        const drafts = draftsRes.data.map((d) => ({ ...d, _type: 'draft' }));
+        const images = imagesRes.data.map((i) => ({ ...i, _type: 'image' }));
+        setContent([...drafts, ...images].sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at)));
+      } catch (e) {
+        console.error('Failed to load approved content', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchApproved();
+  }, []);
+
+  const handleSelect = async (item) => {
+    if (item._type === 'draft') {
+      try {
+        const res = await apiClient.get(`/review-content/preview/${item.id}`);
+        onSelect({ title: item.group?.name || '', content: res.data.text || '' });
+      } catch (e) {
+        console.error('Failed fetching draft content', e);
+      }
+    } else if (item._type === 'image') {
+      onSelect({ title: item.group?.name || '', image: `${process.env.EXPO_PUBLIC_API_URL}/storage/${item.file}` });
+    }
+    onClose();
+  };
+
+  if (loading) return <ActivityIndicator size="large" color="#303F9F" style={{ marginTop: 40 }} />;
+  if (content.length === 0) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#666' }}>No approved content available.</Text></View>;
+
+  const workTypes = ['all', 'articles', 'opinions', 'sports', 'editorial', 'artworks'];
+  const sortOptions = [
+    { value: 'newest', label: 'Newest First' },
+    { value: 'oldest', label: 'Oldest First' },
+    { value: 'title', label: 'Title (A-Z)' },
+  ];
+
+  return (
+    <View style={{ flex: 1 }}>
+
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputContainer}>
+          <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search works..."
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+            placeholderTextColor="#999"
+          />
+          {searchTerm ? (
+            <TouchableOpacity onPress={() => setSearchTerm('')} style={styles.clearSearchButton}>
+              <Ionicons name="close-circle" size={18} color="#999" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+
+
+      <FlatList
+        data={filteredContent}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item }) => (
+          <TouchableOpacity 
+            style={styles.workItem}
+            onPress={() => {
+              onSelect(item);
+              onClose();
+            }}
+          >
+            <View style={styles.workHeader}>
+              <Text style={styles.workTitle}>{item.title}</Text>
+              <Text style={styles.workMeta}>
+                {item.genre && (
+                  <Text style={styles.workGenre}>
+                    {item.genre.charAt(0).toUpperCase() + item.genre.slice(1)}
+                  </Text>
+                )}
+                {item.created_at && (
+                  <Text style={styles.workDate}>
+                    • {new Date(item.created_at).toLocaleDateString()}
+                  </Text>
+                )}
+              </Text>
+            </View>
+            <Text style={styles.workContent} numberOfLines={2}>
+              {item.content?.replace(/<[^>]*>?/gm, '')}
+            </Text>
+            {item.media && item.media.length > 0 && (
+              <Image 
+                source={{ uri: item.media[0].original_url }} 
+                style={styles.workImage}
+                resizeMode="cover"
+              />
+            )}
+          </TouchableOpacity>
+        )}
+        ListEmptyComponent={
+          !loading && (
+            <View style={styles.emptyState}>
+              <Ionicons name="search" size={48} color="#ccc" />
+              <Text style={styles.noResults}>No works found</Text>
+              <Text style={styles.noResultsSubtext}>Try adjusting your search or filters</Text>
+            </View>
+          )
+        }
+      />
+    </View>
+  );
+}
+
+*/
 
 const styles = StyleSheet.create({
-  modalContainer: {
-    flex: 1,
+  searchContainer: {
+    padding: 12,
     backgroundColor: '#fff',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1a237e',
-  },
-  approvedItem: {
+  searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  approvedThumb: {
-    width: 64,
-    height: 64,
+    backgroundColor: '#f5f5f5',
     borderRadius: 8,
-    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 12,
   },
-  approvedTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
+  searchIcon: {
+    marginRight: 8,
   },
-  approvedMeta: {
-    fontSize: 12,
-    color: '#666',
-  },
-  container: {
+  searchInput: {
     flex: 1,
-    backgroundColor: '#fff',
+    height: 40,
+    color: '#333',
+    fontSize: 16,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
+  clearSearchButton: {
+    padding: 4,
+    marginLeft: 4,
+  },
+  // Search and Filter Styles
+  searchContainer: {
+    backgroundColor: '#fff',
+    padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1a237e',
-    flex: 1,
-    textAlign: 'center',
-    marginRight: 100, 
-  },
-  headerButtonsContainer: {
+  searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    position: 'absolute',
-    right: 10,
-    gap: 10,
-  },
-  publishButton: {
-    backgroundColor: '#1a237e',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 4,
-    marginLeft: 10,
-  },
-  publishButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  contentContainer: {
-    flex: 1,
-    padding: 16,
-  },
-  titleInput: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#000',
-  },
-  contentInput: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#333',
-    minHeight: 200,
-  },
-  genreContainer: {
-    marginBottom: 20,
-  },
-  genreLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 10,
-  },
-  genreOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  genreButton: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
-    marginRight: 10,
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  genreButtonSelected: {
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    color: '#333',
+    fontSize: 16,
+  },
+  clearSearchButton: {
+    padding: 4,
+    marginLeft: 4,
+  },
+  filterRow: {
+    marginTop: 8,
+  },
+  filterGroup: {
+    marginBottom: 12,
+  },
+  filterLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  filterButtons: {
+    flexDirection: 'row',
+    paddingBottom: 4,
+  },
+  filterButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    marginRight: 8,
+  },
+  filterButtonActive: {
     backgroundColor: '#1a237e',
   },
-  genreButtonText: {
-    color: '#333',
+  filterButtonText: {
+    color: '#555',
+    fontSize: 13,
+    fontWeight: '500',
   },
-  genreButtonTextSelected: {
+  filterButtonTextActive: {
     color: '#fff',
   },
-  mediaContainer: {
+  sortButtons: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 20,
+    marginHorizontal: -4,
   },
-  mediaItem: {
-    width: '48%',
-    marginRight: '4%',
-    marginBottom: 16,
-    position: 'relative',
+  sortButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    margin: 4,
   },
-  mediaImage: {
+  sortButtonActive: {
+    backgroundColor: '#1a237e',
+  },
+  sortButtonText: {
+    color: '#555',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  sortButtonTextActive: {
+    color: '#fff',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  noResults: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  noResultsSubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  workItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  workHeader: {
+    marginBottom: 8,
+  },
+  workTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  workMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  workGenre: {
+    fontSize: 13,
+    color: '#1a237e',
+    backgroundColor: '#e8eaf6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  workDate: {
+    fontSize: 12,
+    color: '#888',
+    marginLeft: 8,
+  },
+  workContent: {
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  workImage: {
     width: '100%',
-    aspectRatio: 4/3,
+    height: 160,
     borderRadius: 8,
     backgroundColor: '#f5f5f5',
   },
-  documentItem: {
-    width: '100%',
-    height: 120,
+  // Modal styles
+  modalContainer: { flex: 1, backgroundColor: '#fff' },
+  modalHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingHorizontal: 16, 
+    paddingVertical: 12, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#eee',
+    backgroundColor: '#f8f9fa',
+  },
+  modalTitle: { 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    color: '#1a237e' 
+  },
+  approvedItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 16 
+  },
+  approvedThumb: { 
+    width: 64, 
+    height: 64, 
+    borderRadius: 8, 
+    backgroundColor: '#f0f0f0' 
+  },
+  approvedTitle: { fontSize: 15, fontWeight: '600', color: '#333' },
+  approvedMeta: { fontSize: 12, color: '#666' },
+  // Main screen styles
+  container: { flex: 1, backgroundColor: '#fff' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  backButton: { padding: 8 },
+  headerTitle: { fontSize: 18, fontWeight: '600', color: '#1a237e', flex: 1, textAlign: 'center', marginRight: 100 },
+  headerButtonsContainer: { flexDirection: 'row', alignItems: 'center', position: 'absolute', right: 10, gap: 10 },
+  publishButton: { backgroundColor: '#1a237e', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 4, marginLeft: 10 },
+  publishButtonDisabled: { backgroundColor: '#a5a5a5' },
+  publishButtonText: { color: '#fff', fontWeight: '600' },
+  contentContainer: { flex: 1, padding: 16 },
+  titleInput: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, color: '#000', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 8, padding: 12 },
+  contentInput: { 
+    fontSize: 16, 
+    lineHeight: 24, 
+    color: '#333', 
+    minHeight: 300, 
+    borderWidth: 1, 
+    borderColor: '#e0e0e0', 
+    borderRadius: 8, 
+    paddingTop: 0, 
+    padding: 12, 
+    marginTop: -10, // Negative margin to pull content up
+    marginBottom: 20,
+    position: 'relative',
+
+    backgroundColor: '#fff', // Ensure solid background
+    borderTopLeftRadius: 0, // Match border radius with title
+    borderTopRightRadius: 0
+  },
+  titleInput: { 
+    fontSize: 24, 
+    fontWeight: 'bold', 
+    marginBottom: 0, 
+    color: '#000', 
+    borderWidth: 1, 
+    borderColor: '#e0e0e0', 
+    borderBottomWidth: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    padding: 12,
+    position: 'relative',
+    zIndex: 1, // Lower z-index to be behind the editor
+    backgroundColor: '#f8f9fa' // Lighter background to indicate it's behind
+  },
+  genreContainer: { marginBottom: 20, flexDirection: 'row', alignItems: 'center' },
+  genreLabel: { fontSize: 16, fontWeight: '600', color: '#333', marginRight: 10 },
+  genreOptions: { flexDirection: 'row', flexWrap: 'nowrap', flexShrink: 1, overflow: 'hidden' },
+  genreButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f0f0f0', marginRight: 10 },
+  genreButtonSelected: { backgroundColor: '#1a237e' },
+  genreButtonText: { color: '#333' },
+  genreButtonTextSelected: { color: '#fff' },
+  mediaContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 20 },
+  mediaItem: { width: '48%', marginRight: '4%', marginBottom: 16, position: 'relative' },
+  mediaImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8, backgroundColor: '#f5f5f5' },
+  documentItem: { width: '100%', height: 120, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, justifyContent: 'center', alignItems: 'center', padding: 12, backgroundColor: '#f9f9f9' },
+  documentName: { marginTop: 8, fontSize: 12, color: '#666', textAlign: 'center' },
+  removeMediaButton: { position: 'absolute', top: -8, right: -8, backgroundColor: '#fff', borderRadius: 15, padding: 2 },
+  footer: { flexDirection: 'row', padding: 12, borderTopWidth: 1, borderTopColor: '#eee', backgroundColor: '#fff' },
+  footerButton: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 12 },
+  footerButtonText: { marginLeft: 8, color: '#1a237e', fontWeight: '500' },
+  // Editor styles
+  editorContainer: { 
+    borderWidth: 1, 
+    borderColor: '#e0e0e0', 
+    borderRadius: 8, 
+    marginBottom: 20, 
+    overflow: 'hidden',
+    position: 'relative',
+
+  },
+  richEditor: { 
+    minHeight: 300, 
+    backgroundColor: '#fff',
+    position: 'relative',
+
+  },
+  richToolbar: { 
+    backgroundColor: '#f8f9fa', 
+    borderTopWidth: 1, 
+    borderTopColor: '#e0e0e0',
+    position: 'relative',
+
+  },
+  editorPlaceholder: { 
+    minHeight: 300, 
+    borderWidth: 1, 
+    borderColor: '#e0e0e0', 
+    borderRadius: 8, 
+    backgroundColor: '#f9f9f9' 
+  },
+  // Web Editor Toolbar Styles
+  webToolbar: {
+    position: 'relative',
+    zIndex: 2,
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderColor: '#e0e0e0',
+    padding: 8,
+    backgroundColor: '#f8f9fa',
+    
+  },
+  toolbarButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginHorizontal: 4,
+    borderRadius: 4,
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#f9f9f9',
   },
-  documentName: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
+  toolbarButtonActive: {
+    backgroundColor: '#e0e0e0',
+    borderColor: '#1a237e',
   },
-  removeMediaButton: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 2,
-  },
-  footer: {
-    flexDirection: 'row',
-    padding: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    backgroundColor: '#fff',
-  },
-  footerButton: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  footerButtonText: {
-    marginLeft: 8,
-    color: '#1a237e',
-    fontWeight: '500',
+  separator: {
+    width: 1,
+    height: '100%',
+    backgroundColor: '#ddd',
+    marginHorizontal: 6,
   },
 });

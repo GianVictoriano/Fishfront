@@ -4,7 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView } from 'react-native';
 import AppNavbar from '../../../../components/AppNavbar';
 import NewsNavbar from '../../../../components/newsnavbar';
+import RecommendedContent from '../../../../components/RecommendedContent';
+import useInteractionTracking from '../../../../hooks/useInteractionTracking';
 import apiClient from '../../../../utils/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const styles = StyleSheet.create({
   container: {
@@ -469,7 +472,7 @@ const fallbackNewsData = [
   }
 ];
 
-const NewsCard = ({ item, compact, bigTrending, isFirst }) => {
+const NewsCard = ({ item, compact, bigTrending, isFirst, onInteraction }) => {
   const router = useRouter();
   const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
   
@@ -481,6 +484,13 @@ const NewsCard = ({ item, compact, bigTrending, isFirst }) => {
   
   const [imageUri, setImageUri] = useState(getImageUrl(item?.image));
   const [isHovered, setIsHovered] = useState(false);
+  
+  const handlePress = () => {
+    if (onInteraction) {
+      onInteraction(item.id, 'view');
+    }
+    router.push(`/news/article/${item.id}`);
+  };
   
   useEffect(() => {
     setImageUri(getImageUrl(item?.image));
@@ -497,7 +507,7 @@ const NewsCard = ({ item, compact, bigTrending, isFirst }) => {
         activeOpacity={0.9}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        onPress={() => router.push(`/news/article/${item.id}`)}
+        onPress={handlePress}
       >
         <View style={{ position: 'relative' }}>
           <Image 
@@ -559,7 +569,7 @@ const NewsCard = ({ item, compact, bigTrending, isFirst }) => {
       ]}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onPress={() => router.push(`/news/article/${item.id}`)}
+      onPress={handlePress}
       activeOpacity={0.9}
     >
       <View style={{ position: 'relative' }}>
@@ -616,7 +626,31 @@ export default function NewsScreen() {
   const [newsData, setNewsData] = useState(fallbackNewsData);
   const [trendingStories, setTrendingStories] = useState([]);
   const [activeGenre, setActiveGenre] = useState('News');
+  const [currentUser, setCurrentUser] = useState(null);
   const router = useRouter();
+  const { recordView, recordReaction, recordTimeSpent } = useInteractionTracking(currentUser?.id);
+
+  // Get current user for personalization
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const token = await AsyncStorage.getItem('auth_token'); // Fixed: use 'auth_token' not 'authToken'
+        if (token) {
+          const userData = await AsyncStorage.getItem('user_data');
+          if (userData) {
+            setCurrentUser(JSON.parse(userData));
+          } else {
+            // Fallback: fetch from API
+            const response = await apiClient.get('/user');
+            setCurrentUser(response.data);
+          }
+        }
+      } catch (error) {
+        console.log('User not authenticated');
+      }
+    };
+    getCurrentUser();
+  }, []);
 
   // fetch trending stories (most visited in last 3 days)
   useEffect(() => {
@@ -673,17 +707,34 @@ export default function NewsScreen() {
       <ScrollView contentContainerStyle={styles.newsPageScroll}>
         <View style={styles.newsMainRow}>
           <View style={styles.leftColWrapper}>
+            {/* Show recommendations only for News tab */}
+            {activeGenre === 'News' && (
+              <RecommendedContent 
+                userId={currentUser?.id} 
+                onInteraction={recordView}
+              />
+            )}
             <Text style={styles.latestContentTitle}>Latest Content</Text>
             <View style={styles.trendingCardWrapper}>
               {featuredStory && (
                 <TouchableOpacity style={styles.trendingContainer}>
-                  <NewsCard item={featuredStory} isFirst={true} />
+                  <NewsCard 
+                    item={featuredStory} 
+                    isFirst={true} 
+                    onInteraction={recordView}
+                  />
                 </TouchableOpacity>
               )}
             </View>
             <FlatList
               data={gridStories}
-              renderItem={({ item }) => <NewsCard item={item} compact />}
+              renderItem={({ item }) => (
+                <NewsCard 
+                  item={item} 
+                  compact 
+                  onInteraction={recordView}
+                />
+              )}
               keyExtractor={item => item.id}
               numColumns={3}
               columnWrapperStyle={styles.gridRow}

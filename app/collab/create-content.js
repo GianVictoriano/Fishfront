@@ -135,8 +135,8 @@ export default function CreateContentScreen() {
       <View style={styles.optionsGrid}>
         <CreateOptionCard 
           icon="view-dashboard-variant-outline"
-          title="Scrum"
-          description="Organize tasks in a new scrum board."
+          title="Topic"
+          description="Create a new topic for the fishermen publications."
           onPress={() => handlePress('Scrum')}
         />
         <CreateOptionCard 
@@ -144,12 +144,6 @@ export default function CreateContentScreen() {
           title="Folio"
           description="Group related documents in a folio."
           onPress={() => handlePress('Folio')}
-        />
-        <CreateOptionCard 
-          icon="forum-outline"
-          title="Topic"
-          description="Start a new discussion in the forum."
-          onPress={() => router.push('/forum')}
         />
         <CreateOptionCard 
           icon="arrow-up-bold-box-outline"
@@ -167,7 +161,7 @@ export default function CreateContentScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.scrumPanel}>
-            <Text style={styles.scrumPanelTitle}>New Scrum Board</Text>
+            <Text style={styles.scrumPanelTitle}>New Topic Board</Text>
             <View style={styles.modalBody}>
               {/* Left Column */}
               <View style={styles.leftColumn}>
