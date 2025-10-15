@@ -3,12 +3,13 @@ import { useFocusEffect } from 'expo-router';
 import {
   View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, Pressable,
   KeyboardAvoidingView, Platform, ActivityIndicator, Image, Modal, 
-  Linking, ScrollView, useWindowDimensions, TouchableWithoutFeedback, Keyboard
+  Linking, ScrollView, useWindowDimensions, TouchableWithoutFeedback, Keyboard, Alert
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { pickImage } from './imageUtils';
 import apiClient, { sendMessage, getMessages } from '../../utils/api';
+import { useBranding } from '~/context/BrandingContext';
 
 // Proper Word document text extraction for web using JSZip
 const extractWordText = async (file) => {
@@ -166,7 +167,7 @@ const StandaloneSearchInput = React.memo(React.forwardRef(({ style, placeholder,
 }));
 
 // Standalone Chat Input Component (completely isolated)
-const StandaloneChatInput = ({ onSend, onUpload, styles }) => {
+const StandaloneChatInput = ({ onSend, onUpload, styles, brandColor, uploadButtonColor }) => {
   const [text, setText] = useState('');
   const inputRef = useRef(null);
   
@@ -187,15 +188,15 @@ const StandaloneChatInput = ({ onSend, onUpload, styles }) => {
 
   return (
     <View style={styles.inputContainer}>
-      <TouchableOpacity onPress={onUpload} style={styles.uploadButton}>
-        <Feather name="paperclip" size={24} color="#333" />
+      <TouchableOpacity onPress={onUpload} style={[styles.uploadButton, uploadButtonColor && { backgroundColor: uploadButtonColor }]}>
+        <Feather name="paperclip" size={24} color="#fff" />
       </TouchableOpacity>
       <TextInput 
         ref={inputRef}
         style={styles.input} 
         value={text} 
         onChangeText={setText} 
-        placeholder="Type a message (Shift+Enter for new line)..." 
+        placeholder="Type a message" 
         blurOnSubmit={false}
         autoCorrect={true}
         autoCapitalize="sentences"
@@ -204,7 +205,7 @@ const StandaloneChatInput = ({ onSend, onUpload, styles }) => {
         onKeyPress={handleKeyPress}
         returnKeyType="default"
       />
-      <TouchableOpacity onPress={handleSend} style={styles.sendButton}>
+      <TouchableOpacity onPress={handleSend} style={[styles.sendButton, brandColor && { backgroundColor: brandColor }]}>
         <Text style={styles.sendButtonText}>Send</Text>
       </TouchableOpacity>
     </View>
@@ -214,10 +215,12 @@ const StandaloneChatInput = ({ onSend, onUpload, styles }) => {
 export default function CollaborateScreen() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const { colors } = useBranding();
   const [uploadedFile, setUploadedFile] = useState(null);
   const [search, setSearch] = useState('');
   const [groupChats, setGroupChats] = useState([]);
   const [selectedGroupId, setSelectedGroupId] = useState(null);
+  const [groupChatFilter, setGroupChatFilter] = useState('active'); // 'active' or 'finished'
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
@@ -233,6 +236,18 @@ export default function CollaborateScreen() {
   const [scanResult, setScanResult] = useState(null);
   const [plagiarismResult, setPlagiarismResult] = useState(null);
   const [isProcessingDocument, setIsProcessingDocument] = useState(false);
+  const [pendingDocument, setPendingDocument] = useState(null);
+  const [pendingImage, setPendingImage] = useState(null);
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
+  const [confirmModalConfig, setConfirmModalConfig] = useState({ message: '', onConfirm: null, type: '' });
+  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
+  const [feedbackModalConfig, setFeedbackModalConfig] = useState({ message: '', type: 'success' });
+  
+  // Reviewer selection state
+  const [reviewerModalVisible, setReviewerModalVisible] = useState(false);
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [selectedReviewer, setSelectedReviewer] = useState(null);
+  const [pendingUpload, setPendingUpload] = useState(null); // {type: 'image'|'document', file: ...}
 
   const selectedGroupIdRef = useRef(selectedGroupId);
   const isScanningRef = useRef(false);
@@ -272,12 +287,13 @@ export default function CollaborateScreen() {
     }, []) // Remove fetchGroupChats dependency to prevent frequent re-runs
   );
 
-  const filteredGroups = useMemo(() => 
-    groupChats.filter(g => 
-      (g.scrum_board?.status || 'pending') === chatStatusFilter && 
-      g.name.toLowerCase().includes(search.toLowerCase())
-    ), [groupChats, chatStatusFilter, search]
-  );
+  const filteredGroups = groupChats.filter(g => {
+    const matchesSearch = g.name.toLowerCase().includes(search.toLowerCase());
+    const matchesFilter = groupChatFilter === 'active' 
+      ? (g.status === 'active' || !g.status) // Show active or groups without status
+      : g.status === 'published'; // Show published groups
+    return matchesSearch && matchesFilter;
+  }); 
 
   useEffect(() => {
     const currentGroupStillVisible = filteredGroups.some(g => g.id === selectedGroupId);
@@ -287,6 +303,30 @@ export default function CollaborateScreen() {
       setSelectedGroupId(null);
     }
   }, [chatStatusFilter]); // Remove 'search' dependency to prevent auto-selection while typing
+
+  // Function to fetch group members for reviewer selection
+  const fetchGroupMembers = useCallback(async () => {
+    if (!selectedGroupId) {
+      setGroupMembers([]);
+      return;
+    }
+    
+    try {
+      console.log('Fetching members for group:', selectedGroupId);
+      const response = await apiClient.get(`/group-chats/${selectedGroupId}/members`);
+      console.log('Members response:', response.data);
+      console.log('Current user:', currentUser);
+      
+      // Get all members including current user for lead reviewer display
+      const allMembers = response.data;
+      console.log('All members:', allMembers);
+      setGroupMembers(allMembers);
+    } catch (error) {
+      console.error('Failed to fetch group members:', error);
+      console.error('Error details:', error.response?.data);
+      setGroupMembers([]);
+    }
+  }, [selectedGroupId, currentUser]);
 
   const fetchMessages = useCallback(async () => {
     if (!selectedGroupId) {
@@ -298,12 +338,46 @@ export default function CollaborateScreen() {
     try {
       const response = await getMessages(selectedGroupId);
       setMessages(response.data);
+      
+      // Check for pending uploads
+      await checkPendingUploads();
+      
+      // Fetch group members for reviewer selection
+      await fetchGroupMembers();
     } catch (error) {
       console.error('Failed to fetch messages:', error);
     } finally {
       setIsMessagesLoading(false);
     }
-  }, [selectedGroupId]);
+  }, [selectedGroupId, fetchGroupMembers]);
+
+  // Function to check for pending uploads assigned to current user for review
+  const checkPendingUploads = async () => {
+    if (!selectedGroupId || !currentUser) {
+      console.log('checkPendingUploads: Missing selectedGroupId or currentUser');
+      return;
+    }
+    
+    console.log('checkPendingUploads: Checking for group', selectedGroupId, 'user', currentUser.id);
+    
+    try {
+      // Check for pending documents assigned to current user as reviewer
+      const documentsResponse = await apiClient.get(`/review-content?group_id=${selectedGroupId}&status=pending&current_reviewer_id=${currentUser.id}`);
+      console.log('Pending documents response:', documentsResponse.data);
+      const userPendingDoc = documentsResponse.data.length > 0 ? documentsResponse.data[0] : null;
+      console.log('User pending document:', userPendingDoc);
+      setPendingDocument(userPendingDoc);
+      
+      // Check for pending images assigned to current user as reviewer
+      const imagesResponse = await apiClient.get(`/review-images?group_id=${selectedGroupId}&status=pending&current_reviewer_id=${currentUser.id}`);
+      console.log('Pending images response:', imagesResponse.data);
+      const userPendingImg = imagesResponse.data.length > 0 ? imagesResponse.data[0] : null;
+      console.log('User pending image:', userPendingImg);
+      setPendingImage(userPendingImg);
+    } catch (error) {
+      console.error('Failed to check pending uploads:', error);
+    }
+  };
 
   useEffect(() => {
     if (selectedGroupId) {
@@ -312,6 +386,13 @@ export default function CollaborateScreen() {
       setMessages([]);
     }
   }, [selectedGroupId]);
+
+  // Check pending uploads when group or user changes
+  useEffect(() => {
+    if (selectedGroupId && currentUser) {
+      checkPendingUploads();
+    }
+  }, [selectedGroupId, currentUser]);
 
   const inputRef = useRef(null);
   const searchInputRef = useRef(null);
@@ -380,17 +461,38 @@ export default function CollaborateScreen() {
     const nextMsg = messagesRef.current[index + 1];
     const showName = !nextMsg || nextMsg.user_id !== item.user_id;
     const senderName = isMe ? 'you' : (item.user?.profile?.name || item.user?.name || '');
+    
+    // Check if this is an upload notification message
+    const isUploadNotification = item.message && (
+      item.message.includes('has sent') || 
+      item.message.includes('for review') ||
+      item.message.includes('uploaded')
+    );
 
     return (
       <View key={item.id || `msg-${index}`} style={[styles.messageContainer, isMe ? styles.myMessageContainer : styles.theirMessageContainer]}>
         <View style={{flex: 1}}>
-          {showName && (
+          {showName && !isUploadNotification && (
             <Text style={[styles.senderName, isMe ? styles.mySenderName : styles.theirSenderName]}>
               {senderName}
             </Text>
           )}
-          <View style={[styles.messageBubble, isMe ? styles.myMessage : styles.theirMessage]}>
-            <Text style={styles.messageText}>{item.message}</Text>
+          <View style={[
+            styles.messageBubble, 
+            isUploadNotification ? styles.uploadNotificationBubble : (isMe ? styles.myMessage : styles.theirMessage)
+          ]}>
+            {isUploadNotification && (
+              <View style={styles.uploadNotificationHeader}>
+                <Feather name="upload-cloud" size={16} color="#8B5CF6" />
+                <Text style={styles.uploadNotificationLabel}>File Upload</Text>
+              </View>
+            )}
+            <Text style={[
+              styles.messageText,
+              isUploadNotification && styles.uploadNotificationText
+            ]}>
+              {item.message}
+            </Text>
           </View>
         </View>
       </View>
@@ -453,19 +555,330 @@ export default function CollaborateScreen() {
   const handleWordDocumentUpload = async (file) => {
     setIsProcessingDocument(true);
     try {
+      console.log('handleWordDocumentUpload: Starting with file', file.name);
+      
       // Extract text from the document
+      console.log('handleWordDocumentUpload: Extracting text...');
       const extractedText = await extractTextFromDocument(file);
+      console.log('handleWordDocumentUpload: Text extracted, length:', extractedText.length);
       
       // Create a text file from the extracted content
       const textFileName = file.name.replace(/\.(doc|docx)$/i, '.txt');
+      console.log('handleWordDocumentUpload: Creating text file:', textFileName);
       let textFile;
       
       if (Platform.OS === 'web') {
         // Create a Blob for web
         const textBlob = new Blob([extractedText], { type: 'text/plain' });
         textFile = new File([textBlob], textFileName, { type: 'text/plain' });
+        console.log('handleWordDocumentUpload: Created web file');
       } else {
         // Save to temporary file for mobile
+        const tempUri = `${FileSystem.cacheDirectory}${textFileName}`;
+        await FileSystem.writeAsStringAsync(tempUri, extractedText, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        textFile = {
+          uri: tempUri,
+          name: textFileName,
+          type: 'text/plain'
+        };
+        console.log('handleWordDocumentUpload: Created mobile file');
+      }
+      
+      // Send review message
+      console.log('handleWordDocumentUpload: Sending message...');
+      const messageText = `${currentUser.name} has sent a converted document for review: ${textFileName}`;
+      const response = await apiClient.post(`/group-chats/${selectedGroupId}/messages`, { message: messageText });
+      setMessages(prevMessages => [response.data, ...prevMessages]);
+      console.log('handleWordDocumentUpload: Message sent');
+
+      // Upload the text file to review_content
+      console.log('handleWordDocumentUpload: Creating FormData...');
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        formData.append('file', textFile);
+      } else {
+        formData.append('file', {
+          uri: textFile.uri,
+          name: textFile.name,
+          type: textFile.type
+        });
+      }
+      formData.append('group_id', selectedGroupId);
+      formData.append('user_id', currentUser.id);
+      formData.append('status', 'pending');
+      formData.append('no_of_approval', '0');
+      
+      // If replacing, delete the old document first
+      if (pendingDocument) {
+        console.log('handleWordDocumentUpload: Deleting old document', pendingDocument.id);
+        try {
+          await apiClient.delete(`/review-content/${pendingDocument.id}`);
+          console.log('handleWordDocumentUpload: Old document deleted');
+        } catch (deleteError) {
+          // If 404, the document was already deleted/approved/rejected - that's fine
+          if (deleteError.response?.status === 404) {
+            console.log('handleWordDocumentUpload: Old document already deleted (404), continuing...');
+          } else {
+            throw deleteError; // Re-throw other errors
+          }
+        }
+      }
+      
+      console.log('handleWordDocumentUpload: Uploading to review-content...');
+      await apiClient.post('/review-content', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      console.log('handleWordDocumentUpload: Upload successful');
+      
+      // Refresh pending uploads
+      await checkPendingUploads();
+      
+      setFeedbackModalConfig({
+        message: 'Document converted to text and sent for review successfully!',
+        type: 'success'
+      });
+      setFeedbackModalVisible(true);
+    } catch (error) {
+      console.error('Error processing Word document:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      setFeedbackModalConfig({
+        message: `Failed to process Word document: ${error.response?.data?.message || error.message || 'Unknown error'}`,
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    } finally {
+      setIsProcessingDocument(false);
+    }
+  };
+
+  const handleChooseFile = async () => {
+    console.log('handleChooseFile called');
+    console.log('pendingDocument:', pendingDocument);
+    
+    // Check if there's already a pending document
+    if (pendingDocument) {
+      console.log('Showing confirmation for pending document');
+      setConfirmModalConfig({
+        message: 'You already have a pending document submission. Do you want to replace your previous submission?',
+        onConfirm: async () => {
+          console.log('User confirmed replacement');
+          setConfirmModalVisible(false);
+          await proceedWithFileSelection();
+        },
+        type: 'document'
+      });
+      setConfirmModalVisible(true);
+      return;
+    }
+    
+    console.log('No pending document, proceeding with file selection');
+    await proceedWithFileSelection();
+  };
+
+  const proceedWithFileSelection = async () => {
+    // Close the upload modal first
+    setIsUploadModalVisible(false);
+    
+    try {
+      console.log('About to call DocumentPicker.getDocumentAsync');
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain',
+        ],
+        copyToCacheDirectory: true
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        console.log('File selected:', file.name, file.mimeType);
+        
+        // Store file and show reviewer selection modal
+        setPendingUpload({ type: 'document', file });
+        setReviewerModalVisible(true);
+      } else {
+        console.log('File selection cancelled');
+      }
+    } catch (err) {
+      console.error('Error picking document:', err);
+      setFeedbackModalConfig({
+        message: 'Failed to pick document. Please try again.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
+  };
+
+  const handleChooseImage = async () => {
+    console.log('handleChooseImage called');
+    console.log('pendingImage:', pendingImage);
+    
+    // Check if there's already a pending image
+    if (pendingImage) {
+      console.log('Showing confirmation for pending image');
+      setConfirmModalConfig({
+        message: 'You already have a pending image submission. Do you want to replace your previous submission?',
+        onConfirm: async () => {
+          console.log('User confirmed replacement');
+          setConfirmModalVisible(false);
+          await proceedWithImageSelection();
+        },
+        type: 'image'
+      });
+      setConfirmModalVisible(true);
+      return;
+    }
+    
+    console.log('No pending image, proceeding with image selection');
+    await proceedWithImageSelection();
+  };
+
+  const proceedWithImageSelection = async () => {
+    // Close the upload modal first
+    setIsUploadModalVisible(false);
+    
+    try {
+      const image = await pickImage();
+      if (image) {
+        // Store image and show reviewer selection modal
+        setPendingUpload({ type: 'image', file: image });
+        setReviewerModalVisible(true);
+      }
+    } catch (err) {
+      console.error('Error picking image:', err);
+      setFeedbackModalConfig({
+        message: 'Failed to pick image. Please try again.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
+  };
+
+  // Handle upload after reviewer is selected
+  const handleUploadWithReviewer = async () => {
+    if (!selectedReviewer || !pendingUpload) {
+      setFeedbackModalConfig({
+        message: 'Please select a reviewer before submitting.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+      return;
+    }
+
+    setReviewerModalVisible(false);
+
+    try {
+      if (pendingUpload.type === 'image') {
+        await uploadImageWithReviewer(pendingUpload.file, selectedReviewer.id);
+      } else if (pendingUpload.type === 'document') {
+        await uploadDocumentWithReviewer(pendingUpload.file, selectedReviewer.id);
+      }
+      
+      // Clear states
+      setPendingUpload(null);
+      setSelectedReviewer(null);
+    } catch (error) {
+      console.error('Error uploading with reviewer:', error);
+      setFeedbackModalConfig({
+        message: 'Failed to upload. Please try again.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
+  };
+
+  // Upload image with selected reviewer
+  const uploadImageWithReviewer = async (image, reviewerId) => {
+    const formData = new FormData();
+    
+    if (Platform.OS === 'web') {
+      const imageFile = image.file || image;
+      formData.append('image', imageFile);
+    } else {
+      formData.append('image', {
+        uri: Platform.OS === 'android' ? image.uri : image.uri.replace('file://', ''),
+        name: image.fileName || image.uri.split('/').pop() || 'photo.jpg',
+        type: image.mimeType || 'image/jpeg',
+      });
+    }
+    
+    formData.append('group_id', selectedGroupId);
+    formData.append('user_id', currentUser.id);
+    formData.append('current_reviewer_id', reviewerId);
+    formData.append('review_stage', 'initial');
+    
+    // If replacing, delete the old image first
+    if (pendingImage) {
+      try {
+        await apiClient.delete(`/review-images/${pendingImage.id}`);
+        console.log('Old image deleted');
+      } catch (deleteError) {
+        if (deleteError.response?.status === 404) {
+          console.log('Old image already deleted (404), continuing...');
+        } else if (deleteError.response?.status === 405) {
+          console.log('DELETE not supported for images (405), skipping deletion...');
+        } else {
+          throw deleteError;
+        }
+      }
+    }
+    
+    await apiClient.post('/review-images', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    
+    // Send notification message
+    const reviewer = groupMembers.find(m => m.id === reviewerId);
+    const messageText = `${currentUser.name} has sent an image to ${reviewer?.name || 'a reviewer'} for review.`;
+    await apiClient.post(`/group-chats/${selectedGroupId}/messages`, { message: messageText });
+    
+    // Refresh messages and pending uploads
+    await checkPendingUploads();
+    fetchMessages();
+    
+    setFeedbackModalConfig({
+      message: `Image sent to ${reviewer?.name || 'reviewer'} for review!`,
+      type: 'success'
+    });
+    setFeedbackModalVisible(true);
+  };
+
+  // Upload document with selected reviewer
+  const uploadDocumentWithReviewer = async (file, reviewerId) => {
+    // Check if it's a text-based document
+    if (file.mimeType === 'application/msword' || 
+        file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        file.mimeType === 'text/plain' ||
+        file.name.endsWith('.doc') || file.name.endsWith('.docx') || file.name.endsWith('.txt')) {
+      
+      await handleWordDocumentUploadWithReviewer(file, reviewerId);
+    } else {
+      // For PDF, use plagiarism check flow
+      handlePlagiarismCheck('file', file);
+      setUploadedFile(file);
+    }
+  };
+
+  // Handle Word document upload with reviewer
+  const handleWordDocumentUploadWithReviewer = async (file, reviewerId) => {
+    setIsProcessingDocument(true);
+    try {
+      console.log('handleWordDocumentUploadWithReviewer: Starting with file', file.name);
+      
+      const extractedText = await extractTextFromDocument(file);
+      console.log('Text extracted, length:', extractedText.length);
+      
+      const textFileName = file.name.replace(/\.(doc|docx)$/i, '.txt');
+      let textFile;
+      
+      if (Platform.OS === 'web') {
+        const textBlob = new Blob([extractedText], { type: 'text/plain' });
+        textFile = new File([textBlob], textFileName, { type: 'text/plain' });
+      } else {
         const tempUri = `${FileSystem.cacheDirectory}${textFileName}`;
         await FileSystem.writeAsStringAsync(tempUri, extractedText, {
           encoding: FileSystem.EncodingType.UTF8,
@@ -478,7 +891,8 @@ export default function CollaborateScreen() {
       }
       
       // Send review message
-      const messageText = `${currentUser.name} has sent a converted document for review: ${textFileName}`;
+      const reviewer = groupMembers.find(m => m.id === reviewerId);
+      const messageText = `${currentUser.name} has sent a document to ${reviewer?.name || 'a reviewer'} for review: ${textFileName}`;
       const response = await apiClient.post(`/group-chats/${selectedGroupId}/messages`, { message: messageText });
       setMessages(prevMessages => [response.data, ...prevMessages]);
 
@@ -495,82 +909,46 @@ export default function CollaborateScreen() {
       }
       formData.append('group_id', selectedGroupId);
       formData.append('user_id', currentUser.id);
+      formData.append('current_reviewer_id', reviewerId);
+      formData.append('review_stage', 'initial');
       formData.append('status', 'pending');
       formData.append('no_of_approval', '0');
+      
+      // If replacing, delete the old document first
+      if (pendingDocument) {
+        try {
+          await apiClient.delete(`/review-content/${pendingDocument.id}`);
+        } catch (deleteError) {
+          if (deleteError.response?.status === 404) {
+            console.log('Old document already deleted (404), continuing...');
+          } else if (deleteError.response?.status === 405) {
+            console.log('DELETE not supported (405), continuing...');
+          } else {
+            throw deleteError;
+          }
+        }
+      }
       
       await apiClient.post('/review-content', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       
-      alert('Document converted to text and sent for review successfully!');
+      await checkPendingUploads();
+      
+      setFeedbackModalConfig({
+        message: `Document sent to ${reviewer?.name || 'reviewer'} for review!`,
+        type: 'success'
+      });
+      setFeedbackModalVisible(true);
     } catch (error) {
       console.error('Error processing Word document:', error);
-      alert('Failed to process Word document. Please try again.');
+      setFeedbackModalConfig({
+        message: `Failed to process document: ${error.response?.data?.message || error.message || 'Unknown error'}`,
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
     } finally {
       setIsProcessingDocument(false);
-    }
-  };
-
-  const handleChooseFile = async () => {
-    console.log('handleChooseFile called');
-    try {
-      console.log('About to call DocumentPicker.getDocumentAsync');
-      const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'text/plain',
-        ],
-        copyToCacheDirectory: true
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const file = result.assets[0];
-        
-        // Check if it's a text-based document that we can convert to message
-        if (file.mimeType === 'application/msword' || 
-            file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-            file.mimeType === 'text/plain' ||
-            file.name.endsWith('.doc') || file.name.endsWith('.docx') || file.name.endsWith('.txt')) {
-          
-          setIsUploadModalVisible(false);
-          await handleWordDocumentUpload(file);
-        } else {
-          // For other file types (PDF, etc.), use the existing plagiarism check flow
-          handlePlagiarismCheck('file', file);
-          setUploadedFile(file);
-        }
-      } else {
-        setIsUploadModalVisible(false);
-      }
-    } catch (err) {
-      console.error('Error picking document:', err);
-    }
-  };
-
-  const handleChooseImage = async () => {
-    try {
-      const image = await pickImage();
-      if (image) {
-        const formData = new FormData();
-        formData.append('image', {
-          uri: Platform.OS === 'android' ? image.uri : image.uri.replace('file://', ''),
-          name: image.fileName || image.uri.split('/').pop() || 'photo.jpg',
-          type: image.mimeType || 'image/jpeg',
-        });
-        formData.append('group_id', selectedGroupId);
-        formData.append('user_id', currentUser.id);
-        await apiClient.post('/review-images', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        setIsUploadModalVisible(false);
-      } else {
-        setIsUploadModalVisible(false);
-      }
-    } catch (err) {
-      console.error('Error picking/sending image:', err);
-      setIsUploadModalVisible(false);
     }
   };
 
@@ -671,9 +1049,27 @@ export default function CollaborateScreen() {
         formData.append('user_id', currentUser.id);
         formData.append('status', 'pending');
         formData.append('no_of_approval', '0');
+        // If replacing, delete the old document first
+        if (pendingDocument) {
+          try {
+            await apiClient.delete(`/review-content/${pendingDocument.id}`);
+            console.log('Old document deleted');
+          } catch (deleteError) {
+            // If 404, the document was already deleted/approved/rejected - that's fine
+            if (deleteError.response?.status === 404) {
+              console.log('Old document already deleted (404), continuing...');
+            } else {
+              throw deleteError; // Re-throw other errors
+            }
+          }
+        }
+        
         await apiClient.post('/review-content', formData, { 
           headers: { 'Content-Type': 'multipart/form-data' } 
         });
+        
+        // Refresh pending uploads
+        await checkPendingUploads();
       }
     } catch (error) {
       console.error('Failed to send review message:', error);
@@ -726,14 +1122,14 @@ export default function CollaborateScreen() {
     <View style={styles.leftPanel}>
       <View style={styles.filterContainer}>
         <TouchableOpacity 
-          style={[styles.filterButton, chatStatusFilter === 'pending' && styles.activeFilter]}
-          onPress={handlePendingFilter}>
-          <Text style={[styles.filterButtonText, chatStatusFilter === 'pending' && styles.activeFilterText]}>Pending</Text>
+          style={[styles.filterButton, groupChatFilter === 'active' && { backgroundColor: colors.primary || '#374151' }]}
+          onPress={() => setGroupChatFilter('active')}>
+          <Text style={[styles.filterButtonText, groupChatFilter === 'active' && styles.activeFilterText]}>Active</Text>
         </TouchableOpacity>
         <TouchableOpacity 
-          style={[styles.filterButton, chatStatusFilter === 'approved' && styles.activeFilter]}
-          onPress={handleApprovedFilter}>
-          <Text style={[styles.filterButtonText, chatStatusFilter === 'approved' && styles.activeFilterText]}>Finished</Text>
+          style={[styles.filterButton, groupChatFilter === 'finished' && { backgroundColor: colors.primary || '#374151' }]}
+          onPress={() => setGroupChatFilter('finished')}>
+          <Text style={[styles.filterButtonText, groupChatFilter === 'finished' && styles.activeFilterText]}>Finished</Text>
         </TouchableOpacity>
       </View>
       <SearchSection />
@@ -754,11 +1150,56 @@ export default function CollaborateScreen() {
         {selectedGroupId ? (
           <>
             <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16}}>
-              <Text style={styles.title}>{groupChats.find(g => g.id === selectedGroupId)?.name}</Text>
+              <View style={{flex: 1}}>
+                <Text style={styles.title}>{groupChats.find(g => g.id === selectedGroupId)?.name}</Text>
+                {(() => {
+                  const selectedGroup = groupChats.find(g => g.id === selectedGroupId);
+                  
+                  // Check if this is a finished/published chat
+                  if (selectedGroup?.status === 'published') {
+                    return (
+                      <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 6}}>
+                        <Feather name="check-circle" size={14} color="#10B981" />
+                        <Text style={{fontSize: 13, color: '#6B7280', marginLeft: 4}}>
+                          <Text style={{fontWeight: '600', color: '#10B981'}}>Already Published</Text>
+                        </Text>
+                      </View>
+                    );
+                  }
+                  
+                  // Show lead reviewer for active chats
+                  const leadReviewerId = selectedGroup?.scrum_board?.lead_reviewer_id;
+                  if (leadReviewerId) {
+                    const leadReviewer = groupMembers.find(m => m.id === leadReviewerId);
+                    if (leadReviewer) {
+                      return (
+                        <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 6}}>
+                          <Feather name="shield" size={14} color="#10B981" />
+                          <Text style={{fontSize: 13, color: '#6B7280', marginLeft: 4}}>
+                            Lead Reviewer: <Text style={{fontWeight: '600', color: '#10B981'}}>{leadReviewer.name || leadReviewer.email || 'Unknown'}</Text>
+                          </Text>
+                        </View>
+                      );
+                    }
+                  }
+                  
+                  // No lead reviewer found
+                  return (
+                    <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 6}}>
+                      <Feather name="alert-circle" size={14} color="#F59E0B" />
+                      <Text style={{fontSize: 13, color: '#6B7280', marginLeft: 4}}>
+                        No lead reviewer assigned
+                      </Text>
+                    </View>
+                  );
+                })()}
+              </View>
               <View style={{alignItems: 'flex-end'}}>
                 <TouchableOpacity
-                  onPress={() => {
+                  onPress={async () => {
                     console.log('Header upload button pressed');
+                    // Check for pending uploads before showing modal
+                    await checkPendingUploads();
                     setIsUploadModalVisible(true);
                   }}
                   style={{
@@ -770,6 +1211,7 @@ export default function CollaborateScreen() {
                     alignItems: 'center',
                     minHeight: 44, // Ensure adequate touch target
                     justifyContent: 'center',
+                    marginTop: -47 ,
                   }}
                   activeOpacity={0.8}
                 >
@@ -801,8 +1243,14 @@ export default function CollaborateScreen() {
             )}
             <StandaloneChatInput 
               onSend={handleSend}
-              onUpload={() => setIsUploadModalVisible(true)}
+              onUpload={async () => {
+                // Check for pending uploads before showing modal
+                await checkPendingUploads();
+                setIsUploadModalVisible(true);
+              }}
               styles={styles}
+              brandColor={colors.primary}
+              uploadButtonColor={colors.tertiary}
             />
           </>
         ) : (
@@ -875,10 +1323,7 @@ export default function CollaborateScreen() {
                 <View style={{flexDirection: 'row', justifyContent: 'space-around', marginTop: 20, gap: 15}}>
                   <TouchableOpacity 
                     style={[modalStyles.button, {backgroundColor: '#4285F4', flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15}]}
-                    onPress={() => {
-                      setIsUploadModalVisible(false);
-                      handleChooseFile();
-                    }}
+                    onPress={handleChooseFile}
                   >
                     <Feather name="file-text" size={20} color="white" style={{marginRight: 8}} />
                     <Text style={[modalStyles.textStyle, {fontSize: 14}]}>Document{'\n'}(Text/Word)</Text>
@@ -886,10 +1331,7 @@ export default function CollaborateScreen() {
                   
                   <TouchableOpacity 
                     style={[modalStyles.button, {backgroundColor: '#34A853', flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15}]}
-                    onPress={() => {
-                      setIsUploadModalVisible(false);
-                      handleChooseImage();
-                    }}
+                    onPress={handleChooseImage}
                   >
                     <Feather name="image" size={20} color="white" style={{marginRight: 8}} />
                     <Text style={[modalStyles.textStyle, {fontSize: 16}]}>Image</Text>
@@ -951,6 +1393,215 @@ export default function CollaborateScreen() {
                   onPress={() => setIsPlagModalVisible(false)}
                 >
                   <Text style={modalStyles.textStyle}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Confirmation Modal */}
+          <Modal 
+            animationType="fade" 
+            transparent={true} 
+            visible={confirmModalVisible} 
+            onRequestClose={() => {
+              setConfirmModalVisible(false);
+              setIsUploadModalVisible(false);
+            }}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 180, maxWidth: 400}]}>
+                <View style={{alignItems: 'center', marginBottom: 20}}>
+                  <Feather name="alert-circle" size={48} color="#F59E0B" />
+                </View>
+                <Text style={[modalStyles.modalTitle, {fontSize: 20}]}>Replace Submission?</Text>
+                <Text style={[modalStyles.modalText, {textAlign: 'center', marginBottom: 30}]}>
+                  {confirmModalConfig.message}
+                </Text>
+                
+                <View style={{flexDirection: 'row', justifyContent: 'space-around', gap: 15}}>
+                  <TouchableOpacity 
+                    style={[modalStyles.button, {backgroundColor: '#6c757d', flex: 1, paddingVertical: 12}]}
+                    onPress={() => {
+                      console.log('User cancelled replacement');
+                      setConfirmModalVisible(false);
+                      setIsUploadModalVisible(false);
+                    }}
+                  >
+                    <Text style={modalStyles.textStyle}>Cancel</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[modalStyles.button, {backgroundColor: '#DC2626', flex: 1, paddingVertical: 12}]}
+                    onPress={() => {
+                      if (confirmModalConfig.onConfirm) {
+                        confirmModalConfig.onConfirm();
+                      }
+                    }}
+                  >
+                    <Text style={modalStyles.textStyle}>Replace</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Reviewer Selection Modal */}
+          <Modal 
+            animationType="fade" 
+            transparent={true} 
+            visible={reviewerModalVisible} 
+            onRequestClose={() => {
+              setReviewerModalVisible(false);
+              setPendingUpload(null);
+              setSelectedReviewer(null);
+            }}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 400, maxWidth: 500, width: '90%'}]}>
+                <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 20}}>
+                  <Feather name="user-check" size={28} color="#1a237e" />
+                  <Text style={[modalStyles.modalTitle, {fontSize: 22, marginLeft: 12, marginBottom: 0}]}>
+                    Select Reviewer
+                  </Text>
+                </View>
+                <Text style={{fontSize: 14, color: '#6B7280', marginBottom: 20}}>
+                  Choose a team member to review this {pendingUpload?.type === 'image' ? 'image' : 'document'}
+                </Text>
+                
+                <ScrollView style={{maxHeight: 300, width: '100%'}}>
+                  {groupMembers.length === 0 ? (
+                    <View style={{alignItems: 'center', padding: 40}}>
+                      <Feather name="users" size={48} color="#D1D5DB" />
+                      <Text style={{color: '#9CA3AF', marginTop: 12}}>No team members available</Text>
+                    </View>
+                  ) : (
+                    groupMembers
+                      .filter(member => member.id !== currentUser?.id) // Filter out current user for reviewer selection
+                      .map((member) => (
+                      <TouchableOpacity
+                        key={member.id}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: 12,
+                          borderRadius: 10,
+                          marginBottom: 8,
+                          backgroundColor: selectedReviewer?.id === member.id ? '#EEF2FF' : '#F9FAFB',
+                          borderWidth: 2,
+                          borderColor: selectedReviewer?.id === member.id ? '#1a237e' : '#E5E7EB',
+                        }}
+                        onPress={() => setSelectedReviewer(member)}
+                      >
+                        <View style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          backgroundColor: selectedReviewer?.id === member.id ? '#1a237e' : '#D1D5DB',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 12,
+                        }}>
+                          <Text style={{
+                            color: '#fff',
+                            fontSize: 16,
+                            fontWeight: '700',
+                          }}>
+                            {member.name.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={{flex: 1}}>
+                          <Text style={{
+                            fontSize: 15,
+                            fontWeight: '600',
+                            color: '#111827',
+                          }}>
+                            {member.name}
+                          </Text>
+                          {member.profile?.position && (
+                            <Text style={{
+                              fontSize: 13,
+                              color: '#6B7280',
+                              marginTop: 2,
+                            }}>
+                              {member.profile.position}
+                            </Text>
+                          )}
+                        </View>
+                        {selectedReviewer?.id === member.id && (
+                          <Feather name="check-circle" size={24} color="#10B981" />
+                        )}
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
+                
+                <View style={{flexDirection: 'row', gap: 12, marginTop: 20, width: '100%'}}>
+                  <TouchableOpacity 
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#F3F4F6',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => {
+                      setReviewerModalVisible(false);
+                      setPendingUpload(null);
+                      setSelectedReviewer(null);
+                    }}
+                  >
+                    <Text style={{color: '#374151', fontWeight: '600', fontSize: 15}}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: selectedReviewer ? '#1a237e' : '#D1D5DB',
+                      alignItems: 'center',
+                    }}
+                    onPress={handleUploadWithReviewer}
+                    disabled={!selectedReviewer}
+                  >
+                    <Text style={{color: '#fff', fontWeight: '700', fontSize: 15}}>Send for Review</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Feedback Modal */}
+          <Modal 
+            animationType="fade" 
+            transparent={true} 
+            visible={feedbackModalVisible} 
+            onRequestClose={() => setFeedbackModalVisible(false)}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 200, maxWidth: 400}]}>
+                <View style={{alignItems: 'center', marginBottom: 20}}>
+                  <Feather 
+                    name={feedbackModalConfig.type === 'success' ? 'check-circle' : 'x-circle'} 
+                    size={64} 
+                    color={feedbackModalConfig.type === 'success' ? '#10B981' : '#EF4444'} 
+                  />
+                </View>
+                <Text style={[modalStyles.modalTitle, {fontSize: 20, textAlign: 'center'}]}>
+                  {feedbackModalConfig.type === 'success' ? 'Success!' : 'Error'}
+                </Text>
+                <Text style={[modalStyles.modalText, {textAlign: 'center', marginBottom: 30, fontSize: 15}]}>
+                  {feedbackModalConfig.message}
+                </Text>
+                
+                <TouchableOpacity 
+                  style={[modalStyles.button, {
+                    backgroundColor: feedbackModalConfig.type === 'success' ? '#10B981' : '#EF4444',
+                    paddingVertical: 12,
+                    width: '100%'
+                  }]}
+                  onPress={() => setFeedbackModalVisible(false)}
+                >
+                  <Text style={modalStyles.textStyle}>OK</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1100,6 +1751,39 @@ const styles = StyleSheet.create({
     backgroundColor: '#eee', 
     alignSelf: 'flex-start' 
   },
+  uploadNotificationBubble: {
+    backgroundColor: '#F3E8FF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#8B5CF6',
+    alignSelf: 'center',
+    maxWidth: '90%',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  uploadNotificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#DDD6FE',
+  },
+  uploadNotificationLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#8B5CF6',
+    marginLeft: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  uploadNotificationText: {
+    color: '#6B21A8',
+    fontWeight: '500',
+    fontSize: 14,
+  },
   messageText: { 
     fontSize: 16, 
     color: '#222' 
@@ -1148,8 +1832,8 @@ const styles = StyleSheet.create({
   },
   input: { 
     flex: 1, 
-    minHeight: 44,
-    maxHeight: 120,
+    minHeight: 45,
+    maxHeight: 47,
     fontSize: 16, 
     color: '#2c3e50',
     paddingHorizontal: 16,

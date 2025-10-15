@@ -46,30 +46,53 @@ const RecommendedContent = ({ userId, onInteraction }) => {
     return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${url}`;
   };
 
-  const RecommendationCard = ({ item }) => (
-    <TouchableOpacity
-      style={styles.recommendationCard}
-      onPress={() => handleArticlePress(item)}
-      activeOpacity={0.8}
-    >
-      <Image
-        source={{ uri: getImageUrl(item.image) }}
-        style={styles.recommendationImage}
-        resizeMode="cover"
-      />
-      <View style={styles.recommendationContent}>
-        <Text style={styles.recommendationCategory}>
-          {item.genre || 'Recommended'}
-        </Text>
-        <Text style={styles.recommendationTitle} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <Text style={styles.recommendationMeta}>
-          {item.author?.name || 'Anonymous'} • {item.published_at}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const RecommendationCard = ({ item }) => {
+    const [isHovered, setIsHovered] = useState(false);
+    
+    return (
+      <TouchableOpacity
+        style={[
+          styles.recommendationCard,
+          isHovered && styles.recommendationCardHover
+        ]}
+        onPress={() => handleArticlePress(item)}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        activeOpacity={0.9}
+      >
+        <View style={{ position: 'relative' }}>
+          <Image
+            source={{ uri: getImageUrl(item.image) }}
+            style={styles.recommendationImage}
+            resizeMode="cover"
+          />
+          <View style={[
+            styles.cardOverlay,
+            isHovered && styles.cardOverlayHover
+          ]}>
+            <Text style={styles.cardReadMore}>Read Full Story</Text>
+          </View>
+        </View>
+        <View style={styles.recommendationContent}>
+          <Text style={styles.recommendationCategory}>
+            {item.genre || 'Recommended'}
+          </Text>
+          <Text style={styles.recommendationTitle} numberOfLines={2}>
+            {item.title}
+          </Text>
+          <Text style={styles.recommendationDate}>
+            {formatDate(item.published_at)}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -158,13 +181,47 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 8,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+    borderWidth: 1.5,
+    borderColor: '#e4e8ee',
+    boxShadow: '0 4px 24px 0 rgba(60,72,88,0.09)',
+    transition: 'box-shadow 0.25s cubic-bezier(.4,2,.6,1), transform 0.18s cubic-bezier(.4,2,.6,1)',
+    cursor: 'pointer',
+  },
+  recommendationCardHover: {
+    boxShadow: '0 10px 32px 0 rgba(60,72,88,0.18)',
+    transform: 'translateY(-4px) scale(1.025)',
+    borderColor: '#d0d6e0',
   },
   recommendationImage: {
     width: '100%',
     height: 100,
+    transition: 'filter 0.2s',
+  },
+  cardOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0,
+    transition: 'opacity 0.2s ease',
+  },
+  cardOverlayHover: {
+    opacity: 1,
+  },
+  cardReadMore: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
   },
   recommendationContent: {
     padding: 12,
@@ -184,7 +241,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 6,
   },
-  recommendationMeta: {
+  recommendationDate: {
     fontSize: 11,
     color: '#888',
   },

@@ -1,154 +1,108 @@
-import { Link, useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { ActivityIndicator, Image, Modal, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ActivityIndicator, Image, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Navbar from '~/components/Navbar';
-import { useAuth } from '~/context/AuthContext';
 import apiClient from '~/utils/api';
 
-const InfoCard = ({ icon, label, value }) => (
-  <View style={styles.infoCard}>
-    <Feather name={icon} size={24} color="#374151" />
-    <View style={styles.infoTextContainer}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value || 'Not set'}</Text>
-    </View>
-  </View>
-);
-
-export default function ProfileScreen() {
-  const [navVisible, setNavVisible] = useState(false);
-  const { user, loading, logout } = useAuth();
+export default function UserProfileScreen() {
   const router = useRouter();
+  const { id: userId } = useLocalSearchParams();
+  const [user, setUser] = useState(null);
   const [bookmarks, setBookmarks] = useState([]);
-  const [loadingBookmarks, setLoadingBookmarks] = useState(true);
-  const [isAnonymous, setIsAnonymous] = useState(false);
-  const [activeTab, setActiveTab] = useState('details'); // 'details' or 'bookmarks'
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('details');
   const [stats, setStats] = useState({ posts: 0, comments: 0 });
-  const [savingAnonymous, setSavingAnonymous] = useState(false);
 
-  const handleLogout = async () => {
-    await logout();
-  };
-
-  // Fetch bookmarks and stats
   useEffect(() => {
-    const fetchData = async () => {
-      if (!user) return;
+    const fetchUserData = async () => {
+      if (!userId) return;
       
       try {
-        setLoadingBookmarks(true);
-        const [bookmarksRes, topicsRes, commentsRes] = await Promise.all([
-          apiClient.get('/bookmarks'),
-          apiClient.get('/topics').catch(() => ({ data: [] })),
-          apiClient.get('/topics').catch(() => ({ data: [] })) // We'll count comments from topics
-        ]);
+        setLoading(true);
+        // Fetch user profile
+        const userRes = await apiClient.get(`/users/${userId}`);
+        setUser(userRes.data);
         
-        setBookmarks(bookmarksRes.data);
+        // Fetch user's public bookmarks
+        const bookmarksRes = await apiClient.get(`/users/${userId}/bookmarks`).catch(() => ({ data: [] }));
+        setBookmarks(bookmarksRes.data || []);
         
-        // Calculate stats
-        const userTopics = Array.isArray(topicsRes.data) ? topicsRes.data.filter(t => t.user_id === user.id) : [];
+        // Fetch user stats
+        const topicsRes = await apiClient.get('/topics').catch(() => ({ data: [] }));
+        const userTopics = Array.isArray(topicsRes.data) ? topicsRes.data.filter(t => t.user_id === parseInt(userId)) : [];
+        
         setStats({
           posts: userTopics.length,
-          comments: 0 // Will be updated when we have comments endpoint
+          comments: 0
         });
-        
-        // Load anonymous mode preference
-        setIsAnonymous(user.profile?.is_anonymous === 1 || user.profile?.is_anonymous === true);
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Error fetching user data:', error);
       } finally {
-        setLoadingBookmarks(false);
+        setLoading(false);
       }
     };
     
-    fetchData();
-  }, [user]);
-
-  // Delete bookmark
-  const handleDeleteBookmark = async (bookmarkId) => {
-    try {
-      await apiClient.delete(`/bookmarks/${bookmarkId}`);
-      setBookmarks(bookmarks.filter(b => b.id !== bookmarkId));
-    } catch (error) {
-      console.error('Error deleting bookmark:', error);
-    }
-  };
-
-  // Handle anonymous mode toggle
-  const handleAnonymousToggle = async (value) => {
-    setIsAnonymous(value);
-    setSavingAnonymous(true);
-    
-    try {
-      const response = await apiClient.put('/profile', { is_anonymous: value ? 1 : 0 });
-      console.log('Anonymous mode updated:', value);
-      
-      // Update user data in AsyncStorage and context
-      const updatedUser = response.data.user;
-      await AsyncStorage.setItem('user_data', JSON.stringify(updatedUser));
-      
-      // Force re-render by updating the user in auth context if available
-      if (window.location) {
-        window.location.reload();
-      }
-    } catch (error) {
-      console.error('Error updating anonymous mode:', error);
-      // Revert on error
-      setIsAnonymous(!value);
-    } finally {
-      setSavingAnonymous(false);
-    }
-  };
+    fetchUserData();
+  }, [userId]);
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#111827" />
-      </View>
+      <SafeAreaView style={styles.container}>
+        <Navbar />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#111827" />
+          <Text style={styles.loadingText}>Loading profile...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   if (!user) {
     return (
-      <View style={styles.centered}>
-        <Text>Could not load profile.</Text>
-        <TouchableOpacity style={styles.button} onPress={() => router.replace('/')}>
-          <Text style={styles.buttonText}>Go to Login</Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <Navbar />
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>User not found</Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Check if user has anonymous mode enabled
+  if (user.profile?.is_anonymous === 1 || user.profile?.is_anonymous === true) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Navbar />
+        <View style={styles.centered}>
+          <Feather name="eye-off" size={64} color="#9CA3AF" />
+          <Text style={styles.errorText}>Profile Hidden</Text>
+          <Text style={styles.emptyDescription}>
+            This user has enabled anonymous mode and their profile is not visible.
+          </Text>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      {Platform.OS === 'web' ? (
-        <Navbar />
-      ) : (
-        <>
-          <TouchableOpacity style={styles.menuButton} onPress={() => setNavVisible(true)}>
-            <Feather name="menu" size={28} color="#fff" />
-          </TouchableOpacity>
-          <Modal
-            animationType="slide"
-            transparent
-            visible={navVisible}
-            onRequestClose={() => setNavVisible(false)}
-          >
-            <TouchableOpacity style={styles.modalOverlayNav} activeOpacity={1} onPressOut={() => setNavVisible(false)}>
-              <View style={styles.modalViewNav}>
-                <Navbar onLinkPress={() => setNavVisible(false)} />
-              </View>
-            </TouchableOpacity>
-          </Modal>
-        </>
-      )}
-
+      <Navbar />
+      
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Clean Header */}
+        {/* Header */}
         <View style={styles.headerContainer}>
+          <TouchableOpacity style={styles.backButtonTop} onPress={() => router.back()}>
+            <Feather name="arrow-left" size={20} color="#111827" />
+            <Text style={styles.backButtonTopText}>Back</Text>
+          </TouchableOpacity>
+          
           <View style={styles.headerContent}>
             <Image 
               source={{ uri: user.profile?.avatar || `https://ui-avatars.com/api/?name=${user.name.replace(' ', '+')}&background=4F46E5&color=fff` }}
@@ -183,14 +137,14 @@ export default function ProfileScreen() {
             style={[styles.tab, activeTab === 'details' && styles.activeTab]}
             onPress={() => setActiveTab('details')}
           >
-            <Feather name="user" size={20} color={activeTab === 'details' ? '#1a237e' : '#6B7280'} />
+            <Feather name="user" size={20} color={activeTab === 'details' ? '#111827' : '#6B7280'} />
             <Text style={[styles.tabText, activeTab === 'details' && styles.activeTabText]}>Details</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.tab, activeTab === 'bookmarks' && styles.activeTab]}
             onPress={() => setActiveTab('bookmarks')}
           >
-            <Feather name="bookmark" size={20} color={activeTab === 'bookmarks' ? '#1a237e' : '#6B7280'} />
+            <Feather name="bookmark" size={20} color={activeTab === 'bookmarks' ? '#111827' : '#6B7280'} />
             <Text style={[styles.tabText, activeTab === 'bookmarks' && styles.activeTabText]}>Bookmarks</Text>
             {bookmarks.length > 0 && (
               <View style={styles.badge}>
@@ -203,73 +157,57 @@ export default function ProfileScreen() {
         <View style={styles.profileContent}>
           {activeTab === 'details' ? (
             <>
-              {/* Anonymous Mode Toggle */}
-              <View style={[styles.section, styles.privacySection]}>
-                <Text style={[styles.sectionTitle, styles.privacyTitle]}>Privacy Settings</Text>
-                <View style={styles.toggleCard}>
-                  <View style={styles.toggleInfo}>
-                    <Text style={styles.toggleLabel}>Anonymous Mode</Text>
-                    <Text style={styles.toggleDescription}>Hide your identity in public interactions</Text>
-                    {isAnonymous && user.profile?.anonymous_name && (
-                      <View style={styles.anonymousNameBadge}>
-                        <Feather name="user-check" size={14} color="#4F46E5" />
-                        <Text style={styles.anonymousNameText}>
-                          Your public name: {user.profile.anonymous_name}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Switch
-                    value={isAnonymous}
-                    onValueChange={handleAnonymousToggle}
-                    trackColor={{ false: '#E5E7EB', true: '#C7D2FE' }}
-                    thumbColor={isAnonymous ? '#4F46E5' : '#F9FAFB'}
-                    ios_backgroundColor="#E5E7EB"
-                    disabled={savingAnonymous}
-                  />
-                </View>
-              </View>
-
               {/* Profile Information */}
               <View style={[styles.section, styles.infoSection]}>
                 <Text style={[styles.sectionTitle, styles.infoTitle]}>Profile Information</Text>
-                <InfoCard icon="book-open" label="Program" value={user.profile?.program} />
-                <InfoCard icon="grid" label="Section" value={user.profile?.section} />
-                <InfoCard icon="align-left" label="Description" value={user.profile?.description} />
-              </View>
-
-              {/* Action Buttons */}
-              <View style={styles.actionsSection}>
-                <Link href="/edit-profile" asChild>
-                  <TouchableOpacity style={styles.primaryButton}>
-                    <Feather name="edit-2" size={18} color="#fff" />
-                    <Text style={styles.primaryButtonText}>Edit Profile</Text>
-                  </TouchableOpacity>
-                </Link>
-
-                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                  <Feather name="log-out" size={18} color="#DC2626" />
-                  <Text style={styles.logoutButtonText}>Logout</Text>
-                </TouchableOpacity>
+                
+                {user.profile?.program && (
+                  <View style={styles.infoCard}>
+                    <Feather name="book-open" size={24} color="#374151" />
+                    <View style={styles.infoTextContainer}>
+                      <Text style={styles.infoLabel}>Program</Text>
+                      <Text style={styles.infoValue}>{user.profile.program}</Text>
+                    </View>
+                  </View>
+                )}
+                
+                {user.profile?.section && (
+                  <View style={styles.infoCard}>
+                    <Feather name="grid" size={24} color="#374151" />
+                    <View style={styles.infoTextContainer}>
+                      <Text style={styles.infoLabel}>Section</Text>
+                      <Text style={styles.infoValue}>{user.profile.section}</Text>
+                    </View>
+                  </View>
+                )}
+                
+                {user.profile?.description && (
+                  <View style={styles.infoCard}>
+                    <Feather name="align-left" size={24} color="#374151" />
+                    <View style={styles.infoTextContainer}>
+                      <Text style={styles.infoLabel}>Description</Text>
+                      <Text style={styles.infoValue}>{user.profile.description}</Text>
+                    </View>
+                  </View>
+                )}
+                
+                {!user.profile?.program && !user.profile?.section && !user.profile?.description && (
+                  <Text style={styles.noInfo}>No profile information available</Text>
+                )}
               </View>
             </>
           ) : (
             <>
               {/* Bookmarks Section */}
               <View style={[styles.section, styles.bookmarksSection]}>
-                <Text style={[styles.sectionTitle, styles.bookmarksTitle]}>My Bookmarks</Text>
+                <Text style={[styles.sectionTitle, styles.bookmarksTitle]}>Public Bookmarks</Text>
                 
-                {loadingBookmarks ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#1a237e" />
-                    <Text style={styles.loadingText}>Loading bookmarks...</Text>
-                  </View>
-                ) : bookmarks.length === 0 ? (
+                {bookmarks.length === 0 ? (
                   <View style={styles.emptyState}>
                     <Feather name="bookmark" size={64} color="#D1D5DB" />
-                    <Text style={styles.emptyTitle}>No Bookmarks Yet</Text>
+                    <Text style={styles.emptyTitle}>No Public Bookmarks</Text>
                     <Text style={styles.emptyDescription}>
-                      Start highlighting and saving your favorite quotes from articles!
+                      This user hasn't shared any bookmarks yet.
                     </Text>
                   </View>
                 ) : (
@@ -282,12 +220,6 @@ export default function ProfileScreen() {
                             {bookmark.article?.title || 'Article'}
                           </Text>
                         </View>
-                        <TouchableOpacity
-                          onPress={() => handleDeleteBookmark(bookmark.id)}
-                          style={styles.deleteButton}
-                        >
-                          <Feather name="trash-2" size={18} color="#EF4444" />
-                        </TouchableOpacity>
                       </View>
                       
                       <Text style={styles.bookmarkText}>"{bookmark.highlighted_text}"</Text>
@@ -313,7 +245,7 @@ export default function ProfileScreen() {
                             style={styles.viewArticleButton}
                           >
                             <Text style={styles.viewArticleText}>View Article</Text>
-                            <Feather name="arrow-right" size={14} color="#1a237e" />
+                            <Feather name="arrow-right" size={14} color="#111827" />
                           </TouchableOpacity>
                         )}
                       </View>
@@ -338,14 +270,49 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  errorText: {
+    fontSize: 18,
+    color: '#DC2626',
+    marginBottom: 20,
+  },
+  backButton: {
+    backgroundColor: '#111827',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
   headerContainer: {
     backgroundColor: '#FFFFFF',
-    paddingTop: Platform.OS === 'web' ? 60 : 80,
+    paddingTop: Platform.OS === 'web' ? 20 : 40,
     paddingBottom: 30,
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+  },
+  backButtonTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginLeft: 20,
+    marginBottom: 20,
+    gap: 6,
+  },
+  backButtonTopText: {
+    fontSize: 15,
+    color: '#111827',
+    fontWeight: '500',
   },
   headerContent: {
     alignItems: 'center',
@@ -444,10 +411,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F3F4F6',
   },
-  privacySection: {
-    backgroundColor: '#FAFAFF',
-    borderColor: '#E9D5FF',
-  },
   infoSection: {
     backgroundColor: '#F0FDF4',
     borderColor: '#BBF7D0',
@@ -464,53 +427,11 @@ const styles = StyleSheet.create({
     paddingLeft: 4,
     borderLeftWidth: 3,
   },
-  privacyTitle: {
-    borderLeftColor: '#8B5CF6',
-  },
   infoTitle: {
     borderLeftColor: '#10B981',
   },
   bookmarksTitle: {
     borderLeftColor: '#F59E0B',
-  },
-  toggleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    padding: 16,
-  },
-  toggleInfo: {
-    flex: 1,
-    marginRight: 16,
-  },
-  toggleLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#111827',
-    marginBottom: 2,
-  },
-  toggleDescription: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  anonymousNameBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  anonymousNameText: {
-    fontSize: 12,
-    color: '#4F46E5',
-    fontWeight: '600',
   },
   infoCard: {
     flexDirection: 'row',
@@ -534,48 +455,12 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontWeight: '500',
   },
-  actionsSection: {
-    marginTop: 8,
-    gap: 12,
-  },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#111827',
-    borderRadius: 8,
-    paddingVertical: 14,
-    gap: 8,
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingVertical: 14,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  logoutButtonText: {
-    color: '#DC2626',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  loadingText: {
-    marginTop: 12,
+  noInfo: {
     fontSize: 14,
     color: '#6B7280',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    paddingVertical: 20,
   },
   emptyState: {
     alignItems: 'center',
@@ -619,9 +504,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     flex: 1,
-  },
-  deleteButton: {
-    padding: 6,
   },
   bookmarkText: {
     fontSize: 15,
@@ -670,21 +552,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#111827',
     fontWeight: '500',
-  },
-  menuButton: {
-    position: 'absolute',
-    top: 40,
-    left: 20,
-    zIndex: 10,
-    padding: 10,
-  },
-  modalOverlayNav: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalViewNav: {
-    width: '75%',
-    height: '100%',
-    backgroundColor: '#fff',
   },
 });

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, SafeAreaView, StyleSheet, Text, TextInput, View, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
-import { apiClient } from '../utils/api';
+import apiClient from '../utils/api';
 
 const InputField = ({ icon, placeholder, value, onChangeText, multiline = false }) => (
   <View style={styles.inputContainer}>
@@ -53,19 +53,22 @@ export default function EditProfileScreen() {
   const handleUpdateProfile = async () => {
     setSaving(true);
     try {
-      const response = await apiClient.put('/profile', { name, program, section, description });
+      const payload = { name, program, section, description };
+      console.log('Sending profile update:', payload);
+      
+      const response = await apiClient.put('/profile', payload);
+      console.log('Profile update response:', response.data);
+      
       const updatedUser = response.data.user;
       await AsyncStorage.setItem('user_data', JSON.stringify(updatedUser));
       setUser(updatedUser);
+      
       Alert.alert('Success', 'Your profile has been updated.');
-      if (Platform.OS === 'web') {
-        window.location.reload();
-      } else {
-        router.back();
-      }
+      router.replace('/profile');
     } catch (error) {
       console.error('Failed to update profile:', error.response?.data || error.message);
-      Alert.alert('Error', 'Could not update your profile. Please try again.');
+      console.error('Full error:', error);
+      Alert.alert('Error', `Could not update your profile: ${error.response?.data?.message || error.message}`);
     } finally {
       setSaving(false);
     }

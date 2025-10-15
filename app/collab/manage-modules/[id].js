@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable, ScrollView, Switch, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, ScrollView, Switch, TextInput, Modal, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import apiClient from '~/utils/api';
 import { useAuth } from '~/context/AuthContext';
-
-import { Modal } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 
 const ManageModulesScreen = () => {
     const { id } = useLocalSearchParams();
@@ -19,6 +18,7 @@ const ManageModulesScreen = () => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
     const [position, setPosition] = useState('');
+    const [level, setLevel] = useState(1);
     const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
 
     const fetchData = useCallback(async () => {
@@ -36,6 +36,7 @@ const ManageModulesScreen = () => {
         setCollaborator(user); // user object from context
         setProfile(profileData);
         setPosition(profileData.position || '');
+        setLevel(profileData.level || 1);
         const initialSelected = new Set((profileData.modules || []).map(m => m.id));
         setSelectedModules(initialSelected);
       } else {
@@ -48,6 +49,7 @@ const ManageModulesScreen = () => {
         setCollaborator(collaboratorProfile.user);
         setProfile(collaboratorProfile);
         setPosition(collaboratorProfile.position || '');
+        setLevel(collaboratorProfile.level || 1);
         const initialSelected = new Set((collaboratorProfile.modules || []).map(m => m.id));
         setSelectedModules(initialSelected);
       }
@@ -84,6 +86,7 @@ const ManageModulesScreen = () => {
 
             const positionUpdatePromise = apiClient.patch(`/collaborators/${profile.id}`, {
                 position: position,
+                level: level,
             });
 
             await Promise.all([moduleUpdatePromise, positionUpdatePromise]);
@@ -124,6 +127,27 @@ const ManageModulesScreen = () => {
                 placeholder="e.g., Lead Developer"
                 placeholderTextColor="#9CA3AF"
             />
+
+            {/* Only show level selector if user is level 3 and managing someone else */}
+            {user?.profile?.level === 3 && String(id) !== String(user.id) && (
+                <>
+                    <Text style={styles.label}>Contributor Level</Text>
+                    <View style={styles.pickerContainer}>
+                        <Picker
+                            selectedValue={level}
+                            onValueChange={(itemValue) => setLevel(itemValue)}
+                            style={styles.picker}
+                        >
+                            <Picker.Item label="Level 1 - Basic Collaborator" value={1} />
+                            <Picker.Item label="Level 2 - Manager" value={2} />
+                            <Picker.Item label="Level 3 - Administrator" value={3} />
+                        </Picker>
+                    </View>
+                    <Text style={styles.helperText}>
+                        Current level: {profile?.level || 1} | Your level: {user?.profile?.level}
+                    </Text>
+                </>
+            )}
 
             <Text style={[styles.label, { marginTop: 20 }]}>Modules</Text>
 
@@ -215,6 +239,24 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF',
         fontSize: 16,
         marginBottom: 20,
+    },
+    pickerContainer: {
+        borderColor: '#D1D5DB',
+        borderWidth: 1,
+        borderRadius: 8,
+        backgroundColor: '#FFF',
+        marginBottom: 8,
+        overflow: 'hidden',
+    },
+    picker: {
+        height: 50,
+        width: '100%',
+    },
+    helperText: {
+        fontSize: 13,
+        color: '#6B7280',
+        marginBottom: 20,
+        fontStyle: 'italic',
     },
     userName: {
         fontSize: 20,

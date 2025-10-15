@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   ActivityIndicator,
   TouchableOpacity,
   useWindowDimensions,
@@ -24,33 +23,78 @@ const ReviewItem = ({ item, isMobile, onPreview }) => {
   const uploader = item.user?.name || 'Unknown User';
   const uploadDate = item.uploaded_at ? new Date(item.uploaded_at).toLocaleDateString() : 'N/A';
 
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'pending': return { bg: '#FEF3C7', text: '#92400E', icon: 'clock' };
+      case 'approved': return { bg: '#D1FAE5', text: '#065F46', icon: 'check-circle' };
+      case 'rejected': return { bg: '#FEE2E2', text: '#991B1B', icon: 'x-circle' };
+      default: return { bg: '#F3F4F6', text: '#6B7280', icon: 'help-circle' };
+    }
+  };
+
+  const statusStyle = getStatusColor(item.status);
+
   return (
-    <View style={[styles.itemCard, isMobile && styles.itemCardMobile]}>
-      {item._type === 'image' && (
-        <Image
-          source={{ uri: `${API_URL}/storage/${item.file}` }}
-          style={styles.itemImage}
-          resizeMode="cover"
-        />
-      )}
-      <View style={styles.itemContent}>
-        <View style={styles.itemHeader}>
-          <Feather name={item._type === 'image' ? 'image' : 'file-text'} size={18} color="#4A5568" />
-          <Text style={styles.itemType}>{fileType}</Text>
-          <View style={[styles.statusBadge, styles[`status_${item.status}`]]}>
-            <Text style={styles.statusText}>{item.status}</Text>
+    <TouchableOpacity 
+      style={[styles.itemCard, isMobile && styles.itemCardMobile]}
+      onPress={() => onPreview(item)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.cardContainer}>
+        {item._type === 'image' && (
+          <View style={styles.imageContainer}>
+            <Image
+              source={{ uri: `${API_URL}/storage/${item.file}` }}
+              style={styles.itemImage}
+              resizeMode="cover"
+            />
+            <View style={styles.imageOverlay}>
+              <View style={styles.imageTypeTag}>
+                <Feather name="image" size={14} color="#fff" />
+                <Text style={styles.imageTypeText}>Image</Text>
+              </View>
+            </View>
+          </View>
+        )}
+        <View style={styles.itemContent}>
+          <View style={styles.itemHeader}>
+            <View style={styles.typeContainer}>
+              <View style={[styles.iconCircle, item._type === 'image' ? styles.iconCircleImage : styles.iconCircleDoc]}>
+                <Feather 
+                  name={item._type === 'image' ? 'image' : 'file-text'} 
+                  size={14} 
+                  color={item._type === 'image' ? '#8B5CF6' : '#3B82F6'} 
+                />
+              </View>
+              <Text style={styles.itemType}>{fileType}</Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+              <Feather name={statusStyle.icon} size={10} color={statusStyle.text} />
+              <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.titleRow}>
+            <Text style={styles.itemTitle} numberOfLines={2}>{title}</Text>
+            <TouchableOpacity style={styles.previewButton} onPress={() => onPreview(item)}>
+              <Text style={styles.previewButtonText}>Review</Text>
+              <Feather name="arrow-right" size={12} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.metaContainer}>
+            <View style={styles.metaItem}>
+              <Feather name="user" size={12} color="#9CA3AF" />
+              <Text style={styles.itemMeta}>{uploader}</Text>
+            </View>
+            <View style={styles.metaItem}>
+              <Feather name="calendar" size={12} color="#9CA3AF" />
+              <Text style={styles.itemMeta}>{uploadDate}</Text>
+            </View>
           </View>
         </View>
-        <Text style={styles.itemTitle}>{title}</Text>
-        <Text style={styles.itemMeta}>
-          Submitted by {uploader} on {uploadDate}
-        </Text>
-        <TouchableOpacity style={styles.previewButton} onPress={() => onPreview(item)}>
-          <Text style={styles.previewButtonText}>Preview & Approve</Text>
-          <Feather name="arrow-right-circle" size={18} color="#fff" />
-        </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -72,7 +116,13 @@ export default function ReviewContentScreen() {
     const fetchGroupChats = async () => {
       try {
         const response = await apiClient.get('/group-chats');
-        setGroupChats(response.data);
+        // Sort groups by latest (most recent created_at or updated_at first)
+        const sortedGroups = response.data.sort((a, b) => {
+          const dateA = new Date(b.updated_at || b.created_at);
+          const dateB = new Date(a.updated_at || a.created_at);
+          return dateA - dateB;
+        });
+        setGroupChats(sortedGroups);
       } catch (error) {
         console.error('Failed to fetch group chats:', error);
       } finally {
@@ -86,6 +136,10 @@ export default function ReviewContentScreen() {
     const fetchReviewContent = async () => {
       setLoading(true);
       try {
+        // Get current user
+        const userResponse = await apiClient.get('/user');
+        const currentUser = userResponse.data;
+        
         const params = new URLSearchParams({
           status: statusFilter,
         });
@@ -95,16 +149,34 @@ export default function ReviewContentScreen() {
           params.append('group_id', selectedGroupId);
         }
         
+        // IMPORTANT: Only show items assigned to current user as reviewer
+        // This ensures users only see content they need to review
+        if (statusFilter === 'pending') {
+          params.append('current_reviewer_id', currentUser.id);
+        }
+        
         const url = `/review-content?${params.toString()}`;
         const imagesUrl = `/review-images?${params.toString()}`;
 
-        const [draftsRes, imagesRes] = await Promise.all([
+        const [draftsRes, imagesRes, groupsRes] = await Promise.all([
           apiClient.get(url),
           apiClient.get(imagesUrl),
+          apiClient.get('/group-chats'),
         ]);
 
+        // Create a map of group_id to group object for quick lookup
+        const groupsMap = {};
+        groupsRes.data.forEach(group => {
+          groupsMap[group.id] = group;
+        });
+
         const drafts = draftsRes.data.map(d => ({ ...d, _type: 'draft' }));
-        const images = imagesRes.data.map(img => ({ ...img, _type: 'image' }));
+        const images = imagesRes.data.map(img => ({
+          ...img,
+          _type: 'image',
+          // Add group object if not present
+          group: img.group || (img.group_id ? groupsMap[img.group_id] : null)
+        }));
         
         setReviewContent([...drafts, ...images]);
       } catch (error) {
@@ -135,121 +207,212 @@ export default function ReviewContentScreen() {
     if (sortedContent.length === 0) {
       return (
         <View style={styles.emptyContainer}>
-          <Feather name="inbox" size={48} color="#A0AEC0" />
-          <Text style={styles.emptyText}>No content to review in this group.</Text>
+          <View style={styles.emptyIconContainer}>
+            <Feather name="inbox" size={48} color="#9CA3AF" />
+          </View>
+          <Text style={styles.emptyTitle}>No Content Found</Text>
+          <Text style={styles.emptyText}>There are no {statusFilter} items to review in the selected group.</Text>
         </View>
       );
     }
     return (
-      <FlatList
-        data={sortedContent}
-        renderItem={({ item }) => <ReviewItem item={item} isMobile={isMobile} onPreview={handlePreview} />}
-        keyExtractor={(item) => `${item._type}-${item.id}`}
-        contentContainerStyle={{ paddingBottom: 40 }}
-      />
+      <View>
+        {sortedContent.map((item) => (
+          <ReviewItem key={`${item._type}-${item.id}`} item={item} isMobile={isMobile} onPreview={handlePreview} />
+        ))}
+      </View>
     );
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={true}>
       <View style={styles.header}>
-        <Text style={styles.title}>Review Content</Text>
-        <Text style={styles.subtitle}>Select a group and status to see submissions.</Text>
-      </View>
-
-      <View style={[styles.filterContainer, isMobile && styles.filterContainerMobile]}>
-        {/* Group Picker */}
-        <View style={[styles.pickerWrapper, !isMobile && { flex: 1 }, isMobile && styles.pickerWrapperMobile]}>
-          <Text style={styles.pickerLabel}>Group</Text>
-          <View style={styles.pickerShell}>
-            <Picker
-              selectedValue={selectedGroupId}
-              onValueChange={(itemValue) => setSelectedGroupId(itemValue)}
-              style={styles.picker}
-              enabled={!loadingGroups}
-            >
-              <Picker.Item label="All Groups" value={ALL_GROUPS_ID} />
-              {groupChats.map(group => (
-                <Picker.Item key={group.id} label={group.name} value={group.id} />
-              ))}
-            </Picker>
+        <View style={styles.headerRow}>
+          <View style={styles.headerLeft}>
+            <View style={styles.headerIconContainer}>
+              <Feather name="check-square" size={24} color="#1a237e" />
+            </View>
+            <Text style={styles.title}>Review Content</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{sortedContent.length}</Text>
+            <Text style={styles.statLabel}>Items</Text>
           </View>
         </View>
+      </View>
 
-        {/* Status Picker */}
-        <View style={[styles.pickerWrapper, !isMobile && { flex: 1 }, isMobile && styles.pickerWrapperMobile]}>
-          <Text style={styles.pickerLabel}>Status</Text>
-          <View style={styles.pickerShell}>
-            <Picker
-              selectedValue={statusFilter}
-              onValueChange={(itemValue) => setStatusFilter(itemValue)}
-              style={styles.picker}
-            >
-              <Picker.Item label="Pending" value="pending" />
-              <Picker.Item label="Approved" value="approved" />
-              <Picker.Item label="Rejected" value="rejected" />
-            </Picker>
+      <View style={styles.filterSection}>
+        <View style={styles.filterHeader}>
+          <Feather name="filter" size={18} color="#374151" />
+          <Text style={styles.filterTitle}>Filters</Text>
+        </View>
+        <View style={[styles.filterContainer, isMobile && styles.filterContainerMobile]}>
+          {/* Group Picker */}
+          <View style={[styles.pickerWrapper, !isMobile && { flex: 1 }, isMobile && styles.pickerWrapperMobile]}>
+            <View style={styles.pickerLabelContainer}>
+              <Feather name="users" size={14} color="#6B7280" />
+              <Text style={styles.pickerLabel}>Group</Text>
+            </View>
+            <View style={styles.pickerShell}>
+              <Picker
+                selectedValue={selectedGroupId}
+                onValueChange={(itemValue) => setSelectedGroupId(itemValue)}
+                style={styles.picker}
+                enabled={!loadingGroups}
+              >
+                <Picker.Item label="All Groups" value={ALL_GROUPS_ID} />
+                {groupChats.map(group => (
+                  <Picker.Item key={group.id} label={group.name} value={group.id} />
+                ))}
+              </Picker>
+            </View>
+          </View>
+
+          {/* Status Picker */}
+          <View style={[styles.pickerWrapper, !isMobile && { flex: 1 }, isMobile && styles.pickerWrapperMobile]}>
+            <View style={styles.pickerLabelContainer}>
+              <Feather name="tag" size={14} color="#6B7280" />
+              <Text style={styles.pickerLabel}>Status</Text>
+            </View>
+            <View style={styles.pickerShell}>
+              <Picker
+                selectedValue={statusFilter}
+                onValueChange={(itemValue) => setStatusFilter(itemValue)}
+                style={styles.picker}
+              >
+                <Picker.Item label="Pending" value="pending" />
+                <Picker.Item label="Approved" value="approved" />
+                <Picker.Item label="Rejected" value="rejected" />
+              </Picker>
+            </View>
           </View>
         </View>
       </View>
 
       {renderContent()}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7F8FA',
+    backgroundColor: '#F9FAFB',
     padding: Platform.OS === 'web' ? 24 : 16,
   },
   header: {
-    marginBottom: 24,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1A202C',
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#718096',
-    marginTop: 4,
+  statCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  statNumber: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a237e',
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  filterSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 6,
+  },
+  filterTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
   },
   filterContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
+    gap: 16,
   },
   filterContainerMobile: {
     flexDirection: 'column',
   },
   pickerWrapper: {
-    // On web, this will be combined with flex: 1
-    marginRight: 16,
+    marginRight: 0,
   },
   pickerWrapperMobile: {
     width: '100%',
-    marginRight: 0,
     marginBottom: 16,
   },
-  pickerLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#4A5568',
+  pickerLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 8,
+    gap: 4,
+  },
+  pickerLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
   },
   pickerShell: {
-    backgroundColor: '#fff',
+    backgroundColor: '#F9FAFB',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5E7EB',
     justifyContent: 'center',
   },
   picker: {
-    height: 55,
+    height: 44,
     width: '100%',
-    borderWidth: 0, // For web, to hide default browser style
+    borderWidth: 0,
     backgroundColor: 'transparent',
   },
   emptyContainer: {
@@ -259,83 +422,155 @@ const styles = StyleSheet.create({
     padding: 40,
     marginTop: 50,
   },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 8,
+  },
   emptyText: {
-    fontSize: 16,
-    color: '#718096',
-    marginTop: 16,
+    fontSize: 15,
+    color: '#9CA3AF',
     textAlign: 'center',
+    maxWidth: 300,
   },
   itemCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  cardContainer: {
+    flex: 1,
+  },
+  imageContainer: {
+    position: 'relative',
   },
   itemImage: {
     width: '100%',
-    height: 150,
+    height: 180,
+    backgroundColor: '#F3F4F6',
+  },
+  imageOverlay: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+  },
+  imageTypeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 6,
+  },
+  imageTypeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   itemContent: {
-    padding: 16,
+    padding: 18,
   },
   itemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  typeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  iconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    gap: 12,
+  },
+  iconCircleImage: {
+    backgroundColor: '#F3E8FF',
+  },
+  iconCircleDoc: {
+    backgroundColor: '#DBEAFE',
   },
   itemType: {
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#4A5568',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
   },
   itemTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1A202C',
-    marginBottom: 4,
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    lineHeight: 22,
+  },
+  metaContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   itemMeta: {
-    fontSize: 13,
-    color: '#718096',
-    marginBottom: 16,
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
   },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    marginLeft: 'auto',
+    paddingVertical: 4,
+    borderRadius: 10,
+    gap: 3,
   },
-  status_pending: { backgroundColor: '#FFEDD5' },
-  status_approved: { backgroundColor: '#D1FAE5' },
-  status_rejected: { backgroundColor: '#FEE2E2' },
   statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#9A3412', // Default, will be overridden
-    ...Platform.select({
-      'status_pending': { color: '#9A3412' },
-      'status_approved': { color: '#065F46' },
-      'status_rejected': { color: '#991B1B' },
-    }),
+    fontSize: 11,
+    fontWeight: '700',
   },
   previewButton: {
-    backgroundColor: '#303F9F',
+    backgroundColor: '#1a237e',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: 8,
+    gap: 4,
   },
   previewButtonText: {
     color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
-    marginRight: 8,
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

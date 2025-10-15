@@ -34,7 +34,7 @@ const fallbackPublications = {
   ],
 };
 
-const CATEGORIES = ['News', 'Articles', 'Opinion', 'Sports', 'Editorial', 'Artworks'];
+const CATEGORIES = ['News', 'Articles', 'Artworks', 'Sports', 'Editorial', 'Creative'];
 
 const HomeScreen = () => {
   const { width } = useWindowDimensions();
@@ -518,19 +518,19 @@ const styles = StyleSheet.create({
   publicationCard: {
     backgroundColor: '#fff',
     overflow: 'hidden',
-    marginBottom: '16px',
-    boxShadow: '0 4px 24px 0 rgba(60,72,88,0.09)',
-    border: '1.5px solid #e4e8ee',
+    marginBottom: '12px',
+    boxShadow: '0 4px 20px 0 rgba(60,72,88,0.08)',
+    border: '1px solid #e4e8ee',
     transition: 'box-shadow 0.25s cubic-bezier(.4,2,.6,1), transform 0.18s cubic-bezier(.4,2,.6,1)',
     cursor: 'pointer',
     width: '100%',
-    maxWidth: '260px',
-    minWidth: '250px',
+    maxWidth: '278px',
+    minWidth: '200px',
     height: 'auto',
     flexShrink: 0,
     ':hover': {
-      boxShadow: '0 10px 32px 0 rgba(60,72,88,0.18)',
-      transform: 'translateY(-4px) scale(1.025)',
+      boxShadow: '0 10px 28px 0 rgba(60,72,88,0.16)',
+      transform: 'translateY(-3px) scale(1.02)',
       borderColor: '#d0d6e0',
     },
   },
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     width: '100%',
-    height: '160px',
+    height: '120px',
   },
   publicationImage: {
     width: '100%',
@@ -550,16 +550,28 @@ const styles = StyleSheet.create({
     },
   },
   publicationContent: {
-    padding: '20px',
+    padding: '12px',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
     flex: 1,
   },
   publicationTitle: {
-    fontSize: '1rem',
+    fontSize: '0.95rem',
     fontWeight: '600',
     color: '#1a1a1a',
+    margin: '0 0 6px',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    lineHeight: '1.3',
+    letterSpacing: '0.2px',
+  },
+  publicationSummary: {
+    fontSize: '0.8rem',
+    color: '#666',
     margin: '0 0 8px',
     display: '-webkit-box',
     WebkitLineClamp: 2,
@@ -567,18 +579,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     lineHeight: '1.4',
-    letterSpacing: '0.2px',
-  },
-  publicationSummary: {
-    fontSize: '0.875rem',
-    color: '#666',
-    margin: '0 0 12px',
-    display: '-webkit-box',
-    WebkitLineClamp: 3,
-    WebkitBoxOrient: 'vertical',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    lineHeight: '1.5',
     flex: 1,
   },
   cardOverlay: {

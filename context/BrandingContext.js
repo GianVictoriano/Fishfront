@@ -10,6 +10,9 @@ const FALLBACK_BACKGROUND_URL = require('../assets/images/bg.png');
 const BrandingContext = createContext({
   logoUrl: FALLBACK_LOGO_URL,
   backgroundUrl: FALLBACK_BACKGROUND_URL,
+  colors: {},
+  typography: {},
+  pages: {},
   loading: true,
   refreshBranding: () => {},
 });
@@ -21,6 +24,21 @@ export const useBranding = () => useContext(BrandingContext);
 export const BrandingProvider = ({ children }) => {
   const [logoUrl, setLogoUrl] = useState(FALLBACK_LOGO_URL);
   const [backgroundUrl, setBackgroundUrl] = useState(FALLBACK_BACKGROUND_URL);
+  const [colors, setColors] = useState({
+    primary: '#1a237e',
+    secondary: '#303F9F',
+    tertiary: '#3949ab',
+    accent: '#10B981',
+    background: '#FFFFFF',
+    text_primary: '#111827',
+    text_secondary: '#6B7280',
+  });
+  const [typography, setTypography] = useState({
+    primary_font: 'Inter, sans-serif',
+    secondary_font: 'Roboto, sans-serif',
+    heading_font: 'Poppins, sans-serif',
+  });
+  const [pages, setPages] = useState({});
   const [loading, setLoading] = useState(true);
 
   const fetchBranding = useCallback(async () => {
@@ -28,8 +46,8 @@ export const BrandingProvider = ({ children }) => {
     console.log('[BrandingContext] Fetching branding... Attempting to use API_URL:', process.env.EXPO_PUBLIC_API_URL);
     try {
       const response = await apiClient.get('/branding');
-      const { logo_url, background_url } = response.data;
-      console.log('[BrandingContext] Branding data fetched successfully:', { logo_url, background_url });
+      const { logo_url, background_url, colors: brandColors, typography: brandTypography, pages: brandPages } = response.data;
+      console.log('[BrandingContext] Branding data fetched successfully:', response.data);
 
       // If the fetched URL is valid, use it; otherwise, stick with the fallback.
       const finalLogoUrl = logo_url
@@ -42,7 +60,13 @@ export const BrandingProvider = ({ children }) => {
       console.log('[BrandingContext] Setting final image URLs:', { finalLogoUrl, finalBackgroundUrl });
       setLogoUrl(finalLogoUrl);
       setBackgroundUrl(finalBackgroundUrl);
-      console.log('[BrandingContext] Image URLs set:', { logoUrl, backgroundUrl });
+      
+      // Set colors, typography, and pages
+      if (brandColors) setColors(brandColors);
+      if (brandTypography) setTypography(brandTypography);
+      if (brandPages) setPages(brandPages);
+      
+      console.log('[BrandingContext] Branding fully loaded:', { colors: brandColors, typography: brandTypography, pages: brandPages });
     } catch (error) {
       console.error('[BrandingContext] CRITICAL: Failed to fetch branding. Full error object:', error);
       if (error.response) {
@@ -69,7 +93,16 @@ export const BrandingProvider = ({ children }) => {
   }, [fetchBranding]);
 
   return (
-    <BrandingContext.Provider value={{ logoUrl, backgroundUrl, fetchBranding, loading, refreshBranding }}>
+    <BrandingContext.Provider value={{ 
+      logoUrl, 
+      backgroundUrl, 
+      colors, 
+      typography, 
+      pages, 
+      fetchBranding, 
+      loading, 
+      refreshBranding 
+    }}>
       {children}
     </BrandingContext.Provider>
   );

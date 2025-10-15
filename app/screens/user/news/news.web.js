@@ -2,6 +2,7 @@
 import { Link, useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
 import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import AppNavbar from '../../../../components/AppNavbar';
 import NewsNavbar from '../../../../components/newsnavbar';
 import RecommendedContent from '../../../../components/RecommendedContent';
@@ -34,7 +35,7 @@ const styles = StyleSheet.create({
   },
   newsPageScroll: {
     padding: 24,
-    paddingTop: 36,
+    paddingTop: 12,
     alignItems: 'center',
     backgroundColor: '#f4f6f8',
   },
@@ -49,7 +50,8 @@ const styles = StyleSheet.create({
   leftColWrapper: {
     flex: 7,
     minWidth: 340,
-    maxWidth: '70%',
+    maxWidth: '100%',
+    width: '100%',
   },
   rightCol: {
     flex: 3,
@@ -75,7 +77,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 1050,
     alignSelf: 'left',
-    marginBottom: 24,
+    marginBottom: 12,
     paddingHorizontal: 0,
   },
   gridContainer: {
@@ -90,7 +92,7 @@ const styles = StyleSheet.create({
   gridRow: {
     flex: 1,
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 4,
     gap: 12,
   },
   trendingCard: {
@@ -128,35 +130,43 @@ const styles = StyleSheet.create({
   gridRow: {
     flex: 1,
     justifyContent: 'space-between',
-    marginBottom: 14,
-    gap: 14,
+    marginBottom: 4,
+    gap: 10,
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f4f6f8',
     overflow: 'hidden',
-    marginBottom: 28,
-    boxShadow: '0 4px 24px 0 rgba(60,72,88,0.09)',
-    border: '1.5px solid #e4e8ee',
-    transition: 'box-shadow 0.25s cubic-bezier(.4,2,.6,1), transform 0.18s cubic-bezier(.4,2,.6,1)',
+    marginBottom: 0,
+    position: 'relative',
+
+    transition: 'box-shadow 0.25s cubic-bezier(.4,2,.6,1), transform 0.18s cubic-bezier(.4,2,.6,1), background-color 0.2s ease',
     cursor: 'pointer',
-    minWidth: 250,
-    maxWidth: 260,
-    width: '100%',
+    flex: 1,
+    minWidth: 0,
+    borderRadius: 0,
+    flexDirection: 'column',
+    display: 'flex',
+    paddingTop: 20,
+    paddingBottom: 20,
   },
   cardHover: {
+    backgroundColor: '#f4f6f8',
     boxShadow: '0 10px 32px 0 rgba(60,72,88,0.18)',
-    transform: 'translateY(-4px) scale(1.025)',
-    borderColor: '#d0d6e0',
+    transform: 'translateY(-4px) scale(1.02)',
   },
   cardImage: {
     width: '100%',
-    minWidth: 350,
-    maxWidth: 520,
-    height: 100,
+    height: 180,
     objectFit: 'cover',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    transition: 'filter 0.2s',
+    borderRadius: 0,
+    transition: 'opacity 0.2s',
+    marginBottom: 12,
+  },
+  cardImageWrapper: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
   },
   cardImageHover: {
     // No additional styles needed here
@@ -198,34 +208,31 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   cardContent: {
-    padding: 20,
-    backgroundColor: '#fff',
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    minHeight: 92,
+    flex: 1,
+    backgroundColor: 'transparent',
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'flex-start',
-    gap: 8,
   },
   cardCategory: {
-    fontSize: 12,
-    color: '#1769aa',
-    fontWeight: 'bold',
-    marginBottom: 4,
+    fontSize: 10,
+    color: '#999',
+    fontWeight: '600',
+    marginBottom: 8,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
   compactCategory: {
     fontSize: 11,
     marginBottom: 2,
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#222',
-    marginBottom: 2,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    lineHeight: 1.4,
+    marginBottom: 8,
   },
   compactTitle: {
     fontSize: 14,
@@ -344,6 +351,44 @@ const styles = StyleSheet.create({
     borderBottomColor: '#ececec',
     marginVertical: 4,
   },
+  topTrendingItem: {
+    marginBottom: 12,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+  },
+  topTrendingImage: {
+    width: '100%',
+    height: 140,
+    objectFit: 'cover',
+  },
+  topTrendingContent: {
+    padding: 10,
+  },
+  topTrendingTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111',
+    marginBottom: 6,
+    lineHeight: 18,
+  },
+  topTrendingMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  topTrendingCategory: {
+    fontWeight: 'bold',
+    color: '#e53935',
+    fontSize: 10,
+    marginRight: 4,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  topTrendingDate: {
+    fontSize: 10,
+    color: '#666',
+    fontWeight: '400',
+  },
   featuredCard: {
     width: '100%',
     marginBottom: 25,
@@ -455,6 +500,168 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginLeft: 2,
     transition: 'all 0.3s ease',
+  },
+  footer: {
+    backgroundColor: '#3a505b',
+    color: 'white',
+    padding: '40px 20px 20px',
+    marginTop: '40px',
+    marginLeft: -24,
+    marginRight: -24,
+    marginBottom: -24,
+    flexShrink: 0,
+    width: 'calc(100% + 48px)',
+    alignSelf: 'stretch',
+  },
+  footerContent: {
+    marginLeft: '30px',
+    maxWidth: '1200px',
+    margin: '0 auto',
+    flexWrap: 'wrap',
+    gap: '40px',
+    marginBottom: '0px',
+  },
+  footerSection: {
+    flex: 1,
+    minWidth: '250px',
+  },
+  footerHeading: {
+    fontSize: '1.25rem',
+    fontWeight: '600',
+    marginBottom: '20px',
+    color: 'white',
+    paddingTop: '20px',
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  contactIcon: {
+    marginRight: 10,
+    color: '#93c5fd',
+  },
+  contactText: {
+    color: 'white',
+    fontSize: 14,
+  },
+  footerLink: {
+    color: 'white',
+    textDecoration: 'none',
+    transition: 'color 0.2s ease',
+    ':hover': {
+      color: '#ffffff',
+      textDecoration: 'underline',
+    },
+  },
+  copyright: {
+    textAlign: 'center',
+    padding: '20px',
+    borderTop: '1px solid #334155',
+    color: '#94a3b8',
+    fontSize: '0.9rem',
+  },
+  threeColumnGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: 14,
+    width: '100%',
+  },
+  featuredCardWide: {
+    gridColumn: 'span 4',
+    flexDirection: 'row',
+    display: 'flex',
+    backgroundColor: '#fff',
+    borderRadius: 0,
+    overflow: 'hidden',
+    marginBottom: 32,
+    boxShadow: 'none',
+    border: 'none',
+    minHeight: 280,
+  },
+  featuredImageContainer: {
+    width: '35%',
+    minWidth: '35%',
+    maxWidth: '35%',
+    overflow: 'hidden',
+  },
+  featuredImageStyle: {
+    width: '100%',
+    height: '100%',
+    minHeight: 280,
+    objectFit: 'cover',
+  },
+  featuredContentContainer: {
+    flex: 1,
+    paddingLeft: 40,
+    paddingRight: 40,
+    paddingTop: 24,
+    paddingBottom: 24,
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  featuredCategoryLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ff6b35',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 12,
+  },
+  featuredTitleText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    lineHeight: 1.3,
+    marginBottom: 12,
+  },
+  featuredExcerptText: {
+    fontSize: 15,
+    color: '#666',
+    lineHeight: 1.5,
+    marginBottom: 16,
+  },
+  featuredMetaInfo: {
+    fontSize: 12,
+    color: '#999',
+    fontWeight: '400',
+
+  },
+  regularCardNarrow: {
+    gridColumn: 'span 1',
+  },
+  cardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  cardTimeStamp: {
+    fontSize: 11,
+    color: '#999',
+    fontWeight: '400',
+  },
+  loadMoreButton: {
+    alignSelf: 'center',
+    backgroundColor: '#007BFF',
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 6,
+    marginTop: 32,
+    marginBottom: 16,
+    cursor: 'pointer',
+    transition: 'background-color 0.2s ease',
+  },
+  loadMoreButtonHover: {
+    backgroundColor: '#0056b3',
+  },
+  loadMoreButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+    letterSpacing: 0.5,
   },
 });
 
@@ -572,43 +779,35 @@ const NewsCard = ({ item, compact, bigTrending, isFirst, onInteraction }) => {
       onPress={handlePress}
       activeOpacity={0.9}
     >
-      <View style={{ position: 'relative' }}>
+      <View style={styles.cardImageWrapper}>
         <Image
           source={{ uri: imageUri }}
-          style={[
-            styles.cardImage,
-            isHovered && styles.cardImageHover,
-            bigTrending && styles.trendingImage,
-          ]}
+          style={styles.cardImage}
           onError={handleImageError}
           defaultSource={{ uri: defaultImage }}
           resizeMode="cover"
         />
-        <View style={[
-          styles.cardOverlay,
-          isHovered && styles.cardOverlayHover
-        ]}>
+        <View
+          style={[
+            styles.cardOverlay,
+            isHovered && styles.cardOverlayHover
+          ]}
+        >
           <Text style={styles.cardReadMore}>Read Full Story</Text>
         </View>
       </View>
-      <View style={[
-        styles.cardContent,
-        bigTrending && styles.trendingContent,
-      ]}>
-        <Text style={[
-          styles.cardCategory,
-          compact && styles.compactCategory,
-          bigTrending && styles.trendingCategory,
-        ]}>{item?.category || 'General'}</Text>
-        <Text
-          style={[
-            styles.cardTitle,
-            compact && styles.compactTitle,
-            bigTrending && styles.trendingTitle,
-          ]}
-          numberOfLines={bigTrending ? 3 : 2}
-        >
+      <View style={styles.cardContent}>
+        <Text style={styles.cardCategory}>
+          {'   '}
+          {item?.category || 'General'}
+        </Text>
+        <Text style={styles.cardTitle} numberOfLines={2}>
+          {'  '}
           {item?.title || 'Untitled Article'}
+        </Text>
+        <Text style={styles.cardTimeStamp}>
+          {'    '}
+          {item?.date || ''}
         </Text>
       </View>
     </TouchableOpacity>
@@ -627,6 +826,7 @@ export default function NewsScreen() {
   const [trendingStories, setTrendingStories] = useState([]);
   const [activeGenre, setActiveGenre] = useState('News');
   const [currentUser, setCurrentUser] = useState(null);
+  const [displayedArticles, setDisplayedArticles] = useState(9); // For pagination on featured tabs
   const router = useRouter();
   const { recordView, recordReaction, recordTimeSpent } = useInteractionTracking(currentUser?.id);
 
@@ -662,6 +862,9 @@ export default function NewsScreen() {
             title: a.title,
             category: a.genre || 'News',
             published_at: a.published_at,
+            image: a.media && a.media.length > 0 
+              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${a.media[0].file_path.replace('public/', '')}`  
+              : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
           }));
           setTrendingStories(mapped);
         }
@@ -671,7 +874,20 @@ export default function NewsScreen() {
 
   useEffect(() => {
     let isMounted = true;
-    const url = activeGenre === 'News' ? '/public/articles' : `/public/articles?genre=${activeGenre.toLowerCase()}`;
+    // Reset displayed articles count when changing tabs
+    setDisplayedArticles(9);
+    
+    // For tabs other than News and Creative, fetch featured (trending) content
+    const shouldUseFeatured = activeGenre !== 'News' && activeGenre !== 'Creative';
+    let url;
+    
+    if (shouldUseFeatured) {
+      // Fetch most viewed content from last 3 days for featured tabs
+      url = `/public/trending-articles?genre=${activeGenre.toLowerCase()}`;
+    } else {
+      // Fetch latest content for News tab
+      url = activeGenre === 'News' ? '/public/articles' : `/public/articles?genre=${activeGenre.toLowerCase()}`;
+    }
     
     apiClient.get(url)
       .then(res => {
@@ -684,7 +900,7 @@ export default function NewsScreen() {
               ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`  
               : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
             date: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
-            category: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Recent',
+            category: article.genre || 'News',
           }));
           setNewsData(mapped);
         }
@@ -695,79 +911,217 @@ export default function NewsScreen() {
     return () => { isMounted = false; };
   }, [activeGenre]);
 
+  // Determine if we're on a featured tab (Articles, Opinion, Sports, Editorial)
+  const isFeaturedTab = activeGenre !== 'News' && activeGenre !== 'Creative';
+  
   const featuredStory = newsData[0];
-  const gridStories = newsData.slice(1, 10);
-  const headlineStories = newsData.slice(10);
+  const gridStories = isFeaturedTab 
+    ? newsData.slice(1, displayedArticles) // For featured tabs: show limited articles
+    : newsData.slice(1, 7); // For News tab: show up to 8 articles
+  const headlineStories = newsData.slice(9);
+  
+  const hasMoreArticles = isFeaturedTab && newsData.length > displayedArticles;
+  
+  const handleLoadMore = () => {
+    setDisplayedArticles(prev => prev + 8);
+  };
+
+  const handleGenreChange = async (genre) => {
+    setActiveGenre(genre);
+    try {
+      await AsyncStorage.setItem('activeNewsGenre', genre);
+    } catch (error) {
+      console.log('Error saving active genre:', error);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <AppNavbar />
-      <NewsNavbar activeGenre={activeGenre} onGenreChange={setActiveGenre} />
+      <NewsNavbar activeGenre={activeGenre} onGenreChange={handleGenreChange} />
       
       <ScrollView contentContainerStyle={styles.newsPageScroll}>
         <View style={styles.newsMainRow}>
-          <View style={styles.leftColWrapper}>
-            {/* Show recommendations only for News tab */}
-            {activeGenre === 'News' && (
-              <RecommendedContent 
-                userId={currentUser?.id} 
-                onInteraction={recordView}
-              />
-            )}
-            <Text style={styles.latestContentTitle}>Latest Content</Text>
-            <View style={styles.trendingCardWrapper}>
-              {featuredStory && (
-                <TouchableOpacity style={styles.trendingContainer}>
-                  <NewsCard 
-                    item={featuredStory} 
-                    isFirst={true} 
-                    onInteraction={recordView}
-                  />
+          {/* Full width layout for featured tabs (Articles, Opinion, Sports, Editorial) */}
+          {activeGenre !== 'News' && activeGenre !== 'Creative' ? (
+            <View style={{ width: '100%', maxWidth: 1300 }}>
+              <Text style={styles.latestContentTitle}>Featured Content</Text>
+              <View style={styles.threeColumnGrid}>
+                {featuredStory && (
+                  <TouchableOpacity 
+                    style={styles.featuredCardWide}
+                    onPress={() => {
+                      if (recordView) recordView(featuredStory.id, 'view');
+                      router.push(`/news/article/${featuredStory.id}`);
+                    }}
+                  >
+                    <View style={styles.featuredImageContainer}>
+                      <Image 
+                        source={{ uri: featuredStory.image || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070' }}
+                        style={styles.featuredImageStyle}
+                        resizeMode="cover"
+                      />
+                    </View>
+                    <View style={styles.featuredContentContainer}>
+                      <Text style={styles.featuredCategoryLabel}>{activeGenre.toUpperCase()}</Text>
+                      <Text style={styles.featuredTitleText}>{featuredStory.title}</Text>
+                      <Text style={styles.featuredExcerptText} numberOfLines={3}>
+                        {featuredStory.excerpt}
+                      </Text>
+                      <Text style={styles.featuredMetaInfo}>{featuredStory.date}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                {gridStories.map((item) => (
+                  <View 
+                    key={item.id} 
+                    style={styles.regularCardNarrow}
+                  >
+                    <NewsCard 
+                      item={item} 
+                      compact 
+                      onInteraction={recordView}
+                    />
+                  </View>
+                ))}
+              </View>
+              {hasMoreArticles && (
+                <TouchableOpacity 
+                  style={styles.loadMoreButton}
+                  onPress={handleLoadMore}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.loadMoreButtonText}>Load More Articles</Text>
                 </TouchableOpacity>
               )}
             </View>
-            <FlatList
-              data={gridStories}
-              renderItem={({ item }) => (
-                <NewsCard 
-                  item={item} 
-                  compact 
-                  onInteraction={recordView}
-                />
-              )}
-              keyExtractor={item => item.id}
-              numColumns={3}
-              columnWrapperStyle={styles.gridRow}
-              contentContainerStyle={styles.gridContainer}
-              scrollEnabled={false}
-            />
-          </View>
-          <View style={styles.rightCol}>
-            <ScrollView style={styles.rightColScroll} contentContainerStyle={{paddingBottom: 16}}>
-
-              <View style={styles.freshStoriesSection}>
-                <Text style={styles.freshStoriesHeader}>Trending Stories</Text>
-                <Text style={styles.freshStoriesSubheader}>Most visited in last 3 days</Text>
-                <View style={styles.freshStoryList}>
-                  {trendingStories.map(item => (
-                    <TouchableOpacity key={item.id} onPress={() => router.push(`/news/article/${item.id}`)}>
-                      <View style={styles.freshStoryItem}>
-                        <Text style={styles.freshStoryTitle}>
-                          <Text style={styles.freshStoryTitleBold}>{item.category?.toUpperCase()} |</Text> {item.title}
-                        </Text>
-                        <View style={styles.freshStoryMetaRow}>
-                          <Text style={styles.freshStoryCategory}>{item.category?.toUpperCase()}</Text>
-                          <Text style={styles.freshStoryDate}>  {item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''}</Text>
-                        </View>
-                      </View>
-                      <View style={styles.freshStoryDivider} />
+          ) : (
+            // Original two-column layout for News tab
+            <>
+              <View style={styles.leftColWrapper}>
+                <Text style={styles.latestContentTitle}>Latest Content</Text>
+                <View style={styles.trendingCardWrapper}>
+                  {featuredStory && (
+                    <TouchableOpacity style={styles.trendingContainer}>
+                      <NewsCard 
+                        item={featuredStory} 
+                        isFirst={true} 
+                        onInteraction={recordView}
+                      />
                     </TouchableOpacity>
-                  ))}
+                  )}
                 </View>
+                {/* Show recommendations only for News tab */}
+                {activeGenre === 'News' && (
+                  <RecommendedContent 
+                    userId={currentUser?.id} 
+                    onInteraction={recordView}
+                  />
+                )}
+                <FlatList
+                  data={gridStories}
+                  renderItem={({ item }) => (
+                    <NewsCard 
+                      item={item} 
+                      compact 
+                      onInteraction={recordView}
+                    />
+                  )}
+                  keyExtractor={item => item.id}
+                  numColumns={3}
+                  columnWrapperStyle={styles.gridRow}
+                  contentContainerStyle={styles.gridContainer}
+                  scrollEnabled={false}
+                />
               </View>
-            </ScrollView>
-          </View>
+              {activeGenre === 'News' && (
+                <View style={styles.rightCol}>
+                  <ScrollView style={styles.rightColScroll} contentContainerStyle={{paddingBottom: 16}}>
+                    <View style={styles.freshStoriesSection}>
+                      <Text style={styles.freshStoriesHeader}>Trending Stories</Text>
+                      <Text style={styles.freshStoriesSubheader}>Most visited in last 3 days</Text>
+                      <View style={styles.freshStoryList}>
+                        {trendingStories.map((item, index) => (
+                          <TouchableOpacity key={item.id} onPress={() => router.push(`/news/article/${item.id}`)}>
+                            {index < 3 ? (
+                              <View style={styles.topTrendingItem}>
+                                <Image 
+                                  source={{ uri: item.image }} 
+                                  style={styles.topTrendingImage}
+                                  resizeMode="cover"
+                                />
+                                <View style={styles.topTrendingContent}>
+                                  <Text style={styles.topTrendingTitle} numberOfLines={2}>
+                                    {item.title}
+                                  </Text>
+                                  <View style={styles.topTrendingMeta}>
+                                    <Text style={styles.topTrendingCategory}>{item.category?.toUpperCase()}</Text>
+                                    <Text style={styles.topTrendingDate}>{item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</Text>
+                                  </View>
+                                </View>
+                              </View>
+                            ) : (
+                              <>
+                                <View style={styles.freshStoryItem}>
+                                  <Text style={styles.freshStoryTitle}>
+                                    <Text style={styles.freshStoryTitleBold}>{item.category?.toUpperCase()} |</Text> {item.title}
+                                  </Text>
+                                  <View style={styles.freshStoryMetaRow}>
+                                    <Text style={styles.freshStoryCategory}>{item.category?.toUpperCase()}</Text>
+                                    <Text style={styles.freshStoryDate}>  {item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''}</Text>
+                                  </View>
+                                </View>
+                                <View style={styles.freshStoryDivider} />
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  </ScrollView>
+                </View>
+              )}
+            </>
+          )}
         </View>
+
+        {/* Footer Section */}
+        <footer style={styles.footer}>
+          <View style={styles.footerContent}>
+            <View style={styles.footerSection}>
+              <Text style={styles.footerHeading}>Contact Us</Text>
+              <View style={styles.contactItem}>
+                <MaterialIcons name="facebook" size={20} color="#93c5fd" style={styles.contactIcon} />
+                <Text
+                  style={styles.footerLink}
+                  onPress={() => window.open('https://facebook.com/fishermannetwork', '_blank')}
+                >
+                  fishermannetwork
+                </Text>
+              </View>
+              <View style={styles.contactItem}>
+                <MaterialIcons name="email" size={20} color="#93c5fd" style={styles.contactIcon} />
+                <Text
+                  style={styles.footerLink}
+                  onPress={() => window.open('mailto:info@fisherman.network')}
+                >
+                  info@fisherman.network
+                </Text>
+              </View>
+              <View style={styles.contactItem}>
+                <MaterialIcons name="phone" size={20} color="#93c5fd" style={styles.contactIcon} />
+                <Text style={styles.contactText}>+63 2 8123 4567</Text>
+              </View>
+              <View style={styles.contactItem}>
+                <MaterialIcons name="smartphone" size={20} color="#93c5fd" style={styles.contactIcon} />
+                <Text style={styles.contactText}>+63 912 345 6789</Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.copyright}>
+            &copy; {new Date().getFullYear()} Fisherman's Network. All rights reserved.
+          </View>
+        </footer>
       </ScrollView>
     </SafeAreaView>
   );

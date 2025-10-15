@@ -9,7 +9,7 @@ import { useBranding } from '~/context/BrandingContext';
 import { Scrollbars } from 'react-custom-scrollbars-2';
 
 // A single link in the sidebar with hover effects
-const SidebarLink = ({ href, text, iconName, isMinimized, onPress }) => {
+const SidebarLink = ({ href, text, iconName, isMinimized, onPress, hoverColor, colors, textColor, iconColor }) => {
   const router = useRouter();
   const segments = useSegments();
   const isActive = href ? segments.includes(href.split('/').pop()) : false;
@@ -21,9 +21,9 @@ const SidebarLink = ({ href, text, iconName, isMinimized, onPress }) => {
       onPress={() => (onPress ? onPress() : router.push(href))}
       style={({ hovered }) => [
         styles.sidebarLink,
-        isActive && !isMinimized && styles.sidebarLinkActive,
-        isActive && isMinimized && styles.sidebarLinkActiveMinimized,
-        hovered && Platform.OS === 'web' && (isLogout ? styles.logoutHover : styles.sidebarLinkHover),
+        isActive && !isMinimized && [styles.sidebarLinkActive, { backgroundColor: colors.secondary || '#374151' }],
+        isActive && isMinimized && [styles.sidebarLinkActiveMinimized, { backgroundColor: colors.secondary || '#374151' }],
+        hovered && Platform.OS === 'web' && (isLogout ? styles.logoutHover : { backgroundColor: hoverColor || '#1F2937' }),
       ]}
     >
       {({ hovered }) => (
@@ -32,6 +32,7 @@ const SidebarLink = ({ href, text, iconName, isMinimized, onPress }) => {
             name={iconName}
             style={[
               styles.sidebarIcon,
+              { color: iconColor || '#D1D5DB' },
               isMinimized && styles.sidebarIconMinimized,
               isActive && styles.sidebarIconActive,
               hovered && Platform.OS === 'web' && (isLogout ? styles.logoutIconHover : styles.sidebarIconHover),
@@ -41,6 +42,7 @@ const SidebarLink = ({ href, text, iconName, isMinimized, onPress }) => {
             <Text
               style={[
                 styles.sidebarLinkText,
+                { color: textColor || '#D1D5DB' },
                 isActive && styles.sidebarLinkTextActive,
                 hovered && Platform.OS === 'web' && (isLogout ? styles.logoutTextHover : styles.sidebarLinkTextHover),
               ]}
@@ -114,7 +116,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
 
 const Sidebar = ({ isMinimized }) => {
   const { user, logout, hasModule } = useAuth();
-  const { logoUrl, loading: brandingLoading } = useBranding();
+  const { logoUrl, loading: brandingLoading, colors } = useBranding();
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -123,14 +125,14 @@ const Sidebar = ({ isMinimized }) => {
   };
 
   return (
-    <View style={[styles.sidebar, isMinimized && styles.sidebarMinimized]} className="sidebar">
+    <View style={[styles.sidebar, isMinimized && styles.sidebarMinimized, { backgroundColor: colors.primary || '#111827' }]} className="sidebar">
        <View style={styles.sidebarHeader}>
         {brandingLoading ? (
           <View style={styles.logoPlaceholder} />
         ) : (
           <Image source={{ uri: logoUrl }} style={styles.logo} resizeMode="contain" />
         )}
-        {!isMinimized && <Text style={styles.sidebarTitle}>Fisherman</Text>}
+        {!isMinimized && <Text style={[styles.sidebarTitle, { color: colors.text_primary || '#FFFFFF' }]}>Fisherman</Text>}
       </View>
       {!isMinimized ? (
         <Scrollbars
@@ -139,20 +141,16 @@ const Sidebar = ({ isMinimized }) => {
           // Render an invisible thumb
           renderThumbVertical={props => <div {...props} style={{ ...props.style, backgroundColor: 'transparent' }}/>}
         >
-          {hasModule('dashboard') && <SidebarLink href="/collab/dashboard" text="Dashboard" iconName="grid" isMinimized={isMinimized} />}
-          {hasModule('create-content') && <SidebarLink href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} />}
-          {hasModule('review-content') && <SidebarLink href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} />}
-          {hasModule('collaborate') && <SidebarLink href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} />}
-          {hasModule('users') && <SidebarLink href="/collab/users" text="Users" iconName="user-check" isMinimized={isMinimized} />}
-          {hasModule('branding') && <SidebarLink href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} />}
-          {hasModule('forum') && <SidebarLink href="/collab/manage-forum" text="Manage Forum" iconName="message-square" isMinimized={isMinimized} />}
-          {hasModule('folio') && <SidebarLink href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} />}
-          {hasModule('applicants') && <SidebarLink href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} />}
+          {hasModule('dashboard') && <SidebarLink href="/collab/dashboard" text="Dashboard" iconName="grid" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('create-content') && <SidebarLink href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('review-content') && <SidebarLink href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('collaborate') && <SidebarLink href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('branding') && <SidebarLink href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('forum') && <SidebarLink href="/collab/manage-forum" text="Manage Forum" iconName="message-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('folio') && <SidebarLink href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('applicants') && <SidebarLink href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {(user?.profile?.level === 2 || user?.profile?.level === 3) && (
-              <SidebarLink href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} />
-          )}
-          {user?.profile?.level === 3 && (
-              <SidebarLink href={`/collab/manage-modules/${user.id}`} text="My Modules" iconName="settings" isMinimized={isMinimized} />
+              <SidebarLink href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />
           )}
         </Scrollbars>
       ) : (
@@ -160,24 +158,22 @@ const Sidebar = ({ isMinimized }) => {
           {(() => {
             // Collect all sidebar links in order
             const links = [];
-            if (hasModule('dashboard')) links.push(<SidebarLink key="dashboard" href="/collab/dashboard" text="Dashboard" iconName="grid" isMinimized={isMinimized} />);
-            if (hasModule('create-content')) links.push(<SidebarLink key="create-content" href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} />);
-            if (hasModule('review-content')) links.push(<SidebarLink key="review-content" href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} />);
-            if (hasModule('collaborate')) links.push(<SidebarLink key="collaborate" href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} />);
-            if (hasModule('users')) links.push(<SidebarLink key="users" href="/collab/users" text="Users" iconName="user-check" isMinimized={isMinimized} />);
-            if (hasModule('branding')) links.push(<SidebarLink key="branding" href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} />);
-            if (hasModule('forum')) links.push(<SidebarLink key="manage-forum" href="/collab/manage-forum" text="Manage Forum" iconName="message-square" isMinimized={isMinimized} />);
-            if (hasModule('folio')) links.push(<SidebarLink key="manage-folio" href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} />);
-            if (hasModule('applicants')) links.push(<SidebarLink key="manage-applicants" href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} />);
-            if (user?.profile?.level === 2 || user?.profile?.level === 3) links.push(<SidebarLink key="manage-users" href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} />);
-            if (user?.profile?.level === 3) links.push(<SidebarLink key="my-modules" href={`/collab/manage-modules/${user.id}`} text="My Modules" iconName="settings" isMinimized={isMinimized} />);
+            if (hasModule('dashboard')) links.push(<SidebarLink key="dashboard" href="/collab/dashboard" text="Dashboard" iconName="grid" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('create-content')) links.push(<SidebarLink key="create-content" href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('review-content')) links.push(<SidebarLink key="review-content" href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('collaborate')) links.push(<SidebarLink key="collaborate" href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('branding')) links.push(<SidebarLink key="branding" href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('forum')) links.push(<SidebarLink key="manage-forum" href="/collab/manage-forum" text="Manage Forum" iconName="message-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('folio')) links.push(<SidebarLink key="manage-folio" href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('applicants')) links.push(<SidebarLink key="manage-applicants" href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (user?.profile?.level === 2 || user?.profile?.level === 3) links.push(<SidebarLink key="manage-users" href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             // Only show first 7 when minimized
             return isMinimized ? links.slice(0, 7) : links;
           })()}
         </View>
       )}
       <View style={styles.sidebarFooter}>
-        <SidebarLink text="Logout" iconName="log-out" isMinimized={isMinimized} onPress={handleLogout} />
+        <SidebarLink text="Logout" iconName="log-out" isMinimized={isMinimized} onPress={handleLogout} textColor={colors.text_primary} iconColor={colors.text_primary} />
       </View>
     </View>
   );
@@ -186,6 +182,7 @@ const Sidebar = ({ isMinimized }) => {
 export default function CollaboratorLayout() {
   const [isMinimized, setIsMinimized] = useState(false);
   const { user, hasModule } = useAuth();
+  const { colors } = useBranding();
 
   // Web layout with sidebar
   if (Platform.OS === 'web') {
@@ -195,7 +192,7 @@ export default function CollaboratorLayout() {
           <Sidebar isMinimized={isMinimized} />
           <View style={styles.contentContainer}>
             <Pressable 
-              style={styles.toggleButton}
+              style={[styles.toggleButton, { backgroundColor: colors.primary || '#111827', borderColor: colors.primary || '#111827' }]}
               onPress={() => setIsMinimized(!isMinimized)}
             >
               <Feather name={isMinimized ? 'chevron-right' : 'chevron-left'} size={24} color="#FFF" />
@@ -223,7 +220,7 @@ export default function CollaboratorLayout() {
             name="dashboard"
             options={{
               title: 'Dashboard',
-              tabBarIcon: ({ color, size }) => <Feather name="grid" size={size} color={color} />,
+              tabBarIcon: ({ color, size }) => <Feather name="grid" size={size} color={colors.text_primary} />,
             }}
           />
         )}
@@ -232,7 +229,7 @@ export default function CollaboratorLayout() {
             name="create-content"
             options={{
               title: 'Create',
-              tabBarIcon: ({ color, size }) => <Feather name="plus-square" size={size} color={color} />,
+              tabBarIcon: ({ color, size }) => <Feather name="plus-square" size={size} color={colors.text_primary} />,
             }}
           />
         )}
@@ -241,7 +238,7 @@ export default function CollaboratorLayout() {
             name="review-content"
             options={{
               title: 'Review',
-              tabBarIcon: ({ color, size }) => <Feather name="eye" size={size} color={color} />,
+              tabBarIcon: ({ color, size }) => <Feather name="eye" size={size} color={colors.text_primary} />,
             }}
           />
         )}
@@ -250,7 +247,7 @@ export default function CollaboratorLayout() {
             name="collaborate"
             options={{
               title: 'Collaborate',
-              tabBarIcon: ({ color, size }) => <Feather name="users" size={size} color={color} />,
+              tabBarIcon: ({ color, size }) => <Feather name="users" size={size} color={colors.text_primary} />,
             }}
           />
         )}
@@ -259,7 +256,7 @@ export default function CollaboratorLayout() {
             name="more"
             options={{
               title: 'More',
-              tabBarIcon: ({ color, size }) => <Feather name="more-horizontal" size={size} color={color} />,
+              tabBarIcon: ({ color, size }) => <Feather name="more-horizontal" size={size} color={colors.text_primary} />,
             }}
           />
         )}
@@ -282,8 +279,8 @@ export default function CollaboratorLayout() {
           borderTopWidth: 1,
           borderTopColor: '#E5E7EB', // Light grey top border
         },
-        tabBarActiveTintColor: '#111827', // Dark text for active tab
-        tabBarInactiveTintColor: '#A0A0A0', // Grey text for inactive tab
+        tabBarActiveTintColor: '#590d0f', // Dark text for active tab
+        tabBarInactiveTintColor: '#9e3751', // Grey text for inactive tab
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '500',
@@ -295,7 +292,7 @@ export default function CollaboratorLayout() {
           name="dashboard"
           options={{
             title: 'Dashboard',
-            tabBarIcon: ({ color, size }) => <Feather name="grid" size={size} color={color} />,
+            tabBarIcon: ({ color, size }) => <Feather name="grid" size={size} color={colors.text_primary} />,
           }}
         />
       )}
@@ -304,7 +301,7 @@ export default function CollaboratorLayout() {
           name="create-content"
           options={{
             title: 'Create',
-            tabBarIcon: ({ color, size }) => <Feather name="plus-square" size={size} color={color} />,
+            tabBarIcon: ({ color, size }) => <Feather name="plus-square" size={size} color={colors.text_primary} />,
           }}
         />
       )}
@@ -313,7 +310,7 @@ export default function CollaboratorLayout() {
           name="review-content"
           options={{
             title: 'Review',
-            tabBarIcon: ({ color, size }) => <Feather name="eye" size={size} color={color} />,
+            tabBarIcon: ({ color, size }) => <Feather name="eye" size={size} color={colors.text_primary} />,
           }}
         />
       )}
@@ -322,7 +319,7 @@ export default function CollaboratorLayout() {
           name="collaborate"
           options={{
             title: 'Collaborate',
-            tabBarIcon: ({ color, size }) => <Feather name="users" size={size} color={color} />,
+            tabBarIcon: ({ color, size }) => <Feather name="users" size={size} color={colors.text_primary} />,
           }}
         />
       )}
@@ -331,7 +328,7 @@ export default function CollaboratorLayout() {
           name="more"
           options={{
             title: 'More',
-            tabBarIcon: ({ color, size }) => <Feather name="more-horizontal" size={size} color={color} />,
+            tabBarIcon: ({ color, size }) => <Feather name="more-horizontal" size={size} color={colors.text_primary} />,
           }}
         />
       )}
@@ -409,14 +406,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginHorizontal: 15,
   },
-  sidebarLinkActive: {
-    backgroundColor: '#374151',
 
-  },
-  sidebarLinkActiveMinimized: {
-    backgroundColor: '#374151',
-
-  },
   sidebarLinkHover: {
     backgroundColor: '#1F2937', // Slightly lighter navy for hover
   },

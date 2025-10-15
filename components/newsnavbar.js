@@ -1,11 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 // This NewsNavbar is exclusive to news.js and appears under the main Navbar
 export default function NewsNavbar({ onGenreChange, activeGenre }) {
-  // Example sections: All, Latest, Trending, Editorial, Literary, Sports
-  const sections = ['News', 'Articles', 'Opinion', 'Sports', 'Editorial', 'Artworks'];
+  const router = useRouter();
+  const sections = ['News', 'Articles', 'Opinion', 'Sports', 'Editorial', 'Creative'];
+
+  const handleSectionPress = (section) => {
+    if (section === 'Creative') {
+      router.push('/creative');
+    } else if (onGenreChange) {
+      onGenreChange(section);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -14,7 +23,7 @@ export default function NewsNavbar({ onGenreChange, activeGenre }) {
           <TouchableOpacity
             key={section}
             style={[styles.tab, activeGenre === section && styles.activeTab]}
-            onPress={() => onGenreChange && onGenreChange(section)}
+            onPress={() => handleSectionPress(section)}
           >
             <Text style={[styles.tabText, activeGenre === section && styles.activeTabText]}>{section}</Text>
           </TouchableOpacity>

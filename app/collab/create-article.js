@@ -7,6 +7,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../utils/api';
+import { useBranding } from '~/context/BrandingContext';
 
 // --- Platform-Aware Rich Text Editor --- //
 
@@ -49,7 +50,7 @@ const NativeRichToolbar = ({ editor }) => {
 const SimpleWebEditor = ({ value, onChange }) => {
   const editorRef = useRef(null);
   const [activeStyles, setActiveStyles] = useState(new Set());
-
+  const {colors} = useBranding();
   const updateActiveStyles = () => {
     const styles = new Set();
     
@@ -322,6 +323,7 @@ const SimpleWebEditor = ({ value, onChange }) => {
 
 export default function CreateArticleScreen() {
   const router = useRouter();
+  const { colors } = useBranding();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [genre, setGenre] = useState('');
@@ -330,8 +332,16 @@ export default function CreateArticleScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const scrollViewRef = useRef();
   const richText = useRef();
+  
+  // Publish modal state
+  const [publishModalVisible, setPublishModalVisible] = useState(false);
+  const [publishToFacebook, setPublishToFacebook] = useState(false);
+  const [completeGroupChat, setCompleteGroupChat] = useState(true);
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
+  const [completionModalVisible, setCompletionModalVisible] = useState(false);
+  const [publishedArticleId, setPublishedArticleId] = useState(null);
 
-  const handleInsertContent = ({ title: groupTitle, content: draftText, image }) => {
+  const handleInsertContent = ({ title: groupTitle, content: draftText, image, group_id }) => {
     if (groupTitle) setTitle(groupTitle);
     if (draftText) {
       setContent(draftText);
@@ -341,6 +351,9 @@ export default function CreateArticleScreen() {
     }
     if (image) {
       setImages(prev => [...prev, { uri: image, type: 'image', local: false }]);
+    }
+    if (group_id) {
+      setSelectedGroupId(group_id);
     }
     setTimeout(() => {
       if (scrollViewRef.current) {
@@ -572,42 +585,25 @@ export default function CreateArticleScreen() {
 
       console.log('Article published successfully:', responseData);
       
-      // Show success message
-      Alert.alert(
-        'Article Published Successfully!',
-        'What would you like to do next?',
-        [
-          { 
-            text: 'View Article', 
-            onPress: () => {
-              console.log('Navigating to article:', responseData.data?.id);
-              router.push(`/news/article/${responseData.data?.id}`);
-            } 
-          },
-          { 
-            text: 'Create New Article', 
-            onPress: () => {
-              console.log('Resetting form for new article');
-              setTitle(''); 
-              setContent(''); 
-              setGenre(''); 
-              setImages([]);
-              if (scrollViewRef.current) {
-                scrollViewRef.current.scrollTo({ y: 0, animated: true });
-              }
-            }
-          },
-          { 
-            text: 'Back to Dashboard', 
-            onPress: () => {
-              console.log('Navigating to dashboard');
-              router.push('/collab');
-            }, 
-            style: 'cancel' 
-          }
-        ],
-        { cancelable: false }
-      );
+      // If completeGroupChat is enabled and we have a group_id, mark the group chat as published
+      if (completeGroupChat && selectedGroupId) {
+        try {
+          console.log('Marking group chat as published:', selectedGroupId);
+          await apiClient.patch(`/group-chats/${selectedGroupId}/status`, {
+            status: 'published'
+          });
+          console.log('Group chat marked as published');
+          // Clear the selected group ID so it updates in Browse Works
+          setSelectedGroupId(null);
+        } catch (error) {
+          console.error('Failed to mark group chat as published:', error);
+          // Don't fail the whole operation if this fails
+        }
+      }
+      
+      // Show completion modal
+      setPublishedArticleId(responseData.data?.id);
+      setCompletionModalVisible(true);
     } catch (error) {
       console.error('Error in handleSubmit:', error);
       Alert.alert(
@@ -630,12 +626,12 @@ export default function CreateArticleScreen() {
         <View style={styles.headerButtonsContainer}>
 
           <TouchableOpacity 
-            style={[styles.actionButton, styles.publishButton, isSubmitting && styles.publishButtonDisabled]} 
-            onPress={handleSubmit} 
+            style={[styles.actionButton, styles.publishButton, { backgroundColor: colors.primary || '#1a237e' }, isSubmitting && styles.publishButtonDisabled]} 
+            onPress={() => setPublishModalVisible(true)} 
             disabled={isSubmitting}
           >
             <Text style={[styles.actionButtonText, styles.publishButtonText]}>
-              {isSubmitting ? 'Publishing...' : 'Publish'}
+              Publish
             </Text>
           </TouchableOpacity>
         </View>
@@ -662,7 +658,7 @@ export default function CreateArticleScreen() {
 
       <ScrollView style={styles.contentContainer} ref={scrollViewRef}>
         <TextInput
-          style={styles.titleInput}
+          style={[styles.titleInput, { borderColor: colors.primary || '#e0e0e0' }]}
           placeholder="Article Title"
           placeholderTextColor="#666"
           value={title}
@@ -674,8 +670,8 @@ export default function CreateArticleScreen() {
         <View style={styles.genreContainer}>
           <Text style={styles.genreLabel}>Genre: </Text>
           <View style={styles.genreOptions}>
-            {['articles', 'opinions', 'sports', 'editorial', 'artworks'].map((g) => (
-              <TouchableOpacity key={g} style={[styles.genreButton, genre === g && styles.genreButtonSelected]} onPress={() => setGenre(g)}>
+            {['articles', 'opinions', 'sports', 'editorial', 'creative'].map((g) => (
+              <TouchableOpacity key={g} style={[styles.genreButton, genre === g && { backgroundColor: colors.primary || '#1a237e' }]} onPress={() => setGenre(g)}>
                 <Text style={[styles.genreButtonText, genre === g && styles.genreButtonTextSelected]}>
                   {g.charAt(0).toUpperCase() + g.slice(1)}
                 </Text>
@@ -721,12 +717,12 @@ export default function CreateArticleScreen() {
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.footerButton} onPress={pickImage}>
-          <Ionicons name="image" size={24} color="#1a237e" />
-          <Text style={styles.footerButtonText}>Select Image</Text>
+          <Ionicons name="image" size={24} color={colors.primary || '#1a237e'} />
+          <Text style={[styles.footerButtonText, {color: colors.primary || '#1a237e'}]}>Select Image</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.footerButton} onPress={() => setBrowseVisible(true)}>
-          <Ionicons name="book" size={24} color="#1a237e" />
-          <Text style={styles.footerButtonText}>Browse Works</Text>
+          <Ionicons name="book" size={24} color={colors.primary || '#1a237e'} />
+          <Text style={[styles.footerButtonText, {color: colors.primary || '#1a237e'}]}>Browse Works</Text>
         </TouchableOpacity>
       </View>
 
@@ -741,6 +737,154 @@ export default function CreateArticleScreen() {
           <ApprovedWorksList onSelect={handleInsertContent} onClose={() => setBrowseVisible(false)} />
         </View>
       </Modal>
+
+      {/* Publish Modal */}
+      <Modal 
+        animationType="fade" 
+        transparent={true} 
+        visible={publishModalVisible} 
+        onRequestClose={() => setPublishModalVisible(false)}
+      >
+        <View style={styles.publishModalOverlay}>
+          <View style={styles.publishModal}>
+            <View style={styles.publishModalHeader}>
+              <View style={styles.publishHeaderIcon}>
+                <Ionicons name="send" size={24} color="#1a237e" />
+              </View>
+              <View style={styles.publishHeaderText}>
+                <Text style={styles.publishModalTitle}>Publish Article</Text>
+                <Text style={styles.publishModalSubtitle}>Choose your publishing options</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.publishCloseButton} 
+                onPress={() => setPublishModalVisible(false)}
+              >
+                <Ionicons name="close" size={24} color="#6c757d" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.publishModalBody}>
+              {/* Complete Group Chat Toggle */}
+              <TouchableOpacity 
+                style={styles.toggleOption}
+                onPress={() => setCompleteGroupChat(!completeGroupChat)}
+              >
+                <View style={styles.toggleInfo}>
+                  <Ionicons name="checkmark-circle" size={24} color="#1a237e" />
+                  <View style={styles.toggleTextContainer}>
+                    <Text style={styles.toggleTitle}>Complete Group Chat</Text>
+                    <Text style={styles.toggleDescription}>Mark the group chat as finished and move to completed</Text>
+                  </View>
+                </View>
+                <View style={[styles.toggleSwitch, completeGroupChat && styles.toggleSwitchActive]}>
+                  <View style={[styles.toggleThumb, completeGroupChat && styles.toggleThumbActive]} />
+                </View>
+              </TouchableOpacity>
+
+              {/* Facebook Toggle */}
+              <TouchableOpacity 
+                style={styles.toggleOption}
+                onPress={() => setPublishToFacebook(!publishToFacebook)}
+              >
+                <View style={styles.toggleInfo}>
+                  <Ionicons name="logo-facebook" size={24} color="#1877F2" />
+                  <View style={styles.toggleTextContainer}>
+                    <Text style={styles.toggleTitle}>Post to Facebook</Text>
+                    <Text style={styles.toggleDescription}>Share this article on Facebook (Coming Soon)</Text>
+                  </View>
+                </View>
+                <View style={[styles.toggleSwitch, publishToFacebook && styles.toggleSwitchActive]}>
+                  <View style={[styles.toggleThumb, publishToFacebook && styles.toggleThumbActive]} />
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.publishModalFooter}>
+              <TouchableOpacity 
+                style={styles.publishCancelButton}
+                onPress={() => setPublishModalVisible(false)}
+              >
+                <Text style={styles.publishCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.publishConfirmButton}
+                onPress={() => {
+                  setPublishModalVisible(false);
+                  handleSubmit();
+                }}
+              >
+                <Ionicons name="send" size={18} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={styles.publishConfirmButtonText}>Publish Now</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Completion Modal */}
+      <Modal 
+        animationType="fade" 
+        transparent={true} 
+        visible={completionModalVisible} 
+        onRequestClose={() => setCompletionModalVisible(false)}
+      >
+        <View style={styles.publishModalOverlay}>
+          <View style={styles.completionModal}>
+            <View style={styles.completionIconContainer}>
+              <Ionicons name="checkmark-circle" size={80} color="#10B981" />
+            </View>
+            
+            <Text style={styles.completionTitle}>Article Published Successfully!</Text>
+            <Text style={styles.completionMessage}>
+              Your article has been published and is now live.
+            </Text>
+
+            <View style={styles.completionActions}>
+              <TouchableOpacity 
+                style={styles.completionButton}
+                onPress={() => {
+                  setCompletionModalVisible(false);
+                  if (publishedArticleId) {
+                    router.push(`/news/article/${publishedArticleId}`);
+                  }
+                }}
+              >
+                <Ionicons name="eye" size={20} color="#1a237e" />
+                <Text style={styles.completionButtonText}>View Article</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.completionButton}
+                onPress={() => {
+                  setCompletionModalVisible(false);
+                  setTitle(''); 
+                  setContent(''); 
+                  setGenre(''); 
+                  setImages([]);
+                  setSelectedGroupId(null);
+                  if (scrollViewRef.current) {
+                    scrollViewRef.current.scrollTo({ y: 0, animated: true });
+                  }
+                }}
+              >
+                <Ionicons name="create" size={20} color="#1a237e" />
+                <Text style={styles.completionButtonText}>Create New Article</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.completionButton, styles.completionButtonPrimary]}
+                onPress={() => {
+                  setCompletionModalVisible(false);
+                  router.push('/collab');
+                }}
+              >
+                <Ionicons name="home" size={20} color="#fff" />
+                <Text style={[styles.completionButtonText, styles.completionButtonTextPrimary]}>Back to Dashboard</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -750,26 +894,46 @@ function ApprovedWorksList({ onClose, onSelect }) {
   const [filteredContent, setFilteredContent] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [publicationFilter, setPublicationFilter] = useState('pending'); // 'pending' or 'published'
   const router = useRouter();
 
-  const filterContent = (items, search) => {
-    if (!search) return items;
-    const term = search.toLowerCase();
-    return items.filter(item => 
-      (item.group?.name && item.group.name.toLowerCase().includes(term)) ||
-      (item.status && item.status.toLowerCase().includes(term)) ||
-      (item._type === 'draft' && item.text && item.text.toLowerCase().includes(term))
-    );
+  const filterContent = (items, search, pubFilter) => {
+    let filtered = items;
+    
+    // Filter by publication status
+    filtered = filtered.filter(item => {
+      if (pubFilter === 'pending') {
+        return !item.group?.status || item.group?.status === 'active';
+      } else {
+        return item.group?.status === 'published';
+      }
+    });
+    
+    // Filter by search term
+    if (search) {
+      const term = search.toLowerCase();
+      filtered = filtered.filter(item => 
+        (item.group?.name && item.group.name.toLowerCase().includes(term)) ||
+        (item.status && item.status.toLowerCase().includes(term)) ||
+        (item._type === 'draft' && item.text && item.text.toLowerCase().includes(term))
+      );
+    }
+    
+    return filtered;
   };
 
   useEffect(() => {
-    setFilteredContent(filterContent(content, searchTerm));
-  }, [content, searchTerm]);
+    setFilteredContent(filterContent(content, searchTerm, publicationFilter));
+  }, [content, searchTerm, publicationFilter]);
 
   useEffect(() => {
     const fetchApproved = async () => {
       try {
-        const params = new URLSearchParams({ status: 'approved' });
+        // Only fetch items that have been approved by lead reviewer
+        const params = new URLSearchParams({ 
+          status: 'approved',
+          review_stage: 'approved' // Only show items that passed lead review
+        });
         const [draftsRes, imagesRes] = await Promise.all([
           apiClient.get(`/review-content?${params}`),
           apiClient.get(`/review-images?${params}`),
@@ -790,24 +954,69 @@ function ApprovedWorksList({ onClose, onSelect }) {
 
   const handleSelect = async (item) => {
     setLoading(true);
-    if (item._type === 'draft') {
+    
+    // Find all items with the same group_id
+    const groupItems = content.filter(i => i.group_id === item.group_id);
+    const hasDraft = groupItems.some(i => i._type === 'draft');
+    const hasImage = groupItems.some(i => i._type === 'image');
+    
+    let selectedData = {
+      title: item.group?.name || '',
+      group_id: item.group_id
+    };
+    
+    // If both draft and image exist in the same group, add both
+    if (hasDraft && hasImage) {
       try {
-        const res = await apiClient.get(`/review-content/preview/${item.id}`);
-        const plainText = res.data.text || '';
-        const lines = plainText.split('\n');
-        let htmlContent = '';
-        if (lines.length > 0) {
-          const firstLine = lines[0].trim();
-          const rest = lines.slice(1).join('\n');
-          htmlContent = `<h1>${firstLine}</h1>${rest.replace(/\n/g, '<br />')}`;
+        // Get draft content
+        const draftItem = groupItems.find(i => i._type === 'draft');
+        if (draftItem) {
+          const res = await apiClient.get(`/review-content/preview/${draftItem.id}`);
+          const plainText = res.data.text || '';
+          const lines = plainText.split('\n');
+          let htmlContent = '';
+          if (lines.length > 0) {
+            const firstLine = lines[0].trim();
+            const rest = lines.slice(1).join('\n');
+            htmlContent = `<h1>${firstLine}</h1>${rest.replace(/\n/g, '<br />')}`;
+          }
+          selectedData.content = htmlContent;
         }
-        onSelect({ title: item.group?.name || '', content: htmlContent });
+        
+        // Get image
+        const imageItem = groupItems.find(i => i._type === 'image');
+        if (imageItem) {
+          selectedData.image = `${process.env.EXPO_PUBLIC_API_URL}/storage/${imageItem.file}`;
+        }
+        
+        onSelect(selectedData);
       } catch (e) {
-        console.error('Failed fetching draft content', e);
+        console.error('Failed fetching group content', e);
       }
-    } else if (item._type === 'image') {
-      onSelect({ title: item.group?.name || '', image: `${process.env.EXPO_PUBLIC_API_URL}/storage/${item.file}` });
+    } else {
+      // If only one type exists, handle as before
+      if (item._type === 'draft') {
+        try {
+          const res = await apiClient.get(`/review-content/preview/${item.id}`);
+          const plainText = res.data.text || '';
+          const lines = plainText.split('\n');
+          let htmlContent = '';
+          if (lines.length > 0) {
+            const firstLine = lines[0].trim();
+            const rest = lines.slice(1).join('\n');
+            htmlContent = `<h1>${firstLine}</h1>${rest.replace(/\n/g, '<br />')}`;
+          }
+          selectedData.content = htmlContent;
+          onSelect(selectedData);
+        } catch (e) {
+          console.error('Failed fetching draft content', e);
+        }
+      } else if (item._type === 'image') {
+        selectedData.image = `${process.env.EXPO_PUBLIC_API_URL}/storage/${item.file}`;
+        onSelect(selectedData);
+      }
     }
+    
     onClose();
   };
 
@@ -839,6 +1048,36 @@ function ApprovedWorksList({ onClose, onSelect }) {
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Publication Status Filter */}
+      <View style={styles.publicationFilterContainer}>
+        <TouchableOpacity 
+          style={[styles.publicationFilterButton, publicationFilter === 'pending' && styles.activePublicationFilter]}
+          onPress={() => setPublicationFilter('pending')}
+        >
+          <Ionicons 
+            name="time-outline" 
+            size={18} 
+            color={publicationFilter === 'pending' ? '#1a237e' : '#666'} 
+          />
+          <Text style={[styles.publicationFilterText, publicationFilter === 'pending' && styles.activePublicationFilterText]}>
+            Pending for Publication
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.publicationFilterButton, publicationFilter === 'published' && styles.activePublicationFilter]}
+          onPress={() => setPublicationFilter('published')}
+        >
+          <Ionicons 
+            name="checkmark-circle-outline" 
+            size={18} 
+            color={publicationFilter === 'published' ? '#10B981' : '#666'} 
+          />
+          <Text style={[styles.publicationFilterText, publicationFilter === 'published' && styles.activePublicationFilterText]}>
+            Published
+          </Text>
+        </TouchableOpacity>
+      </View>
+      
       <View style={styles.searchContainer}>
         <View style={styles.searchInputContainer}>
           <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
@@ -934,7 +1173,7 @@ const filterAndSortContent = (data, search) => {
   if (loading) return <ActivityIndicator size="large" color="#303F9F" style={{ marginTop: 40 }} />;
   if (content.length === 0) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#666' }}>No approved content available.</Text></View>;
 
-  const workTypes = ['all', 'articles', 'opinions', 'sports', 'editorial', 'artworks'];
+  const workTypes = ['all', 'articles', 'opinions', 'sports', 'editorial', 'creative'];
   const sortOptions = [
     { value: 'newest', label: 'Newest First' },
     { value: 'oldest', label: 'Oldest First' },
@@ -1222,6 +1461,39 @@ const styles = StyleSheet.create({
   },
   approvedTitle: { fontSize: 15, fontWeight: '600', color: '#333' },
   approvedMeta: { fontSize: 12, color: '#666' },
+  publicationFilterContainer: {
+    flexDirection: 'row',
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    gap: 8,
+  },
+  publicationFilterButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    gap: 6,
+  },
+  activePublicationFilter: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#1a237e',
+  },
+  publicationFilterText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+  },
+  activePublicationFilterText: {
+    color: '#1a237e',
+  },
   // Main screen styles
   container: { flex: 1, backgroundColor: '#fff' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
@@ -1246,7 +1518,6 @@ const styles = StyleSheet.create({
     marginTop: -10, // Negative margin to pull content up
     marginBottom: 20,
     position: 'relative',
-
     backgroundColor: '#fff', // Ensure solid background
     borderTopLeftRadius: 0, // Match border radius with title
     borderTopRightRadius: 0
@@ -1341,5 +1612,219 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#ddd',
     marginHorizontal: 6,
+  },
+  publishModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  publishModal: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 600,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  publishModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  publishHeaderIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  publishHeaderText: {
+    flex: 1,
+  },
+  publishModalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  publishModalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  publishCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+  },
+  publishModalBody: {
+    padding: 24,
+  },
+  toggleOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  toggleInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 16,
+  },
+  toggleTextContainer: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  toggleTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  toggleDescription: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
+  },
+  toggleSwitch: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#D1D5DB',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleSwitchActive: {
+    backgroundColor: '#10B981',
+  },
+  toggleThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  toggleThumbActive: {
+    alignSelf: 'flex-end',
+  },
+  publishModalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    gap: 12,
+  },
+  publishCancelButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  publishCancelButtonText: {
+    color: '#374151',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  publishConfirmButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#1a237e',
+    shadowColor: '#1a237e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  publishConfirmButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  completionModal: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 32,
+    width: '90%',
+    maxWidth: 500,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  completionIconContainer: {
+    marginBottom: 24,
+  },
+  completionTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  completionMessage: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  completionActions: {
+    width: '100%',
+    gap: 12,
+  },
+  completionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    gap: 10,
+  },
+  completionButtonPrimary: {
+    backgroundColor: '#1a237e',
+    borderColor: '#1a237e',
+  },
+  completionButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1a237e',
+  },
+  completionButtonTextPrimary: {
+    color: '#fff',
   },
 });

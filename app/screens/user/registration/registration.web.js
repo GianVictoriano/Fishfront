@@ -1,16 +1,21 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image, Platform, Alert, ActivityIndicator, ScrollView, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Image, Platform, Alert, ActivityIndicator, ScrollView, TextInput, Modal } from 'react-native';
 import Tesseract from 'tesseract.js';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { Feather } from '@expo/vector-icons';
 import apiClient from '../../../../utils/api';
+import { useAuth } from '~/context/AuthContext';
 
 export default function RegistrationScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [corImage, setCorImage] = useState(null);
   const [ocrText, setOcrText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingProfile, setIsCheckingProfile] = useState(true);
+  const [isCollaborator, setIsCollaborator] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
     srCode: '',
@@ -20,6 +25,9 @@ export default function RegistrationScreen() {
   });
   const [step, setStep] = useState(1);
   const [selectedRole, setSelectedRole] = useState(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalType, setModalType] = useState('');
 
   const updateEmailFromSrCode = (srCode) => {
     if (srCode) {
@@ -142,13 +150,87 @@ export default function RegistrationScreen() {
     }
   };
 
+  useEffect(() => {
+    const checkUserProfile = async () => {
+      if (!user) {
+        // Show modal if user is not logged in
+        setModalMessage('Only members of the Batangas State University-ARASOF are allowed to be a part of the Fisherman Publications. Please sign in with your university account.');
+        setModalType('error');
+        setIsModalVisible(true);
+        setIsCheckingProfile(false);
+        return;
+      }
+
+      try {
+        const response = await apiClient.get('/api/profile');
+        const profile = response.data;
+        
+        // Check if user is already a collaborator, editor, adviser, or admin
+        if (profile && ['collaborator', 'editor', 'adviser', 'admin'].includes(profile.role)) {
+          setIsCollaborator(true);
+        }
+      } catch (error) {
+        console.error('Error checking profile:', error);
+      } finally {
+        setIsCheckingProfile(false);
+      }
+    };
+
+    checkUserProfile();
+  }, [user]);
+
   console.log('Current step:', step);
   
+  if (isCheckingProfile) {
+    return (
+      <View style={{ flex: 1 }}>
+        <ImageBackground
+          source={{ uri: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070' }}
+          style={styles.bg}
+          resizeMode="cover"
+        >
+          <View style={styles.overlay}>
+            <View style={styles.contentWrapper}>
+              <ActivityIndicator size="large" color="#1a237e" />
+              <Text style={[styles.subtitle, { marginTop: 16 }]}>Checking your profile...</Text>
+            </View>
+          </View>
+        </ImageBackground>
+      </View>
+    );
+  }
+
+  if (isCollaborator) {
+    return (
+      <View style={{ flex: 1 }}>
+        <ImageBackground
+          source={{ uri: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070' }}
+          style={styles.bg}
+          resizeMode="cover"
+        >
+          <View style={styles.overlay}>
+            <View style={styles.contentWrapper}>
+              <Feather name="check-circle" size={64} color="#10B981" style={{ marginBottom: 20 }} />
+              <Text style={styles.title}>You're Already a Collaborator!</Text>
+              <Text style={styles.subtitle}>
+                You are already part of the Fisherman Publications team. You don't need to apply again.
+              </Text>
+              <TouchableOpacity style={styles.nextButton} onPress={() => router.back()}>
+                <Text style={styles.nextButtonText}>Go Back</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ImageBackground>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView 
-      contentContainerStyle={styles.scrollContainer}
-      keyboardShouldPersistTaps="handled"
-    >
+    <View style={{ flex: 1 }}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+      >
       <ImageBackground
         source={{ uri: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070' }}
         style={styles.bg}
@@ -179,14 +261,6 @@ export default function RegistrationScreen() {
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#1a237e" />
                 <Text style={styles.loadingText}>Reading Image...</Text>
-              </View>
-            )}
-            {ocrText && (
-              <View style={styles.ocrContainer}>
-                <Text style={styles.ocrTitle}>Extracted Text:</Text>
-                <ScrollView style={styles.ocrScrollView}>
-                  <Text style={styles.ocrText}>{ocrText}</Text>
-                </ScrollView>
               </View>
             )}
           </View>
@@ -247,9 +321,14 @@ export default function RegistrationScreen() {
             </View>
           ) : null}
 
-                <TouchableOpacity style={styles.nextButton} onPress={() => setStep(2)}>
-                  <Text style={styles.nextButtonText}>Next</Text>
-                </TouchableOpacity>
+                <View style={styles.buttonContainer}>
+                  <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                    <Text style={styles.backButtonText}>Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.nextButton} onPress={() => setStep(2)}>
+                    <Text style={styles.nextButtonText}>Next</Text>
+                  </TouchableOpacity>
+                </View>
               </>
             ) : (
               <>
@@ -309,33 +388,16 @@ export default function RegistrationScreen() {
                         
                         console.log('Application submitted successfully:', response.data);
                         
-                        // Show success message
-                        Alert.alert(
-                          'Application Submitted!', 
-                          'Your application has been received. We will review it and get back to you soon.',
-                          [
-                            { 
-                              text: 'OK', 
-                              onPress: () => {
-                                // Reset the form and go back to the first step
-                                setFormData({
-                                  fullName: '',
-                                  srCode: '',
-                                  email: '',
-                                  enrollmentYear: '',
-                                  department: ''
-                                });
-                                setSelectedRole(null);
-                                setStep(1);
-                              }
-                            }
-                          ]
-                        );
+                        setModalMessage('Application Submitted! Your application has been received. We will review it and get back to you soon.');
+                        setModalType('success');
+                        setIsModalVisible(true);
                         
                       } catch (error) {
                         console.error('Error submitting application:', error);
                         const errorMessage = error.response?.data?.message || 'Failed to submit application. Please try again.';
-                        Alert.alert('Error', errorMessage);
+                        setModalMessage(errorMessage);
+                        setModalType('error');
+                        setIsModalVisible(true);
                       } finally {
                         setIsSubmitting(false);
                       }
@@ -356,6 +418,53 @@ export default function RegistrationScreen() {
       </View>
       </ImageBackground>
     </ScrollView>
+    <Modal
+      visible={isModalVisible}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => setIsModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={{alignItems: 'center', marginBottom: 20}}>
+            <Feather 
+              name={modalType === 'success' ? 'check-circle' : 'x-circle'} 
+              size={64} 
+              color={modalType === 'success' ? '#10B981' : '#EF4444'} 
+            />
+          </View>
+          <Text style={styles.modalTitle}>
+            {modalType === 'success' ? 'Success!' : 'Error'}
+          </Text>
+          <Text style={styles.modalText}>{modalMessage}</Text>
+          <TouchableOpacity
+            style={[styles.modalButton, {
+              backgroundColor: modalType === 'success' ? '#10B981' : '#EF4444'
+            }]}
+            onPress={() => {
+              setIsModalVisible(false);
+              if (modalType === 'success') {
+                setFormData({
+                  fullName: '',
+                  srCode: '',
+                  email: '',
+                  enrollmentYear: '',
+                  department: ''
+                });
+                setSelectedRole(null);
+                setStep(1);
+              } else if (!user) {
+                // If user is not logged in, redirect back
+                router.back();
+              }
+            }}
+          >
+            <Text style={styles.modalButtonText}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+    </View>
   );
 }
 
@@ -435,8 +544,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
-    alignSelf: 'center',
-    marginTop: 10,
   },
   nextButtonText: {
     color: '#fff',
@@ -585,5 +692,55 @@ const styles = StyleSheet.create({
   emailInput: {
     backgroundColor: '#f8f9fa',
     color: '#6c757d',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 32,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalText: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  modalButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

@@ -29,6 +29,8 @@ export default function ForumScreen() {
   const [reporting, setReporting] = useState(false);
   const [reportingItemId, setReportingItemId] = useState(null);
 
+  const router = useRouter();
+
   useEffect(() => {
     let filtered = topics;
     if (selectedCategory !== 'All') {
@@ -286,7 +288,18 @@ export default function ForumScreen() {
               </View>
               <View style={styles.topicHeader}>
                 <Text style={styles.topicMeta}>
-                  {selectedTopic.secret ? 'Anonymous' : (selectedTopic.user?.name || 'Anonymous')} • {new Date(selectedTopic.created_at).toLocaleDateString()}
+                  {selectedTopic.secret ? (
+                    'Anonymous'
+                  ) : selectedTopic.user?.profile?.is_anonymous ? (
+                    selectedTopic.user?.profile?.anonymous_name || 'Anonymous User'
+                  ) : (
+                    <Text 
+                      style={styles.clickableUsername}
+                      onPress={() => selectedTopic.user?.id && router.push(`/user-profile/${selectedTopic.user.id}`)}
+                    >
+                      {selectedTopic.user?.name || 'Anonymous'}
+                    </Text>
+                  )} • {new Date(selectedTopic.created_at).toLocaleDateString()}
                 </Text>
               </View>
               <Text style={styles.topicDetailsBody}>{selectedTopic.body}</Text>
@@ -300,13 +313,28 @@ export default function ForumScreen() {
                         <View style={styles.commentUserInfo}>
                           <View style={styles.commentAvatar}>
                             <Text style={styles.commentAvatarText}>
-                              {comment.secret || !comment.user?.profile?.name ? 'A' : comment.user.profile.name.charAt(0).toUpperCase()}
+                              {comment.secret ? 'A' : 
+                               comment.user?.profile?.is_anonymous ? 
+                                 (comment.user?.profile?.anonymous_name?.charAt(0).toUpperCase() || 'A') :
+                                 (comment.user?.profile?.name?.charAt(0).toUpperCase() || comment.user?.name?.charAt(0).toUpperCase() || 'A')}
                             </Text>
                           </View>
                           <View>
-                            <Text style={styles.commentAuthor}>
-                              {comment.secret ? 'Anonymous User' : (comment.user?.profile?.name || 'Anonymous User')}
-                            </Text>
+                            {comment.secret ? (
+                              <Text style={styles.commentAuthor}>Anonymous User</Text>
+                            ) : comment.user?.profile?.is_anonymous ? (
+                              <Text style={styles.commentAuthor}>
+                                {comment.user?.profile?.anonymous_name || 'Anonymous User'}
+                              </Text>
+                            ) : (
+                              <TouchableOpacity 
+                                onPress={() => comment.user?.id && router.push(`/user-profile/${comment.user.id}`)}
+                              >
+                                <Text style={[styles.commentAuthor, styles.clickableUsername]}>
+                                  {comment.user?.profile?.name || comment.user?.name || 'Anonymous User'}
+                                </Text>
+                              </TouchableOpacity>
+                            )}
                             <Text style={styles.commentDate}>
                               {new Date(comment.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                             </Text>
@@ -406,9 +434,25 @@ export default function ForumScreen() {
                   onPress={() => setSelectedTopic(item)}
                 >
                   <Text style={styles.topicTitle}>{item.title}</Text>
-                  <Text style={styles.topicMeta}>
-                    {item.secret ? 'Anonymous' : (item.user?.name || 'Anonymous')} • {new Date(item.created_at).toLocaleDateString()}
-                  </Text>
+                  <View style={styles.topicMetaContainer}>
+                    <Text style={styles.topicMeta}>
+                      {item.secret ? (
+                        'Anonymous'
+                      ) : item.user?.profile?.is_anonymous ? (
+                        item.user?.profile?.anonymous_name || 'Anonymous User'
+                      ) : (
+                        <Text 
+                          style={styles.clickableUsername}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            item.user?.id && router.push(`/user-profile/${item.user.id}`);
+                          }}
+                        >
+                          {item.user?.name || 'Anonymous'}
+                        </Text>
+                      )} • {new Date(item.created_at).toLocaleDateString()}
+                    </Text>
+                  </View>
                   {item.body && (
                     <Text style={styles.topicBody} numberOfLines={2} ellipsizeMode="tail">
                       {item.body}
@@ -853,11 +897,19 @@ const styles = StyleSheet.create({
       marginBottom: 4,
       color: '#1e88e5',
   },
+  topicMetaContainer: {
+    marginBottom: 8,
+  },
   topicMeta: {
     color: '#666',
-      fontSize: 12,
-      marginBottom: 8,
-    },
+    fontSize: 12,
+  },
+  clickableUsername: {
+    color: '#1e88e5',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    cursor: 'pointer',
+  },
     topicBody: {
       color: '#333',
       marginBottom: 8,

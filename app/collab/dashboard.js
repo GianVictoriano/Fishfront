@@ -60,9 +60,6 @@ export default function DashboardScreen() {
             <Text style={styles.title}>Welcome, {user?.profile?.name || 'Collaborator'}!</Text>
             <Text style={styles.subtitle}>Here's a summary of your workspace.</Text>
           </View>
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-            <Feather name="log-out" size={24} color="#1A202C" />
-          </TouchableOpacity>
         </View>
 
         {isMobile ? (
