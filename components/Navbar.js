@@ -61,7 +61,7 @@ const Navbar = () => {
             {user ? (
               <>
             <NavLink href="forum" text="Forum" iconName="comments" pathname={pathname} />
-            <NavLink href="contribute" text="Contribute" iconName="plus-circle" pathname={pathname} />
+            <NavLink href="contribute" text="Submit" iconName="plus-circle" pathname={pathname} />
             <View style={styles.userMenuContainer}>
           <TouchableOpacity style={styles.userMenuButton} onPress={() => setDropdownVisible(!dropdownVisible)}>
                         {user?.profile?.avatar ? (

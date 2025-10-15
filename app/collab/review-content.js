@@ -170,8 +170,13 @@ export default function ReviewContentScreen() {
           groupsMap[group.id] = group;
         });
 
-        const drafts = draftsRes.data.map(d => ({ ...d, _type: 'draft' }));
-        const images = imagesRes.data.map(img => ({
+        // Filter out folio submissions - they should only appear in manage folio
+        const drafts = draftsRes.data
+          .filter(d => !d.is_folio_submission)
+          .map(d => ({ ...d, _type: 'draft' }));
+        const images = imagesRes.data
+          .filter(img => !img.is_folio_submission)
+          .map(img => ({
           ...img,
           _type: 'image',
           // Add group object if not present

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, FlatList, ScrollView, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import apiClient from '../../utils/api';
 import { useBranding } from '~/context/BrandingContext';
@@ -21,6 +21,7 @@ const CATEGORIES = ['Sports', 'Literature', 'Technology', 'Art', 'Science', 'Oth
 
 export default function CreateContentScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [showScrumPanel, setShowScrumPanel] = useState(false);
   const { colors } = useBranding();
 
@@ -37,14 +38,57 @@ export default function CreateContentScreen() {
   const [allCollaborators, setAllCollaborators] = useState([]);
   const [searchByPosition, setSearchByPosition] = useState(false);
   
+  // Activity form state
+  const [showActivityPanel, setShowActivityPanel] = useState(false);
+  const [activityTitle, setActivityTitle] = useState('');
+  const [activityDate, setActivityDate] = useState('');
+  const [activityLocation, setActivityLocation] = useState('');
+  const [activityRequiredMembers, setActivityRequiredMembers] = useState('1');
+  const [showActivityDatePicker, setShowActivityDatePicker] = useState(false);
+  const [selectedActivityDate, setSelectedActivityDate] = useState(new Date());
+  const [selectedActivityMembers, setSelectedActivityMembers] = useState([]);
+  const [activitySearchTerm, setActivitySearchTerm] = useState('');
+  const [activitySearchResults, setActivitySearchResults] = useState([]);
+  const [activitySearchByPosition, setActivitySearchByPosition] = useState(false);
+  
+  // Folio form state
+  const [showFolioPanel, setShowFolioPanel] = useState(false);
+  const [folioTitle, setFolioTitle] = useState('');
+  const [folioTheme, setFolioTheme] = useState('');
+  const [folioStartDate, setFolioStartDate] = useState('');
+  const [folioEndDate, setFolioEndDate] = useState('');
+  const [selectedFolioMembers, setSelectedFolioMembers] = useState([]);
+  const [folioLeadOrganizer, setFolioLeadOrganizer] = useState(null);
+  const [folioSearchTerm, setFolioSearchTerm] = useState('');
+  const [folioSearchResults, setFolioSearchResults] = useState([]);
+  const [folioSearchByPosition, setFolioSearchByPosition] = useState(false);
+  const [isJournalistsOnly, setIsJournalistsOnly] = useState(true);
+  
   // Feedback modal state
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
   const [feedbackModalConfig, setFeedbackModalConfig] = useState({ message: '', type: 'success' });
+  
+  // Activity confirmation modal state
+  const [activityConfirmModalVisible, setActivityConfirmModalVisible] = useState(false);
+
+  // Handle incoming parameters from coverage request approval
+  useEffect(() => {
+    if (params.openActivity === 'true') {
+      // Pre-fill activity form with data from coverage request
+      if (params.activityTitle) setActivityTitle(params.activityTitle);
+      if (params.activityDate) setActivityDate(params.activityDate);
+      if (params.activityLocation) setActivityLocation(params.activityLocation);
+      if (params.activityRequiredMembers) setActivityRequiredMembers(params.activityRequiredMembers);
+      
+      // Open the activity panel
+      setShowActivityPanel(true);
+    }
+  }, [params]);
 
   // Fetch collaborators when the panel opens
   useEffect(() => {
     const fetchCollaborators = async () => {
-      if (showScrumPanel) {
+      if (showScrumPanel || showActivityPanel || showFolioPanel) {
         try {
           const response = await apiClient.get('/users');
           const users = response.data.users || [];
@@ -57,7 +101,7 @@ export default function CreateContentScreen() {
       }
     };
     fetchCollaborators();
-  }, [showScrumPanel]);
+  }, [showScrumPanel, showActivityPanel, showFolioPanel]);
 
   // Handle search filtering
   useEffect(() => {
@@ -74,6 +118,36 @@ export default function CreateContentScreen() {
     }
   }, [searchTerm, selectedCollaborators, allCollaborators, searchByPosition]);
 
+  // Handle activity search filtering
+  useEffect(() => {
+    if (activitySearchTerm) {
+      const results = allCollaborators.filter(user => {
+        const matchesSearch = activitySearchByPosition
+          ? user.profile?.position?.toLowerCase().includes(activitySearchTerm.toLowerCase())
+          : user.name.toLowerCase().includes(activitySearchTerm.toLowerCase());
+        return matchesSearch && !selectedActivityMembers.some(c => c.id === user.id);
+      });
+      setActivitySearchResults(results);
+    } else {
+      setActivitySearchResults([]);
+    }
+  }, [activitySearchTerm, selectedActivityMembers, allCollaborators, activitySearchByPosition]);
+
+  // Handle folio search filtering
+  useEffect(() => {
+    if (folioSearchTerm) {
+      const results = allCollaborators.filter(user => {
+        const matchesSearch = folioSearchByPosition
+          ? user.profile?.position?.toLowerCase().includes(folioSearchTerm.toLowerCase())
+          : user.name.toLowerCase().includes(folioSearchTerm.toLowerCase());
+        return matchesSearch && !selectedFolioMembers.some(c => c.id === user.id);
+      });
+      setFolioSearchResults(results);
+    } else {
+      setFolioSearchResults([]);
+    }
+  }, [folioSearchTerm, selectedFolioMembers, allCollaborators, folioSearchByPosition]);
+
   const handleAddCollaborator = (user) => {
     setSelectedCollaborators(prev => [...prev, user]);
     setSearchTerm('');
@@ -84,8 +158,36 @@ export default function CreateContentScreen() {
     setSelectedCollaborators(prev => prev.filter(u => u.id !== userId));
   };
 
+  const handleAddActivityMember = (user) => {
+    setSelectedActivityMembers(prev => [...prev, user]);
+    setActivitySearchTerm('');
+    setActivitySearchResults([]);
+  };
+
+  const handleRemoveActivityMember = (userId) => {
+    setSelectedActivityMembers(prev => prev.filter(u => u.id !== userId));
+  };
+
+  const handleAddFolioMember = (user) => {
+    setSelectedFolioMembers(prev => [...prev, user]);
+    setFolioSearchTerm('');
+    setFolioSearchResults([]);
+  };
+
+  const handleRemoveFolioMember = (userId) => {
+    setSelectedFolioMembers(prev => prev.filter(u => u.id !== userId));
+  };
+
   const handleOpenScrumPanel = () => {
     setShowScrumPanel(true);
+  };
+
+  const handleOpenActivityPanel = () => {
+    setShowActivityPanel(true);
+  };
+
+  const handleOpenFolioPanel = () => {
+    setShowFolioPanel(true);
   };
 
   const handleCloseScrumPanel = () => {
@@ -100,11 +202,44 @@ export default function CreateContentScreen() {
     setSearchByPosition(false);
   };
 
+  const handleCloseActivityPanel = () => {
+    setShowActivityPanel(false);
+    // Reset form
+    setActivityTitle('');
+    setActivityDate('');
+    setActivityLocation('');
+    setActivityRequiredMembers('1');
+    setSelectedActivityMembers([]);
+    setActivitySearchTerm('');
+    setActivitySearchByPosition(false);
+    
+    // If coming from coverage request approval, navigate back to manage-requests
+    if (params.openActivity === 'true') {
+      router.push('/collab/manage-requests');
+    }
+  };
+
+  const handleCloseFolioPanel = () => {
+    setShowFolioPanel(false);
+    // Reset form
+    setFolioTitle('');
+    setFolioTheme('');
+    setFolioStartDate('');
+    setFolioEndDate('');
+    setSelectedFolioMembers([]);
+    setFolioLeadOrganizer(null);
+    setFolioSearchTerm('');
+    setFolioSearchByPosition(false);
+    setIsJournalistsOnly(true);
+  };
+
   const handlePress = (type) => {
     if (type === 'Scrum') {
       handleOpenScrumPanel();
+    } else if (type === 'Activity') {
+      handleOpenActivityPanel();
     } else if (type === 'Folio') {
-      // Folio logic here
+      handleOpenFolioPanel();
     } else if (type === 'PublishOnTop') {
       Alert.alert('Coming Soon', 'Publish on Top of Scrum feature is under development.');
     }
@@ -158,6 +293,133 @@ export default function CreateContentScreen() {
     }
   };
 
+  const handleCreateActivity = async (skipConfirmation = false) => {
+    if (!activityTitle) {
+      setFeedbackModalConfig({
+        message: 'Please enter a title for the activity.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+      return;
+    }
+
+    if (!activityDate) {
+      setFeedbackModalConfig({
+        message: 'Please select a date and time for the activity.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+      return;
+    }
+
+    // Check if selected members are fewer than required members
+    const requiredCount = parseInt(activityRequiredMembers) || 0;
+    if (!skipConfirmation && requiredCount > 0 && selectedActivityMembers.length < requiredCount) {
+      setActivityConfirmModalVisible(true);
+      return;
+    }
+
+    const payload = {
+      title: activityTitle,
+      date: activityDate,
+      location: activityLocation,
+      required_members: parseInt(activityRequiredMembers) || null,
+      members: selectedActivityMembers.map(m => m.id),
+    };
+
+    try {
+      const response = await apiClient.post('/activities', payload);
+      
+      setFeedbackModalConfig({
+        message: response.data.message || 'Activity created successfully!',
+        type: 'success'
+      });
+      setFeedbackModalVisible(true);
+      handleCloseActivityPanel();
+
+      // If coming from coverage request approval, navigate back to manage-requests
+      if (params.openActivity === 'true') {
+        setTimeout(() => {
+          router.push('/collab/manage-requests');
+        }, 1500);
+      } else {
+        // Otherwise, redirect to create topic with pre-filled data
+        setTimeout(() => {
+          // Pre-fill the scrum board with activity data
+          setScrumTitle(activityTitle);
+          setSelectedCollaborators(selectedActivityMembers);
+          setShowScrumPanel(true);
+        }, 500);
+      }
+
+    } catch (error) {
+      console.error('Failed to create activity:', error.response?.data || error.message);
+      setFeedbackModalConfig({
+        message: error.response?.data?.message || 'An error occurred. Please try again.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
+  };
+
+  const handleCreateFolio = async () => {
+    if (!folioTitle) {
+      setFeedbackModalConfig({
+        message: 'Please enter a title for the literary folio.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+      return;
+    }
+
+    if (!folioTheme) {
+      setFeedbackModalConfig({
+        message: 'Please enter a theme for the literary folio.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+      return;
+    }
+
+    if (!folioLeadOrganizer) {
+      setFeedbackModalConfig({
+        message: 'Please select a lead organizer for this literary folio.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+      return;
+    }
+
+    const payload = {
+      title: folioTitle,
+      theme: folioTheme,
+      start_date: folioStartDate || null,
+      end_date: folioEndDate || null,
+      members: selectedFolioMembers.map(m => m.id),
+      lead_organizer_id: folioLeadOrganizer.id,
+      is_journalists_only: isJournalistsOnly,
+    };
+
+    try {
+      const response = await apiClient.post('/folios', payload);
+      
+      setFeedbackModalConfig({
+        message: response.data.message || 'Literary folio created successfully!',
+        type: 'success'
+      });
+      setFeedbackModalVisible(true);
+      handleCloseFolioPanel();
+
+    } catch (error) {
+      console.error('Failed to create folio:', error.response?.data || error.message);
+      setFeedbackModalConfig({
+        message: error.response?.data?.message || 'An error occurred. Please try again.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={[styles.header, { color: colors.primary || '#1a237e' }]}>Create New Content</Text>
@@ -168,6 +430,13 @@ export default function CreateContentScreen() {
           title="Topic"
           description="Create a new topic for the fishermen publications."
           onPress={() => handlePress('Scrum')}
+          iconColor={colors.primary}
+        />
+        <CreateOptionCard 
+          icon="calendar-check"
+          title="Activity"
+          description="Schedule an event or activity with team members."
+          onPress={() => handlePress('Activity')}
           iconColor={colors.primary}
         />
         <CreateOptionCard 
@@ -472,6 +741,581 @@ export default function CreateContentScreen() {
                 }}
               >
                 <Text style={styles.datePickerConfirmText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Activity Panel Modal */}
+      <Modal
+        visible={showActivityPanel}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseActivityPanel}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.scrumPanel}>
+            <View style={styles.modalHeader}>
+              <View style={styles.headerIconContainer}>
+                <MaterialCommunityIcons name="calendar-check" size={28} color={colors.primary} />
+              </View>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.scrumPanelTitle}>New Activity</Text>
+                <Text style={styles.scrumPanelSubtitle}>Schedule an event or activity</Text>
+              </View>
+              <TouchableOpacity style={styles.closeButton} onPress={handleCloseActivityPanel}>
+                <Feather name="x" size={24} color="#6c757d" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              {/* Left Column */}
+              <View style={styles.leftColumn}>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelContainer}>
+                      <Feather name="edit-3" size={16} color="#1a237e" />
+                      <Text style={[styles.label, {color: colors.primary}]}>Event Name/Title</Text>
+                    </View>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g., Team Meeting, Workshop"
+                      value={activityTitle}
+                      onChangeText={setActivityTitle}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelContainer}>
+                      <Feather name="calendar" size={16} color="#1a237e" />
+                      <Text style={styles.label}>Date & Time</Text>
+                      <Text style={styles.requiredBadge}>Required</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.input, styles.datePickerButton]}
+                      onPress={() => setShowActivityDatePicker(true)}
+                    >
+                      <Text style={activityDate ? styles.dateText : styles.datePlaceholder}>
+                        {activityDate || 'Select date and time'}
+                      </Text>
+                      <Feather name="calendar" size={18} color="#9CA3AF" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelContainer}>
+                      <Feather name="map-pin" size={16} color="#1a237e" />
+                      <Text style={styles.label}>Location</Text>
+                      <Text style={styles.optionalBadge}>Optional</Text>
+                    </View>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g., Conference Room A, Main Campus"
+                      value={activityLocation}
+                      onChangeText={setActivityLocation}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelContainer}>
+                      <Feather name="users" size={16} color="#1a237e" />
+                      <Text style={styles.label}>Required Members</Text>
+                      <Text style={styles.optionalBadge}>Optional</Text>
+                    </View>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Number of required members"
+                      value={activityRequiredMembers}
+                      onChangeText={setActivityRequiredMembers}
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Right Column */}
+              <View style={styles.rightColumn}>
+                <View style={styles.labelContainer}>
+                  <Feather name="users" size={16} color="#1a237e" />
+                  <Text style={styles.label}>Members</Text>
+                  <View style={[styles.countBadge, {backgroundColor: colors.primary || '#1a237e'}]}>
+                    <Text style={styles.countBadgeText}>{selectedActivityMembers.length}</Text>
+                  </View>
+                </View>
+                <View style={styles.searchInputContainer}>
+                  <Feather name="search" size={18} color="#9CA3AF" style={styles.searchIcon} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder={activitySearchByPosition ? "Search by position..." : "Search by name..."}
+                    value={activitySearchTerm}
+                    onChangeText={setActivitySearchTerm}
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+                <View style={styles.searchToggleContainer}>
+                  <TouchableOpacity
+                    style={[styles.searchToggleButton, !activitySearchByPosition && styles.searchToggleButtonActive]}
+                    onPress={() => setActivitySearchByPosition(false)}
+                  >
+                    <Feather name="user" size={14} color={!activitySearchByPosition ? "#fff" : "#6B7280"} />
+                    <Text style={[styles.searchToggleText, !activitySearchByPosition && styles.searchToggleTextActive]}>Name</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.searchToggleButton, activitySearchByPosition && styles.searchToggleButtonActive]}
+                    onPress={() => setActivitySearchByPosition(true)}
+                  >
+                    <Feather name="briefcase" size={14} color={activitySearchByPosition ? "#fff" : "#6B7280"} />
+                    <Text style={[styles.searchToggleText, activitySearchByPosition && styles.searchToggleTextActive]}>Position</Text>
+                  </TouchableOpacity>
+                </View>
+                {activitySearchResults.length > 0 && (
+                  <FlatList
+                    style={styles.searchResultsContainer}
+                    data={activitySearchResults}
+                    keyExtractor={item => item.id}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity style={styles.searchResultItem} onPress={() => handleAddActivityMember(item)}>
+                        <View style={styles.searchResultContent}>
+                          <View style={styles.avatarPlaceholder}>
+                            <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                          </View>
+                          <View style={styles.searchResultInfo}>
+                            <Text style={styles.searchResultName}>{item.name}</Text>
+                            {item.profile?.position && <Text style={styles.searchResultPosition}>{item.profile.position}</Text>}
+                          </View>
+                        </View>
+                        <Feather name="plus-circle" size={20} color="#1a237e" />
+                      </TouchableOpacity>
+                    )}
+                  />
+                )}
+                <View style={styles.selectedCollaboratorsHeader}>
+                  <Text style={styles.selectedLabel}>Selected</Text>
+                </View>
+                <ScrollView style={styles.collaboratorsContainer} showsVerticalScrollIndicator={false}>
+                  {selectedActivityMembers.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <Feather name="user-plus" size={32} color="#D1D5DB" />
+                      <Text style={styles.emptyStateText}>No members added yet</Text>
+                    </View>
+                  ) : (
+                    selectedActivityMembers.map(user => (
+                      <View key={user.id} style={styles.collaboratorTag}>
+                        <View style={styles.collaboratorTagAvatar}>
+                          <Text style={styles.collaboratorTagAvatarText}>{user.name.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <View style={{flex: 1}}>
+                          <Text style={styles.collaboratorTagText}>{user.name}</Text>
+                        </View>
+                        <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveActivityMember(user.id)}>
+                          <Feather name="x" size={16} color="#6B7280" />
+                        </TouchableOpacity>
+                      </View>
+                    ))
+                  )}
+                </ScrollView>
+              </View>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <Pressable
+                style={styles.cancelButton}
+                onPress={handleCloseActivityPanel}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.createButton, {backgroundColor: colors.primary || '#1a237e'}]}
+                onPress={handleCreateActivity}
+              >
+                <Feather name="check" size={18} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={styles.createButtonText}>Create Activity</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Folio Panel Modal */}
+      <Modal
+        visible={showFolioPanel}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseFolioPanel}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.scrumPanel}>
+            <View style={styles.modalHeader}>
+              <View style={styles.headerIconContainer}>
+                <MaterialCommunityIcons name="folder-multiple" size={28} color={colors.primary} />
+              </View>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.scrumPanelTitle}>New Literary Folio</Text>
+                <Text style={styles.scrumPanelSubtitle}>Create a collection for literary works</Text>
+              </View>
+              <TouchableOpacity style={styles.closeButton} onPress={handleCloseFolioPanel}>
+                <Feather name="x" size={24} color="#6c757d" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              {/* Left Column */}
+              <View style={styles.leftColumn}>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelContainer}>
+                      <Feather name="edit-3" size={16} color="#1a237e" />
+                      <Text style={[styles.label, {color: colors.primary}]}>Folio Title</Text>
+                    </View>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g., Spring 2025 Literary Collection"
+                      value={folioTitle}
+                      onChangeText={setFolioTitle}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelContainer}>
+                      <Feather name="feather" size={16} color="#1a237e" />
+                      <Text style={styles.label}>Theme</Text>
+                    </View>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g., Nature, Hope, Community"
+                      value={folioTheme}
+                      onChangeText={setFolioTheme}
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelContainer}>
+                      <Feather name="calendar" size={16} color="#1a237e" />
+                      <Text style={styles.label}>Start Date</Text>
+                      <Text style={styles.optionalBadge}>Optional</Text>
+                    </View>
+                    <input
+                      type="date"
+                      value={folioStartDate}
+                      onChange={(e) => setFolioStartDate(e.target.value)}
+                      style={{
+                        padding: 12,
+                        fontSize: 16,
+                        borderRadius: 8,
+                        border: '1px solid #e2e8f0',
+                        fontFamily: 'system-ui',
+                        width: '100%',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelContainer}>
+                      <Feather name="calendar" size={16} color="#1a237e" />
+                      <Text style={styles.label}>End Date</Text>
+                      <Text style={styles.optionalBadge}>Optional</Text>
+                    </View>
+                    <input
+                      type="date"
+                      value={folioEndDate}
+                      onChange={(e) => setFolioEndDate(e.target.value)}
+                      style={{
+                        padding: 12,
+                        fontSize: 16,
+                        borderRadius: 8,
+                        border: '1px solid #e2e8f0',
+                        fontFamily: 'system-ui',
+                        width: '100%',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelContainer}>
+                      <Feather name="users" size={16} color="#1a237e" />
+                      <Text style={styles.label}>Audience</Text>
+                    </View>
+                    <View style={styles.toggleContainer}>
+                      <TouchableOpacity
+                        style={[styles.toggleButton, isJournalistsOnly && styles.toggleButtonActive]}
+                        onPress={() => setIsJournalistsOnly(true)}
+                      >
+                        <Feather name="edit" size={16} color={isJournalistsOnly ? "#fff" : "#6B7280"} />
+                        <Text style={[styles.toggleText, isJournalistsOnly && styles.toggleTextActive]}>
+                          Journalists Only
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.toggleButton, !isJournalistsOnly && styles.toggleButtonActive]}
+                        onPress={() => setIsJournalistsOnly(false)}
+                      >
+                        <Feather name="globe" size={16} color={!isJournalistsOnly ? "#fff" : "#6B7280"} />
+                        <Text style={[styles.toggleText, !isJournalistsOnly && styles.toggleTextActive]}>
+                          Whole School
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelContainer}>
+                      <Feather name="star" size={16} color="#1a237e" />
+                      <Text style={styles.label}>Lead Organizer</Text>
+                      <Text style={styles.requiredBadge}>Required</Text>
+                    </View>
+                    <Text style={styles.helperText}>
+                      The lead organizer manages submissions and coordinates the folio
+                    </Text>
+                    {folioLeadOrganizer ? (
+                      <View style={styles.leadReviewerCard}>
+                        <View style={styles.leadReviewerAvatar}>
+                          <Text style={styles.leadReviewerAvatarText}>{folioLeadOrganizer.name.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <View style={{flex: 1}}>
+                          <Text style={styles.leadReviewerName}>{folioLeadOrganizer.name}</Text>
+                          {folioLeadOrganizer.profile?.position && (
+                            <Text style={styles.leadReviewerPosition}>{folioLeadOrganizer.profile.position}</Text>
+                          )}
+                        </View>
+                        <TouchableOpacity onPress={() => setFolioLeadOrganizer(null)}>
+                          <Feather name="x-circle" size={20} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.leadReviewerPlaceholder}>
+                        <Feather name="user-check" size={24} color="#D1D5DB" />
+                        <Text style={styles.leadReviewerPlaceholderText}>
+                          Select from team members →
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Right Column */}
+              <View style={styles.rightColumn}>
+                <View style={styles.labelContainer}>
+                  <Feather name="users" size={16} color="#1a237e" />
+                  <Text style={styles.label}>Team Members</Text>
+                  <View style={[styles.countBadge, {backgroundColor: colors.primary || '#1a237e'}]}>
+                    <Text style={styles.countBadgeText}>{selectedFolioMembers.length}</Text>
+                  </View>
+                </View>
+                <View style={styles.searchInputContainer}>
+                  <Feather name="search" size={18} color="#9CA3AF" style={styles.searchIcon} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder={folioSearchByPosition ? "Search by position..." : "Search by name..."}
+                    value={folioSearchTerm}
+                    onChangeText={setFolioSearchTerm}
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+                <View style={styles.searchToggleContainer}>
+                  <TouchableOpacity
+                    style={[styles.searchToggleButton, !folioSearchByPosition && styles.searchToggleButtonActive]}
+                    onPress={() => setFolioSearchByPosition(false)}
+                  >
+                    <Feather name="user" size={14} color={!folioSearchByPosition ? "#fff" : "#6B7280"} />
+                    <Text style={[styles.searchToggleText, !folioSearchByPosition && styles.searchToggleTextActive]}>Name</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.searchToggleButton, folioSearchByPosition && styles.searchToggleButtonActive]}
+                    onPress={() => setFolioSearchByPosition(true)}
+                  >
+                    <Feather name="briefcase" size={14} color={folioSearchByPosition ? "#fff" : "#6B7280"} />
+                    <Text style={[styles.searchToggleText, folioSearchByPosition && styles.searchToggleTextActive]}>Position</Text>
+                  </TouchableOpacity>
+                </View>
+                {folioSearchResults.length > 0 && (
+                  <FlatList
+                    style={styles.searchResultsContainer}
+                    data={folioSearchResults}
+                    keyExtractor={item => item.id}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity style={styles.searchResultItem} onPress={() => handleAddFolioMember(item)}>
+                        <View style={styles.searchResultContent}>
+                          <View style={styles.avatarPlaceholder}>
+                            <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                          </View>
+                          <View style={styles.searchResultInfo}>
+                            <Text style={styles.searchResultName}>{item.name}</Text>
+                            {item.profile?.position && <Text style={styles.searchResultPosition}>{item.profile.position}</Text>}
+                          </View>
+                        </View>
+                        <Feather name="plus-circle" size={20} color="#1a237e" />
+                      </TouchableOpacity>
+                    )}
+                  />
+                )}
+                <View style={styles.selectedCollaboratorsHeader}>
+                  <Text style={styles.selectedLabel}>Selected</Text>
+                </View>
+                <ScrollView style={styles.collaboratorsContainer} showsVerticalScrollIndicator={false}>
+                  {selectedFolioMembers.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <Feather name="user-plus" size={32} color="#D1D5DB" />
+                      <Text style={styles.emptyStateText}>No members added yet</Text>
+                    </View>
+                  ) : (
+                    selectedFolioMembers.map(user => (
+                      <View key={user.id} style={styles.collaboratorTag}>
+                        <View style={styles.collaboratorTagAvatar}>
+                          <Text style={styles.collaboratorTagAvatarText}>{user.name.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <View style={{flex: 1}}>
+                          <Text style={styles.collaboratorTagText}>{user.name}</Text>
+                          {folioLeadOrganizer?.id === user.id && (
+                            <View style={styles.leadBadge}>
+                              <Feather name="star" size={10} color="#10B981" />
+                              <Text style={styles.leadBadgeText}>Lead Organizer</Text>
+                            </View>
+                          )}
+                        </View>
+                        {folioLeadOrganizer?.id !== user.id && (
+                          <TouchableOpacity 
+                            style={styles.setLeadButton} 
+                            onPress={() => setFolioLeadOrganizer(user)}
+                          >
+                            <Feather name="star" size={14} color="#1a237e" />
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity style={styles.removeButton} onPress={() => {
+                          if (folioLeadOrganizer?.id === user.id) {
+                            setFolioLeadOrganizer(null);
+                          }
+                          handleRemoveFolioMember(user.id);
+                        }}>
+                          <Feather name="x" size={16} color="#6B7280" />
+                        </TouchableOpacity>
+                      </View>
+                    ))
+                  )}
+                </ScrollView>
+              </View>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <Pressable
+                style={styles.cancelButton}
+                onPress={handleCloseFolioPanel}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.createButton, {backgroundColor: colors.primary || '#1a237e'}]}
+                onPress={handleCreateFolio}
+              >
+                <Feather name="check" size={18} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={styles.createButtonText}>Create Folio</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Activity Date Picker Modal */}
+      <Modal
+        visible={showActivityDatePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowActivityDatePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.datePickerModal}>
+            <View style={styles.datePickerHeader}>
+              <Text style={styles.datePickerTitle}>Select Activity Date & Time</Text>
+              <TouchableOpacity onPress={() => setShowActivityDatePicker(false)}>
+                <Feather name="x" size={24} color="#6c757d"/>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.datePickerBody}>
+              <input
+                type="datetime-local"
+                style={{
+                  padding: 12,
+                  fontSize: 16,
+                  borderRadius: 8,
+                  border: '1px solid #E5E7EB',
+                  fontFamily: 'system-ui',
+                  width: '100%',
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                }}
+                value={selectedActivityDate.toISOString().slice(0, 16)}
+                onChange={(e) => {
+                  const newDate = new Date(e.target.value);
+                  setSelectedActivityDate(newDate);
+                }}
+              />
+            </View>
+
+            <View style={styles.datePickerFooter}>
+              <TouchableOpacity
+                style={styles.datePickerCancelButton}
+                onPress={() => {
+                  setShowActivityDatePicker(false);
+                }}
+              >
+                <Text style={styles.datePickerCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.datePickerConfirmButton}
+                onPress={() => {
+                  const formatted = selectedActivityDate.toISOString().slice(0, 16).replace('T', ' ');
+                  setActivityDate(formatted);
+                  setShowActivityDatePicker(false);
+                }}
+              >
+                <Text style={styles.datePickerConfirmText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Activity Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={activityConfirmModalVisible}
+        onRequestClose={() => setActivityConfirmModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.feedbackModal}>
+            <View style={{alignItems: 'center', marginBottom: 20}}>
+              <Feather name="alert-circle" size={64} color="#F59E0B" />
+            </View>
+            <Text style={styles.feedbackTitle}>Insufficient Members</Text>
+            <Text style={styles.feedbackMessage}>
+              You have selected {selectedActivityMembers.length} member(s), but {activityRequiredMembers} member(s) are required.
+              {'\n\n'}Do you want to proceed anyway?
+            </Text>
+            
+            <View style={styles.confirmButtonContainer}>
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.cancelConfirmButton]}
+                onPress={() => setActivityConfirmModalVisible(false)}
+              >
+                <Text style={styles.cancelConfirmButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.proceedConfirmButton]}
+                onPress={() => {
+                  setActivityConfirmModalVisible(false);
+                  handleCreateActivity(true);
+                }}
+              >
+                <Text style={styles.proceedConfirmButtonText}>Proceed</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1039,6 +1883,69 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  confirmButtonContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    marginTop: 8,
+  },
+  confirmButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cancelConfirmButton: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  cancelConfirmButtonText: {
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  proceedConfirmButton: {
+    backgroundColor: '#F59E0B',
+  },
+  proceedConfirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  toggleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    gap: 8,
+  },
+  toggleButtonActive: {
+    backgroundColor: '#1a237e',
+  },
+  toggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  toggleTextActive: {
+    color: '#fff',
   },
   datePickerButton: {
     flexDirection: 'row',

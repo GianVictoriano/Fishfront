@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import apiClient from '../utils/api';
 
@@ -18,15 +18,44 @@ const RecommendedContent = ({ userId, onInteraction }) => {
       setLoading(true);
       const endpoint = userId ? '/recommendations' : '/public/recommendations';
       const response = await apiClient.get(endpoint, {
-        params: { limit: 5 }
+        params: { limit: 6 }
       });
       
-      if (response.data?.data) {
-        setRecommendations(response.data.data);
+      let recommendations = response.data?.data || [];
+      
+      // If we have less than 6 recommendations, fill with most reacted/popular articles
+      if (recommendations.length < 6) {
+        try {
+          const popularResponse = await apiClient.get('/public/trending-articles', {
+            params: { limit: 6 - recommendations.length }
+          });
+          
+          const popularArticles = popularResponse.data?.data || [];
+          
+          // Filter out articles that are already in recommendations to avoid duplicates
+          const recommendationIds = new Set(recommendations.map(r => r.id));
+          const additionalArticles = popularArticles.filter(article => !recommendationIds.has(article.id));
+          
+          recommendations = [...recommendations, ...additionalArticles];
+        } catch (popularError) {
+          console.warn('Could not fetch popular articles:', popularError);
+        }
       }
+      
+      setRecommendations(recommendations.slice(0, 6)); // Ensure we don't exceed 6
     } catch (err) {
       console.error('Error fetching recommendations:', err);
-      setError('Failed to load recommendations');
+      
+      // Fallback: try to get popular articles if recommendations fail
+      try {
+        const popularResponse = await apiClient.get('/public/trending-articles', {
+          params: { limit: 6 }
+        });
+        setRecommendations(popularResponse.data?.data?.slice(0, 6) || []);
+      } catch (fallbackError) {
+        console.error('Fallback also failed:', fallbackError);
+        setError('Failed to load recommendations');
+      }
     } finally {
       setLoading(false);
     }
@@ -43,7 +72,9 @@ const RecommendedContent = ({ userId, onInteraction }) => {
   const getImageUrl = (url) => {
     if (!url) return 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
     if (url.startsWith('http')) return url;
-    return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${url}`;
+    // Handle both /storage/ path (from recommendations) and media file paths (from trending)
+    if (url.startsWith('/storage/')) return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${url}`;
+    return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${url.replace('public/', '')}`;
   };
 
   const formatDate = (dateString) => {
@@ -81,7 +112,7 @@ const RecommendedContent = ({ userId, onInteraction }) => {
         </View>
         <View style={styles.recommendationContent}>
           <Text style={styles.recommendationCategory}>
-            {item.genre || 'Recommended'}
+            {item.genre || item.category || 'Recommended'}
           </Text>
           <Text style={styles.recommendationTitle} numberOfLines={2}>
             {item.title}
@@ -103,7 +134,7 @@ const RecommendedContent = ({ userId, onInteraction }) => {
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color="#007BFF" />
-          <Text style={styles.loadingText}>Learning your preferences...</Text>
+          <Text style={styles.loadingText}>Finding the best stories for you...</Text>
         </View>
       </View>
     );
@@ -118,17 +149,32 @@ const RecommendedContent = ({ userId, onInteraction }) => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>🤖 Recommended for You</Text>
         <Text style={styles.headerSubtitle}>
-          {userId ? 'Based on your reading patterns' : 'Popular content'}
+          {userId ? 'Personalized recommendations & trending stories' : 'Popular content & trending stories'}
         </Text>
       </View>
-      <FlatList
-        data={recommendations}
-        renderItem={({ item }) => <RecommendationCard item={item} />}
-        keyExtractor={(item) => item.id.toString()}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.listContainer}
-      />
+      <div style={{ 
+        overflowX: 'auto', 
+        overflowY: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none',
+      }}>
+        <style>{`
+          div::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'row',
+          padding: '12px 16px',
+          gap: '12px',
+        }}>
+          {recommendations.map((item) => (
+            <RecommendationCard key={item.id.toString()} item={item} />
+          ))}
+        </div>
+      </div>
     </View>
   );
 };
@@ -138,7 +184,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     marginBottom: 20,
     borderRadius: 12,
-    overflow: 'hidden',
     boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
     border: '1px solid #e4e8ee',
   },
@@ -171,13 +216,19 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
   },
+  scrollContainer: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   listContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
+    flexDirection: 'row',
   },
   recommendationCard: {
     width: 200,
-    marginRight: 12,
+    minWidth: 200,
+    marginRight: 0,
     backgroundColor: '#fff',
     borderRadius: 8,
     overflow: 'hidden',
@@ -186,6 +237,7 @@ const styles = StyleSheet.create({
     boxShadow: '0 4px 24px 0 rgba(60,72,88,0.09)',
     transition: 'box-shadow 0.25s cubic-bezier(.4,2,.6,1), transform 0.18s cubic-bezier(.4,2,.6,1)',
     cursor: 'pointer',
+    flexShrink: 0,
   },
   recommendationCardHover: {
     boxShadow: '0 10px 32px 0 rgba(60,72,88,0.18)',

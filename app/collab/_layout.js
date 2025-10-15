@@ -138,8 +138,11 @@ const Sidebar = ({ isMinimized }) => {
         <Scrollbars
           style={{ flex: 1 }} // Ensure it takes up available space
           autoHide
-          // Render an invisible thumb
-          renderThumbVertical={props => <div {...props} style={{ ...props.style, backgroundColor: 'transparent' }}/>}
+          autoHideTimeout={0}
+          autoHideDuration={0}
+          // Render invisible thumb and track
+          renderThumbVertical={props => <div {...props} style={{ display: 'none' }}/>}
+          renderTrackVertical={props => <div {...props} style={{ display: 'none' }}/>}
         >
           {hasModule('dashboard') && <SidebarLink href="/collab/dashboard" text="Dashboard" iconName="grid" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('create-content') && <SidebarLink href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
@@ -149,6 +152,7 @@ const Sidebar = ({ isMinimized }) => {
           {hasModule('forum') && <SidebarLink href="/collab/manage-forum" text="Manage Forum" iconName="message-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('folio') && <SidebarLink href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('applicants') && <SidebarLink href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('requests') && <SidebarLink href="/collab/manage-requests" text="Manage Requests" iconName="file-text" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {(user?.profile?.level === 2 || user?.profile?.level === 3) && (
               <SidebarLink href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />
           )}
@@ -166,6 +170,7 @@ const Sidebar = ({ isMinimized }) => {
             if (hasModule('forum')) links.push(<SidebarLink key="manage-forum" href="/collab/manage-forum" text="Manage Forum" iconName="message-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('folio')) links.push(<SidebarLink key="manage-folio" href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('applicants')) links.push(<SidebarLink key="manage-applicants" href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('requests')) links.push(<SidebarLink key="manage-requests" href="/collab/manage-requests" text="Manage Requests" iconName="file-text" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (user?.profile?.level === 2 || user?.profile?.level === 3) links.push(<SidebarLink key="manage-users" href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             // Only show first 7 when minimized
             return isMinimized ? links.slice(0, 7) : links;

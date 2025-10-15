@@ -10,16 +10,16 @@ import AppNavbar from '../../components/AppNavbar';
 import apiClient from '../../utils/api';
 
 const SUBMISSION_TYPES = [
-  {
-    id: 'literature',
-    title: 'Submit Literature/Artwork',
-    description: 'Share your creative writing, poetry, or visual artwork',
-    icon: 'auto-stories',
-    color: '#4f46e5',
-  },
+  // {
+  //   id: 'literature',
+  //   title: 'Submit Literature/Artwork',
+  //   description: 'Share your creative writing, poetry, or visual artwork',
+  //   icon: 'auto-stories',
+  //   color: '#4f46e5',
+  // },
   {
     id: 'coverage',
-    title: 'Request Coverage',
+    title: 'Submit Request',
     description: 'Suggest a topic or event you\'d like us to cover',
     icon: 'record-voice-over',
     color: '#f59e0b',
@@ -50,6 +50,17 @@ const Contribute = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
   const { user } = useAuth();
+  const [showEligibilityModal, setShowEligibilityModal] = useState(false);
+  const [eventDate, setEventDate] = useState('');
+  const [eventLocation, setEventLocation] = useState('');
+  const [numJournalists, setNumJournalists] = useState('1');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDateErrorModal, setShowDateErrorModal] = useState(false);
+  const [showTimeErrorModal, setShowTimeErrorModal] = useState(false);
+  const [dateErrorMessage, setDateErrorMessage] = useState('');
+
+  const router = useRouter();
 
   const validateForm = () => {
     const newErrors = {};
@@ -69,12 +80,39 @@ const Contribute = () => {
     if (isArtwork && files.length === 0) {
       newErrors.files = 'Please upload at least one file';
     }
+
+    // Validate coverage-specific fields
+    if (submissionType === 'coverage') {
+      if (!eventDate) newErrors.eventDate = 'Event date is required';
+      if (!eventLocation.trim()) newErrors.eventLocation = 'Event location is required';
+      if (!numJournalists || parseInt(numJournalists) < 1) {
+        newErrors.numJournalists = 'Please specify number of journalists (minimum 1)';
+      }
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
   
   const handleSelectType = (type) => {
+    // Check eligibility for coverage requests
+    if (type === 'coverage') {
+      const email = user?.email || '';
+      // Check if email matches pattern **-*****@g.batstate-u.edu.ph
+      const studentEmailPattern = /^\d{2}-\d{5}@g\.batstate-u\.edu\.ph$/;
+      if (studentEmailPattern.test(email)) {
+        setShowEligibilityModal(true);
+        return;
+      }
+    }
+
+    // Reset coverage fields when switching to different type
+    if (type !== 'coverage') {
+      setEventDate('');
+      setEventLocation('');
+      setNumJournalists('1');
+    }
+    
     setSubmissionType(type);
     if (type === 'literature') {
       setStep('category');
@@ -91,6 +129,10 @@ const Contribute = () => {
   
   const handleBack = () => {
     if (step === 'form' || step === 'category') {
+      // Reset coverage fields when going back
+      setEventDate('');
+      setEventLocation('');
+      setNumJournalists('1');
       setStep('select');
     } else {
       router.back();
@@ -163,6 +205,13 @@ const Contribute = () => {
       formData.append('type', submissionType);
       formData.append('user_id', user.id);  // Changed userId to user_id to match backend
 
+      // Add coverage-specific fields
+      if (submissionType === 'coverage') {
+        formData.append('event_date', eventDate);
+        formData.append('event_location', eventLocation);
+        formData.append('num_journalists', numJournalists);
+      }
+
       // Only append files if they exist
       if (files.length > 0) {
         files.forEach((file, index) => {
@@ -202,8 +251,8 @@ const Contribute = () => {
   const renderSelectionScreen = () => (
     <View style={styles.selectionContainer}>
       <View style={styles.header}>
-        <Text style={styles.title}>Make a Contribution</Text>
-        <Text style={styles.subtitle}>Choose what you'd like to share with University</Text>
+        <Text style={styles.title}>Submit</Text>
+        <Text style={styles.subtitle}>Choose what you'd like to share with the Fisherman Publications</Text>
       </View>
       
       <View style={styles.cardsContainer}>
@@ -298,6 +347,80 @@ const Contribute = () => {
           </View>
         )}
 
+        {submissionType === 'coverage' && (
+          <>
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Event Details</Text>
+              <View style={styles.eventDetailsRow}>
+                <View style={styles.detailField}>
+                  <Text style={styles.fieldLabel}>Date & Time</Text>
+                  <TouchableOpacity
+                    style={[styles.input, styles.datePickerButton, errors.eventDate && styles.inputError]}
+                    onPress={() => setShowDatePicker(true)}
+                  >
+                    <Text style={eventDate ? styles.dateText : styles.datePlaceholder}>
+                      {eventDate || 'Select date and time'}
+                    </Text>
+                    <MaterialIcons name="calendar-today" size={18} color="#94a3b8" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.detailField}>
+                  <Text style={styles.fieldLabel}>Location</Text>
+                  <TextInput
+                    style={[styles.input, errors.eventLocation && styles.inputError]}
+                    value={eventLocation}
+                    onChangeText={setEventLocation}
+                    placeholder="Enter location"
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
+
+                <View style={styles.detailField}>
+                  <Text style={styles.fieldLabel}>No. of Journalists</Text>
+                  <View style={styles.journalistsContainer}>
+                    <TouchableOpacity
+                      style={styles.arrowButton}
+                      onPress={() => {
+                        const current = parseInt(numJournalists) || 1;
+                        if (current > 1) {
+                          setNumJournalists((current - 1).toString());
+                        }
+                      }}
+                    >
+                      <MaterialIcons name="keyboard-arrow-down" size={20} color="#4f46e5" />
+                    </TouchableOpacity>
+
+                    <TextInput
+                      style={[styles.journalistInput, errors.numJournalists && styles.inputError]}
+                      value={numJournalists}
+                      onChangeText={setNumJournalists}
+                      placeholder="1"
+                      placeholderTextColor="#94a3b8"
+                      keyboardType="numeric"
+                      textAlign="center"
+                    />
+
+                    <TouchableOpacity
+                      style={styles.arrowButton}
+                      onPress={() => {
+                        const current = parseInt(numJournalists) || 1;
+                        setNumJournalists((current + 1).toString());
+                      }}
+                    >
+                      <MaterialIcons name="keyboard-arrow-up" size={20} color="#4f46e5" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              {errors.eventDate && <Text style={[styles.errorText, {marginTop: 4}]}>{errors.eventDate}</Text>}
+              {errors.numJournalists && <Text style={[styles.errorText, {marginTop: 4}]}>{errors.numJournalists}</Text>}
+              {errors.eventLocation && <Text style={[styles.errorText, {marginTop: 4}]}>{errors.eventLocation}</Text>}
+            </View>
+          </>
+        )}
+
         <View style={styles.formGroup}>
           <Text style={styles.label}>
             {submissionType === 'literature' ? 'Content' : 
@@ -367,7 +490,7 @@ const Contribute = () => {
           {isSubmitting ? (
             <ActivityIndicator color="#ffffff" />
           ) : (
-            <Text style={styles.submitButtonText}>Submit for Review</Text>
+            <Text style={styles.submitButtonText}>Submit Request</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -382,6 +505,181 @@ const Contribute = () => {
         {step === 'category' && renderCategorySelection()}
         {step === 'form' && renderForm()}
       </ScrollView>
+
+      {/* Eligibility Modal */}
+      <Modal
+        visible={showEligibilityModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowEligibilityModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.eligibilityModal}>
+            <View style={styles.modalIconContainer}>
+              <MaterialIcons name="block" size={48} color="#ef4444" />
+            </View>
+            <Text style={styles.modalTitle}>Not Eligible</Text>
+            <Text style={styles.modalMessage}>
+              Student accounts are not eligible to request coverage. This feature is only available for faculty, staff, and departments.
+            </Text>
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => setShowEligibilityModal(false)}
+            >
+              <Text style={styles.modalButtonText}>Understood</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Date Picker Modal */}
+      <Modal
+        visible={showDatePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.datePickerModal}>
+            <View style={styles.datePickerHeader}>
+              <Text style={styles.datePickerTitle}>Select Event Date & Time</Text>
+              <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                <MaterialIcons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.datePickerBody}>
+              <input
+                type="datetime-local"
+                style={{
+                  padding: 12,
+                  fontSize: 16,
+                  borderRadius: 8,
+                  border: '1px solid #e2e8f0',
+                  fontFamily: 'system-ui',
+                  width: '100%',
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                }}
+                value={(() => {
+                  const year = selectedDate.getFullYear();
+                  const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                  const day = String(selectedDate.getDate()).padStart(2, '0');
+                  const hours = String(selectedDate.getHours()).padStart(2, '0');
+                  const minutes = String(selectedDate.getMinutes()).padStart(2, '0');
+                  return `${year}-${month}-${day}T${hours}:${minutes}`;
+                })()}
+                onChange={(e) => {
+                  const newDate = new Date(e.target.value + ':00'); // Add seconds
+                  setSelectedDate(newDate);
+                }}
+              />
+            </View>
+
+            <View style={styles.datePickerFooter}>
+              <TouchableOpacity
+                style={styles.datePickerCancelButton}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <Text style={styles.datePickerCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.datePickerConfirmButton}
+                onPress={() => {
+                  const now = new Date();
+                  const selectedDateTime = new Date(selectedDate);
+                  
+                  // Check if selected date is before current date
+                  const selectedDateOnly = new Date(selectedDateTime.getFullYear(), selectedDateTime.getMonth(), selectedDateTime.getDate());
+                  const currentDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  
+                  if (selectedDateOnly < currentDateOnly) {
+                    setDateErrorMessage('You cannot select a date in the past.');
+                    setShowDateErrorModal(true);
+                    return;
+                  }
+                  
+                  // Check if selected time is less than 1 hour from now (for today's date)
+                  if (selectedDateOnly.getTime() === currentDateOnly.getTime()) {
+                    const oneHourFromNow = new Date(now.getTime() + (60 * 60 * 1000)); // 1 hour in milliseconds
+                    
+                    if (selectedDateTime < oneHourFromNow) {
+                      setDateErrorMessage('You must select a time at least 1 hour from now.');
+                      setShowTimeErrorModal(true);
+                      return;
+                    }
+                  }
+                  
+                  const formatted = (() => {
+                    const year = selectedDate.getFullYear();
+                    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(selectedDate.getDate()).padStart(2, '0');
+                    const hours = String(selectedDate.getHours()).padStart(2, '0');
+                    const minutes = String(selectedDate.getMinutes()).padStart(2, '0');
+                    return `${year}-${month}-${day} ${hours}:${minutes}`;
+                  })();
+                  setEventDate(formatted);
+                  setShowDatePicker(false);
+                }}
+              >
+                <Text style={styles.datePickerConfirmText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Date Error Modal */}
+      <Modal
+        visible={showDateErrorModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDateErrorModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.eligibilityModal}>
+            <View style={styles.modalIconContainer}>
+              <MaterialIcons name="error-outline" size={48} color="#ef4444" />
+            </View>
+            <Text style={styles.modalTitle}>Invalid Date</Text>
+            <Text style={styles.modalMessage}>
+              {dateErrorMessage}
+            </Text>
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => setShowDateErrorModal(false)}
+            >
+              <Text style={styles.modalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Time Error Modal */}
+      <Modal
+        visible={showTimeErrorModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTimeErrorModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.eligibilityModal}>
+            <View style={styles.modalIconContainer}>
+              <MaterialIcons name="schedule" size={48} color="#f59e0b" />
+            </View>
+            <Text style={styles.modalTitle}>Invalid Time</Text>
+            <Text style={styles.modalMessage}>
+              {dateErrorMessage}
+            </Text>
+            <TouchableOpacity
+              style={[styles.modalButton, {backgroundColor: '#f59e0b'}]}
+              onPress={() => setShowTimeErrorModal(false)}
+            >
+              <Text style={styles.modalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -611,6 +909,163 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '600',
     fontSize: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eligibilityModal: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 32,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalIconContainer: {
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  modalButton: {
+    backgroundColor: '#ef4444',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dateText: {
+    fontSize: 16,
+    color: '#1e293b',
+  },
+  datePlaceholder: {
+    fontSize: 16,
+    color: '#94a3b8',
+  },
+  datePickerModal: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  datePickerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  datePickerBody: {
+    padding: 20,
+  },
+  datePickerFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    gap: 12,
+  },
+  datePickerCancelButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+  },
+  datePickerCancelText: {
+    color: '#475569',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  datePickerConfirmButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#4f46e5',
+  },
+  datePickerConfirmText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  eventDetailsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  detailField: {
+    flex: 1,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#475569',
+    marginBottom: 6,
+  },
+  journalistsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minHeight: 48,
+  },
+  arrowButton: {
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  journalistInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1e293b',
+    textAlign: 'center',
+    paddingVertical: 8,
+    minWidth: 40,
   },
 });
 

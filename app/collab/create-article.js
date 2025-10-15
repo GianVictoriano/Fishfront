@@ -498,6 +498,7 @@ export default function CreateArticleScreen() {
       formData.append('content', content.trim());
       formData.append('genre', genre || 'articles'); // Default to 'articles' if not selected
       formData.append('status', 'draft');
+      formData.append('post_to_facebook', publishToFacebook ? '1' : '0');
 
       console.log('Form data prepared, processing images...');
       
@@ -790,7 +791,7 @@ export default function CreateArticleScreen() {
                   <Ionicons name="logo-facebook" size={24} color="#1877F2" />
                   <View style={styles.toggleTextContainer}>
                     <Text style={styles.toggleTitle}>Post to Facebook</Text>
-                    <Text style={styles.toggleDescription}>Share this article on Facebook (Coming Soon)</Text>
+                    <Text style={styles.toggleDescription}>Automatically share this article on your Facebook page</Text>
                   </View>
                 </View>
                 <View style={[styles.toggleSwitch, publishToFacebook && styles.toggleSwitchActive]}>

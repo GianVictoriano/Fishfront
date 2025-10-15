@@ -28,6 +28,8 @@ export default function RegistrationScreen() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState('');
   const [modalType, setModalType] = useState('');
+  const [applicationPeriod, setApplicationPeriod] = useState(null);
+  const [isCheckingPeriod, setIsCheckingPeriod] = useState(true);
 
   const updateEmailFromSrCode = (srCode) => {
     if (srCode) {
@@ -158,6 +160,7 @@ export default function RegistrationScreen() {
         setModalType('error');
         setIsModalVisible(true);
         setIsCheckingProfile(false);
+        setIsCheckingPeriod(false);
         return;
       }
 
@@ -176,12 +179,48 @@ export default function RegistrationScreen() {
       }
     };
 
+    const checkApplicationPeriod = async () => {
+      try {
+        const response = await apiClient.get('/api/application-period');
+        if (response.data) {
+          setApplicationPeriod(response.data);
+          
+          // Check if current date is within the application period
+          // Compare only dates, not times
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+          
+          const startDate = new Date(response.data.start_date);
+          startDate.setHours(0, 0, 0, 0);
+          
+          const endDate = new Date(response.data.end_date);
+          endDate.setHours(23, 59, 59, 999);
+          
+          if (now < startDate) {
+            setModalMessage(`Application period has not yet started. Applications will open on ${startDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.`);
+            setModalType('error');
+            setIsModalVisible(true);
+          } else if (now > endDate) {
+            setModalMessage(`Application period has ended. The deadline was ${endDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}. Please check back for the next application period.`);
+            setModalType('error');
+            setIsModalVisible(true);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking application period:', error);
+        // If there's no period set, allow applications (backward compatibility)
+      } finally {
+        setIsCheckingPeriod(false);
+      }
+    };
+
     checkUserProfile();
+    checkApplicationPeriod();
   }, [user]);
 
   console.log('Current step:', step);
   
-  if (isCheckingProfile) {
+  if (isCheckingProfile || isCheckingPeriod) {
     return (
       <View style={{ flex: 1 }}>
         <ImageBackground

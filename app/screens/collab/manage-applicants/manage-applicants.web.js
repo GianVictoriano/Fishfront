@@ -20,6 +20,13 @@ export default function ManageApplicantsScreen() {
   const [accepting, setAccepting] = useState(false);
   const { colors } = useBranding();
   const router = useRouter();
+  const [periodModal, setPeriodModal] = useState(false);
+  const [periodData, setPeriodData] = useState({ start_date: '', end_date: '' });
+  const [savingPeriod, setSavingPeriod] = useState(false);
+  const [currentPeriod, setCurrentPeriod] = useState(null);
+  const [contactModal, setContactModal] = useState({ visible: false, applicant: null });
+  const [emailContent, setEmailContent] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const fetchApplicants = async () => {
     try {
@@ -61,6 +68,32 @@ export default function ManageApplicantsScreen() {
     }
   };
 
+  const handleSendEmail = async () => {
+    if (!emailContent.trim()) {
+      Alert.alert('Error', 'Please enter a message');
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      await apiClient.post('/api/send-email', {
+        to: contactModal.applicant.email,
+        subject: `Message from Fisherman Publication`,
+        message: emailContent,
+        applicant_name: contactModal.applicant.full_name
+      });
+      Alert.alert('Success', 'Email sent successfully!');
+      setContactModal({ visible: false, applicant: null });
+      setEmailContent('');
+    } catch (err) {
+      console.error('Failed to send email', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to send email';
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   const applyFilters = () => {
     let filtered = [...applicants];
 
@@ -98,8 +131,51 @@ export default function ManageApplicantsScreen() {
     applyFilters();
   }, [searchQuery, roleFilter, sortOrder, applicants]);
 
+  const fetchApplicationPeriod = async () => {
+    try {
+      const res = await apiClient.get('/api/application-period');
+      if (res.data) {
+        setCurrentPeriod(res.data);
+        setPeriodData({
+          start_date: res.data.start_date || '',
+          end_date: res.data.end_date || ''
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load application period', err);
+    }
+  };
+
+  const handleSavePeriod = async () => {
+    if (!periodData.start_date || !periodData.end_date) {
+      Alert.alert('Error', 'Please fill in both start and end dates');
+      return;
+    }
+
+    if (new Date(periodData.start_date) > new Date(periodData.end_date)) {
+      Alert.alert('Error', 'Start date must be before end date');
+      return;
+    }
+
+    setSavingPeriod(true);
+    try {
+      const res = await apiClient.post('/api/application-period', periodData);
+      if (res.data) {
+        setCurrentPeriod(res.data);
+        Alert.alert('Success', 'Application period has been set successfully');
+        setPeriodModal(false);
+      }
+    } catch (err) {
+      console.error('Failed to save application period', err);
+      Alert.alert('Error', err.response?.data?.message || 'Failed to save application period');
+    } finally {
+      setSavingPeriod(false);
+    }
+  };
+
   useEffect(() => {
     fetchApplicants();
+    fetchApplicationPeriod();
   }, []);
 
   // Get unique roles for filter dropdown
@@ -112,7 +188,24 @@ export default function ManageApplicantsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Manage Applicants</Text>
+      <View style={styles.headerContainer}>
+        <Text style={styles.title}>Manage Applicants</Text>
+        <TouchableOpacity
+          style={styles.setPeriodButton}
+          onPress={() => setPeriodModal(true)}
+        >
+          <MaterialIcons name="event" size={20} color="#fff" />
+          <Text style={styles.setPeriodButtonText}>Set Period</Text>
+        </TouchableOpacity>
+      </View>
+      {currentPeriod && (
+        <View style={styles.periodInfoContainer}>
+          <MaterialIcons name="info-outline" size={16} color="#1565c0" />
+          <Text style={styles.periodInfoText}>
+            Application Period: {new Date(currentPeriod.start_date).toLocaleDateString()} - {new Date(currentPeriod.end_date).toLocaleDateString()}
+          </Text>
+        </View>
+      )}
       
       {/* Filters and Search */}
       <View style={styles.filtersContainer}>
@@ -170,16 +263,16 @@ export default function ManageApplicantsScreen() {
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => (
             <View style={styles.card}>
- <View style={styles.nameRow}>
-  <Text style={[styles.name, {color: colors.text_secondary || '#1a237e'}]}>{item.full_name}</Text>
-  <TouchableOpacity 
-    style={styles.contactButton}
-    onPress={() => Linking.openURL(`mailto:${item.email}`)}
-  >
-    <MaterialIcons name="email" size={16} color="#1565c0" />
-    <Text style={styles.contactText}>Contact</Text>
-  </TouchableOpacity>
-</View>
+              <View style={styles.nameRow}>
+                <Text style={[styles.name, {color: colors.text_secondary || '#1a237e'}]}>{item.full_name}</Text>
+                <TouchableOpacity 
+                  style={styles.contactButton}
+                  onPress={() => setContactModal({ visible: true, applicant: item })}
+                >
+                  <MaterialIcons name="email" size={16} color="#1565c0" />
+                  <Text style={styles.contactText}>Contact</Text>
+                </TouchableOpacity>
+              </View>
               <Text style={styles.detail}>SR Code: {item.sr_code}</Text>
               <Text style={styles.detail}>Email: {item.email}</Text>
               <Text style={styles.detail}>Enrollment Year: {item.enrollment_year}</Text>
@@ -244,6 +337,141 @@ export default function ManageApplicantsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Set Period Modal */}
+      <Modal
+        visible={periodModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPeriodModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Set Application Period</Text>
+            <Text style={styles.modalSubtext}>
+              Set the start and end dates for accepting new applications
+            </Text>
+            
+            <View style={styles.dateInputContainer}>
+              <Text style={styles.dateLabel}>Start Date</Text>
+              <input
+                type="date"
+                value={periodData.start_date}
+                onChange={(e) => setPeriodData({ ...periodData, start_date: e.target.value })}
+                style={{
+                  padding: 12,
+                  fontSize: 16,
+                  borderRadius: 8,
+                  border: '1px solid #e2e8f0',
+                  fontFamily: 'system-ui',
+                  width: '100%',
+                  maxWidth: '400px',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </View>
+
+            <View style={styles.dateInputContainer}>
+              <Text style={styles.dateLabel}>End Date</Text>
+              <input
+                type="date"
+                value={periodData.end_date}
+                onChange={(e) => setPeriodData({ ...periodData, end_date: e.target.value })}
+                style={{
+                  padding: 12,
+                  fontSize: 16,
+                  borderRadius: 8,
+                  border: '1px solid #e2e8f0',
+                  fontFamily: 'system-ui',
+                  width: '100%',
+                  maxWidth: '400px',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </View>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setPeriodModal(false)}
+                disabled={savingPeriod}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleSavePeriod}
+                disabled={savingPeriod}
+              >
+                {savingPeriod ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.confirmButtonText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Contact Modal */}
+      <Modal
+        visible={contactModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setContactModal({ visible: false, applicant: null })}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Contact Applicant</Text>
+            <Text style={styles.modalSubtitle}>
+              Sending email to: {contactModal.applicant?.email}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              Applicant: {contactModal.applicant?.full_name}
+            </Text>
+            
+            <TextInput
+              style={styles.emailInput}
+              placeholder="Type your message here..."
+              value={emailContent}
+              onChangeText={setEmailContent}
+              multiline
+              numberOfLines={8}
+              textAlignVertical="top"
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setContactModal({ visible: false, applicant: null });
+                  setEmailContent('');
+                }}
+                disabled={sendingEmail}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleSendEmail}
+                disabled={sendingEmail}
+              >
+                {sendingEmail ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <MaterialIcons name="send" size={18} color="#fff" />
+                    <Text style={styles.confirmButtonText}>Send Email</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -275,7 +503,6 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 4,
     color: '#1a237e',
   },
   detail: {
@@ -288,8 +515,6 @@ const styles = StyleSheet.create({
     color: s === 'approved' ? '#28a745' : s === 'rejected' ? '#dc3545' : '#ffc107',
   }),
   title: {
-    marginTop: 16,
-    marginLeft: 19,
     fontSize: 28,
     fontWeight: 'bold',
     color: '#333',
@@ -412,12 +637,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 24,
     width: '90%',
-    maxWidth: 400,
+    maxWidth: 500,
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
     elevation: 5,
+  },
+  emailInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    minHeight: 150,
+    marginVertical: 16,
+    backgroundColor: '#f9f9f9',
   },
   modalTitle: {
     fontSize: 20,
@@ -460,5 +695,51 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 19,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  setPeriodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1565c0',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 6,
+  },
+  setPeriodButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  periodInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e3f2fd',
+    paddingVertical: 8,
+    paddingHorizontal: 19,
+    gap: 8,
+  },
+  periodInfoText: {
+    color: '#1565c0',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  dateInputContainer: {
+    width: '100%',
+    marginBottom: 16,
+    alignItems: 'flex-start',
+  },
+  dateLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
   },
 });

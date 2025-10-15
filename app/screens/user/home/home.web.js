@@ -47,58 +47,75 @@ const HomeScreen = () => {
   const [isViewAllHovered, setIsViewAllHovered] = useState(false);
   const [isReadFeaturedHovered, setIsReadFeaturedHovered] = useState(false);
   const [isJoinUsHovered, setIsJoinUsHovered] = useState(false);
+  const [applicationPeriod, setApplicationPeriod] = useState(null);
+  const [isCheckingPeriod, setIsCheckingPeriod] = useState(true);
 
   useEffect(() => {
-    const fetchArticlesByCategory = async () => {
-      try {
-        setIsLoading(true);
-        
-        // First, fetch all articles with their genres
-        const response = await apiClient.get('/public/articles?sort=published_at:desc');
-        
-        if (!response.data?.data) {
-          setError('No articles found');
-          return;
-        }
-        
-        const allArticles = response.data.data;
-        const categoryData = {};
-        
-        // Initialize each category with an empty array
-        CATEGORIES.forEach(category => {
-          categoryData[category] = [];
-        });
-        
-        // Categorize articles by their genre
-        allArticles.forEach(article => {
-          const articleGenre = article.genre || 'General';
-          const category = CATEGORIES.find(cat => cat.toLowerCase() === articleGenre.toLowerCase());
-          
-          if (category && categoryData[category]?.length < 4) {
-            categoryData[category].push({
-              id: article.id?.toString() || '',
-              title: article.title || 'Untitled Article',
-              summary: '', // Removed content display
-              image: article.media && article.media.length > 0 
-                ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`
-                : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
-              link: `news/article/${article.slug || article.id}`,
-              genre: article.genre
-            });
-          }
-        });
-        
-        setPublications(categoryData);
-      } catch (err) {
-        console.error('Error fetching articles:', err);
-        setError('Failed to load articles. Please try again later.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchArticlesByCategory();
+    fetchApplicationPeriod();
   }, []);
+
+  const fetchApplicationPeriod = async () => {
+    try {
+      const response = await apiClient.get('/api/application-period');
+      if (response.data) {
+        setApplicationPeriod(response.data);
+      }
+    } catch (error) {
+      console.log('No application period set or error fetching:', error);
+      // If no period is set, keep applicationPeriod as null
+    } finally {
+      setIsCheckingPeriod(false);
+    }
+  };
+
+  const fetchArticlesByCategory = async () => {
+    try {
+      setIsLoading(true);
+      
+      // First, fetch all articles with their genres
+      const response = await apiClient.get('/public/articles?sort=published_at:desc');
+      
+      if (!response.data?.data) {
+        setError('No articles found');
+        return;
+      }
+      
+      const allArticles = response.data.data;
+      const categoryData = {};
+      
+      // Initialize each category with an empty array
+      CATEGORIES.forEach(category => {
+        categoryData[category] = [];
+      });
+      
+      // Categorize articles by their genre
+      allArticles.forEach(article => {
+        const articleGenre = article.genre || 'General';
+        const category = CATEGORIES.find(cat => cat.toLowerCase() === articleGenre.toLowerCase());
+        
+        if (category && categoryData[category]?.length < 4) {
+          categoryData[category].push({
+            id: article.id?.toString() || '',
+            title: article.title || 'Untitled Article',
+            summary: '', // Removed content display
+            image: article.media && article.media.length > 0 
+              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`
+              : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+            link: `news/article/${article.slug || article.id}`,
+            genre: article.genre
+          });
+        }
+      });
+      
+      setPublications(categoryData);
+    } catch (err) {
+      console.error('Error fetching articles:', err);
+      setError('Failed to load articles. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div style={styles.container}>
@@ -225,7 +242,8 @@ const HomeScreen = () => {
           </div>
         )}
         
-        {/* Recruitment Section */}
+        {/* Recruitment Section - Only show if application period is set */}
+        {applicationPeriod && (
         <section style={{...styles.section, ...styles.recruitmentSection}}>
           <div style={styles.recruitmentContent}>
             <img
@@ -253,6 +271,7 @@ const HomeScreen = () => {
             </div>
           </div>
         </section>
+        )}
       </div>
 
       {/* Footer */}

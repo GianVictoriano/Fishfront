@@ -248,6 +248,9 @@ export default function CollaborateScreen() {
   const [groupMembers, setGroupMembers] = useState([]);
   const [selectedReviewer, setSelectedReviewer] = useState(null);
   const [pendingUpload, setPendingUpload] = useState(null); // {type: 'image'|'document', file: ...}
+  
+  // Folio submission confirmation state
+  const [folioConfirmModalVisible, setFolioConfirmModalVisible] = useState(false);
 
   const selectedGroupIdRef = useRef(selectedGroupId);
   const isScanningRef = useRef(false);
@@ -275,7 +278,10 @@ export default function CollaborateScreen() {
         try {
           await Promise.all([
             fetchGroupChats(),
-            apiClient.get('/users/me').then(response => setCurrentUser(response.data))
+            apiClient.get('/user').then(response => {
+              console.log('Current user loaded:', response.data);
+              setCurrentUser(response.data);
+            })
           ]);
         } catch (error) {
           console.error('Failed to fetch initial data:', error);
@@ -677,6 +683,18 @@ export default function CollaborateScreen() {
     await proceedWithFileSelection();
   };
 
+  // Helper function to check if current group chat is a folio chat
+  const isFolioChat = () => {
+    const currentChat = groupChats.find(g => g.id === selectedGroupId);
+    return currentChat?.folio != null;
+  };
+
+  // Helper function to get folio lead organizer
+  const getFolioLeadOrganizer = () => {
+    const currentChat = groupChats.find(g => g.id === selectedGroupId);
+    return currentChat?.folio?.lead_organizer_id;
+  };
+
   const proceedWithFileSelection = async () => {
     // Close the upload modal first
     setIsUploadModalVisible(false);
@@ -697,9 +715,16 @@ export default function CollaborateScreen() {
         const file = result.assets[0];
         console.log('File selected:', file.name, file.mimeType);
         
-        // Store file and show reviewer selection modal
+        // Store file and check if it's a folio chat
         setPendingUpload({ type: 'document', file });
-        setReviewerModalVisible(true);
+        
+        if (isFolioChat()) {
+          // Show folio confirmation modal instead of reviewer selection
+          setFolioConfirmModalVisible(true);
+        } else {
+          // Show reviewer selection modal for regular chats
+          setReviewerModalVisible(true);
+        }
       } else {
         console.log('File selection cancelled');
       }
@@ -744,9 +769,16 @@ export default function CollaborateScreen() {
     try {
       const image = await pickImage();
       if (image) {
-        // Store image and show reviewer selection modal
+        // Store image and check if it's a folio chat
         setPendingUpload({ type: 'image', file: image });
-        setReviewerModalVisible(true);
+        
+        if (isFolioChat()) {
+          // Show folio confirmation modal instead of reviewer selection
+          setFolioConfirmModalVisible(true);
+        } else {
+          // Show reviewer selection modal for regular chats
+          setReviewerModalVisible(true);
+        }
       }
     } catch (err) {
       console.error('Error picking image:', err);
@@ -942,6 +974,215 @@ export default function CollaborateScreen() {
       setFeedbackModalVisible(true);
     } catch (error) {
       console.error('Error processing Word document:', error);
+      setFeedbackModalConfig({
+        message: `Failed to process document: ${error.response?.data?.message || error.message || 'Unknown error'}`,
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    } finally {
+      setIsProcessingDocument(false);
+    }
+  };
+
+  // Handle folio submission (send directly to lead organizer)
+  const handleFolioSubmission = async () => {
+    if (!pendingUpload) {
+      setFeedbackModalConfig({
+        message: 'No file selected for submission.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+      return;
+    }
+
+    setFolioConfirmModalVisible(false);
+
+    try {
+      const leadOrganizerId = getFolioLeadOrganizer();
+      const currentChat = groupChats.find(g => g.id === selectedGroupId);
+      const folioId = currentChat?.folio?.id;
+
+      if (!leadOrganizerId || !folioId) {
+        throw new Error('Could not find folio lead organizer');
+      }
+
+      if (pendingUpload.type === 'image') {
+        await uploadImageForFolio(pendingUpload.file, leadOrganizerId, folioId);
+      } else if (pendingUpload.type === 'document') {
+        await uploadDocumentForFolio(pendingUpload.file, leadOrganizerId, folioId);
+      }
+      
+      // Clear states
+      setPendingUpload(null);
+    } catch (error) {
+      console.error('Error submitting to folio:', error);
+      setFeedbackModalConfig({
+        message: 'Failed to submit. Please try again.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
+  };
+
+  // Upload image for folio submission
+  const uploadImageForFolio = async (image, leadOrganizerId, folioId) => {
+    if (!currentUser || !currentUser.id) {
+      console.error('Current user not loaded');
+      setFeedbackModalConfig({
+        message: 'Loading user data... Please try again in a moment.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+      return;
+    }
+    
+    const formData = new FormData();
+    
+    if (Platform.OS === 'web') {
+      const imageFile = image.file || image;
+      formData.append('image', imageFile);
+    } else {
+      formData.append('image', {
+        uri: Platform.OS === 'android' ? image.uri : image.uri.replace('file://', ''),
+        name: image.fileName || image.uri.split('/').pop() || 'photo.jpg',
+        type: image.mimeType || 'image/jpeg',
+      });
+    }
+    
+    formData.append('group_id', selectedGroupId);
+    formData.append('user_id', currentUser.id);
+    formData.append('current_reviewer_id', leadOrganizerId);
+    formData.append('review_stage', 'initial');
+    formData.append('is_folio_submission', '1');
+    formData.append('folio_id', folioId);
+    
+    const imageResponse = await apiClient.post('/review-images', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    
+    // Also create a folio submission record
+    const imageName = image.file?.name || image.fileName || image.uri?.split('/').pop() || 'image';
+    await apiClient.post(`/folios/${folioId}/submit`, {
+      title: imageName.replace(/\.(jpg|jpeg|png|gif|webp)$/i, ''),
+      content: `Image submission: ${imageResponse.data.file_path || imageName}`,
+      type: 'other' // You can make this selectable later
+    });
+    
+    // Send notification message
+    const currentChat = groupChats.find(g => g.id === selectedGroupId);
+    const leadOrganizerName = currentChat?.folio?.lead_organizer?.name || 'the lead organizer';
+    const userName = currentUser?.name || currentUser?.email || 'A user';
+    const messageText = `${userName} has submitted an image to the folio for review by ${leadOrganizerName}.`;
+    await apiClient.post(`/group-chats/${selectedGroupId}/messages`, { message: messageText });
+    
+    // Refresh messages
+    fetchMessages();
+    
+    setFeedbackModalConfig({
+      message: `Image submitted to folio lead organizer!`,
+      type: 'success'
+    });
+    setFeedbackModalVisible(true);
+  };
+
+  // Upload document for folio submission
+  const uploadDocumentForFolio = async (file, leadOrganizerId, folioId) => {
+    // Check if it's a text-based document
+    if (file.mimeType === 'application/msword' || 
+        file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        file.mimeType === 'text/plain' ||
+        file.name.endsWith('.doc') || file.name.endsWith('.docx') || file.name.endsWith('.txt')) {
+      
+      await handleWordDocumentUploadForFolio(file, leadOrganizerId, folioId);
+    } else {
+      // For PDF, show error (folio submissions should be text-based)
+      setFeedbackModalConfig({
+        message: 'Folio submissions must be text-based documents (.doc, .docx, .txt). PDF files are not supported for folio submissions.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
+  };
+
+  // Handle Word document upload for folio
+  const handleWordDocumentUploadForFolio = async (file, leadOrganizerId, folioId) => {
+    if (!currentUser || !currentUser.id) {
+      console.error('Current user not loaded');
+      setFeedbackModalConfig({
+        message: 'Loading user data... Please try again in a moment.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+      return;
+    }
+    
+    setIsProcessingDocument(true);
+    try {
+      const extractedText = await extractTextFromDocument(file);
+      const textFileName = file.name.replace(/\.(doc|docx)$/i, '.txt');
+      let textFile;
+      
+      if (Platform.OS === 'web') {
+        const textBlob = new Blob([extractedText], { type: 'text/plain' });
+        textFile = new File([textBlob], textFileName, { type: 'text/plain' });
+      } else {
+        const tempUri = `${FileSystem.cacheDirectory}${textFileName}`;
+        await FileSystem.writeAsStringAsync(tempUri, extractedText, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        textFile = {
+          uri: tempUri,
+          name: textFileName,
+          type: 'text/plain'
+        };
+      }
+      
+      // Send notification message
+      const currentChat = groupChats.find(g => g.id === selectedGroupId);
+      const leadOrganizerName = currentChat?.folio?.lead_organizer?.name || 'the lead organizer';
+      const userName = currentUser?.name || currentUser?.email || 'A user';
+      const messageText = `${userName} has submitted a document to the folio for review by ${leadOrganizerName}: ${textFileName}`;
+      const response = await apiClient.post(`/group-chats/${selectedGroupId}/messages`, { message: messageText });
+      setMessages(prevMessages => [response.data, ...prevMessages]);
+
+      // Upload the text file to review_content
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        formData.append('file', textFile);
+      } else {
+        formData.append('file', {
+          uri: textFile.uri,
+          name: textFile.name,
+          type: textFile.type
+        });
+      }
+      formData.append('group_id', selectedGroupId);
+      formData.append('user_id', currentUser.id);
+      formData.append('current_reviewer_id', leadOrganizerId);
+      formData.append('review_stage', 'initial');
+      formData.append('status', 'pending');
+      formData.append('no_of_approval', '0');
+      formData.append('is_folio_submission', '1');
+      formData.append('folio_id', folioId);
+      
+      await apiClient.post('/review-content', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      // Also create a folio submission record
+      await apiClient.post(`/folios/${folioId}/submit`, {
+        title: file.name.replace(/\.(doc|docx)$/i, ''),
+        content: extractedText,
+        type: 'other' // You can make this selectable later
+      });
+      
+      setFeedbackModalConfig({
+        message: `Document submitted to folio lead organizer!`,
+        type: 'success'
+      });
+      setFeedbackModalVisible(true);
+    } catch (error) {
+      console.error('Error processing folio document:', error);
       setFeedbackModalConfig({
         message: `Failed to process document: ${error.response?.data?.message || error.message || 'Unknown error'}`,
         type: 'error'
@@ -1167,7 +1408,23 @@ export default function CollaborateScreen() {
                     );
                   }
                   
-                  // Show lead reviewer for active chats
+                  // Check if this is a folio chat
+                  const folioLeadOrganizerId = selectedGroup?.folio?.lead_organizer_id;
+                  if (folioLeadOrganizerId) {
+                    const leadOrganizer = groupMembers.find(m => m.id === folioLeadOrganizerId);
+                    if (leadOrganizer) {
+                      return (
+                        <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 6}}>
+                          <Feather name="star" size={14} color="#8B5CF6" />
+                          <Text style={{fontSize: 13, color: '#6B7280', marginLeft: 4}}>
+                            Lead Organizer: <Text style={{fontWeight: '600', color: '#8B5CF6'}}>{leadOrganizer.name || leadOrganizer.email || 'Unknown'}</Text>
+                          </Text>
+                        </View>
+                      );
+                    }
+                  }
+                  
+                  // Show lead reviewer for scrum board chats
                   const leadReviewerId = selectedGroup?.scrum_board?.lead_reviewer_id;
                   if (leadReviewerId) {
                     const leadReviewer = groupMembers.find(m => m.id === leadReviewerId);
@@ -1183,12 +1440,12 @@ export default function CollaborateScreen() {
                     }
                   }
                   
-                  // No lead reviewer found
+                  // No lead reviewer/organizer found
                   return (
                     <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 6}}>
                       <Feather name="alert-circle" size={14} color="#F59E0B" />
                       <Text style={{fontSize: 13, color: '#6B7280', marginLeft: 4}}>
-                        No lead reviewer assigned
+                        No lead assigned
                       </Text>
                     </View>
                   );
@@ -1563,7 +1820,100 @@ export default function CollaborateScreen() {
                     onPress={handleUploadWithReviewer}
                     disabled={!selectedReviewer}
                   >
-                    <Text style={{color: '#fff', fontWeight: '700', fontSize: 15}}>Send for Review</Text>
+                    <Feather name="send" size={18} color="#fff" />
+                    <Text style={{color: '#fff', fontWeight: '700', fontSize: 15}}>Submit</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Folio Submission Confirmation Modal */}
+          <Modal 
+            animationType="fade" 
+            transparent={true} 
+            visible={folioConfirmModalVisible} 
+            onRequestClose={() => {
+              setFolioConfirmModalVisible(false);
+              setPendingUpload(null);
+            }}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 300, maxWidth: 500, width: '90%'}]}>
+                <View style={{alignItems: 'center', marginBottom: 20}}>
+                  <View style={{
+                    width: 80,
+                    height: 80,
+                    borderRadius: 40,
+                    backgroundColor: '#EEF2FF',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: 16,
+                  }}>
+                    <Feather name="folder" size={40} color="#1a237e" />
+                  </View>
+                  <Text style={[modalStyles.modalTitle, {fontSize: 22, marginBottom: 8}]}>
+                    Submit to Folio
+                  </Text>
+                  <Text style={{fontSize: 15, color: '#6B7280', textAlign: 'center', lineHeight: 22}}>
+                    This {pendingUpload?.type === 'image' ? 'image' : 'document'} will be sent directly to the folio lead organizer for review.
+                  </Text>
+                </View>
+                
+                <View style={{
+                  backgroundColor: '#F9FAFB',
+                  borderRadius: 12,
+                  padding: 16,
+                  marginBottom: 24,
+                  borderLeftWidth: 4,
+                  borderLeftColor: '#1a237e',
+                }}>
+                  <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 8}}>
+                    <Feather name="info" size={18} color="#1a237e" />
+                    <Text style={{fontSize: 14, fontWeight: '600', color: '#111827', marginLeft: 8}}>
+                      Submission Details
+                    </Text>
+                  </View>
+                  <Text style={{fontSize: 13, color: '#6B7280', lineHeight: 20}}>
+                    • Your {pendingUpload?.type === 'image' ? 'image' : 'document'} will be reviewed by the lead organizer{'\n'}
+                    • You'll be notified once it's been reviewed{'\n'}
+                    • Make sure your submission follows the folio theme
+                  </Text>
+                </View>
+
+                <View style={{flexDirection: 'row', gap: 12}}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      minWidth: 120,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#F3F4F6',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => {
+                      setFolioConfirmModalVisible(false);
+                      setPendingUpload(null);
+                    }}
+                  >
+                    <Text style={{color: '#374151', fontWeight: '600', fontSize: 15}}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      minWidth: 120,
+                      flexDirection: 'row',
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#1a237e',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                    }}
+                    onPress={handleFolioSubmission}
+                  >
+                    <Feather name="send" size={18} color="#fff" />
+                    <Text style={{color: '#fff', fontWeight: '700', fontSize: 15}}>Submit</Text>
                   </TouchableOpacity>
                 </View>
               </View>

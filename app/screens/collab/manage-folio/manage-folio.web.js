@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
-  Image,
   ScrollView,
   FlatList,
   SafeAreaView,
@@ -10,181 +9,425 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Alert,
 } from 'react-native';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { MaterialIcons, Feather } from '@expo/vector-icons';
 import apiClient from '../../../../utils/api';
+import { useAuth } from '../../../../context/AuthContext';
 
 export default function ManageFolioScreen() {
+  const { user } = useAuth();
   const [selected, setSelected] = useState(null);
-  const [previewVisible, setPreviewVisible] = useState(false);
-  const [contributions, setContributions] = useState([]);
+  const [detailsVisible, setDetailsVisible] = useState(false);
+  const [folios, setFolios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [submissions, setSubmissions] = useState([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [folioToDelete, setFolioToDelete] = useState(null);
 
-  const fetchContributions = async () => {
+  const fetchFolios = async () => {
     try {
-      console.log('Fetching contributions...');
-      const res = await apiClient.get('/contributions');
-      console.log('API Response:', res.data);
-      // Handle both paginated and non-paginated responses
+      const res = await apiClient.get('/folios');
       const list = Array.isArray(res.data) ? res.data : (res.data.data || []);
-      console.log('Processed contributions:', list);
-      setContributions(list);
+      
+      // Filter to show only folios where current user is lead organizer
+      const myFolios = list.filter(folio => folio.lead_organizer_id === user?.id);
+      
+      setFolios(myFolios);
       setError(null);
     } catch (err) {
-      console.error('Failed to load contributions:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-        headers: err.response?.headers,
-      });
-      setError(err.response?.data?.message || 'Failed to load contributions');
+      console.error('Failed to load folios:', err);
+      setError(err.response?.data?.message || 'Failed to load folios');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchContributions();
-  }, []);
+    if (user) {
+      fetchFolios();
+    }
+  }, [user]);
 
-  const updateStatus = async (id, status) => {
+  const fetchSubmissions = async (folioId) => {
+    setLoadingSubmissions(true);
     try {
-      await apiClient.post(`/api/contributions/${id}/status`, { status });
-      setContributions((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, status } : c))
-      );
+      const res = await apiClient.get(`/folios/${folioId}/submissions`);
+      setSubmissions(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error('Failed to update status', err);
-      Alert.alert('Error', 'Failed to update status');
+      console.error('Failed to load submissions:', err);
+      alert('Failed to load submissions');
+    } finally {
+      setLoadingSubmissions(false);
     }
   };
 
-  const deleteContribution = async (id) => {
-    Alert.alert('Confirm Delete', 'Are you sure you want to delete this contribution?', [
-      {
-        text: 'Cancel',
-        style: 'cancel',
-      },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await apiClient.delete(`/api/contributions/${id}`);
-            setContributions((prev) => prev.filter((c) => c.id !== id));
-          } catch (err) {
-            console.error('Failed to delete contribution', err);
-            Alert.alert('Error', 'Failed to delete contribution');
-          }
-        },
-      },
-    ]);
+  const updateFolioStatus = async (id, status) => {
+    try {
+      await apiClient.put(`/folios/${id}`, { status });
+      setFolios((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, status } : f))
+      );
+      alert(`Folio status updated to ${status}`);
+    } catch (err) {
+      console.error('Failed to update status', err);
+      alert('Failed to update status: ' + (err.response?.data?.message || err.message));
+    }
   };
 
-  const handlePreview = (item) => {
-    setSelected(item);
-    setPreviewVisible(true);
+  const reviewSubmission = async (folioId, submissionId, status, feedback = '') => {
+    try {
+      await apiClient.post(`/folios/${folioId}/submissions/${submissionId}/review`, {
+        status,
+        feedback,
+      });
+      
+      // Refresh submissions
+      fetchSubmissions(folioId);
+      alert('Submission reviewed successfully');
+    } catch (err) {
+      console.error('Failed to review submission', err);
+      alert('Failed to review submission: ' + (err.response?.data?.message || err.message));
+    }
   };
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity style={styles.card} onPress={() => handlePreview(item)}>
+  const openDeleteModal = (folio) => {
+    setFolioToDelete(folio);
+    setDeleteModalVisible(true);
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModalVisible(false);
+    setFolioToDelete(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!folioToDelete) return;
+    
+    try {
+      await apiClient.delete(`/folios/${folioToDelete.id}`);
+      setFolios((prev) => prev.filter((f) => f.id !== folioToDelete.id));
+      alert('Folio deleted successfully');
+      closeDeleteModal();
+    } catch (err) {
+      console.error('Failed to delete folio', err);
+      alert('Failed to delete folio: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleViewDetails = async (folio) => {
+    setSelected(folio);
+    setDetailsVisible(true);
+    await fetchSubmissions(folio.id);
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'open': return '#28a745';
+      case 'closed': return '#dc3545';
+      case 'published': return '#007bff';
+      case 'draft': return '#ffc107';
+      default: return '#6c757d';
+    }
+  };
+
+  const renderFolioItem = ({ item }) => (
+    <TouchableOpacity style={styles.card} onPress={() => handleViewDetails(item)}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>{item.title}</Text>
-        <Text style={styles.status(item.status)}>{item.status.toUpperCase()}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>{item.title}</Text>
+          <Text style={styles.theme}>Theme: {item.theme}</Text>
+        </View>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+          <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+        </View>
       </View>
-      <Text style={styles.detail}>Category: {item.category}</Text>
-      <Text style={styles.detail}>Author ID: {item.user_id}</Text>
+      
+      <View style={styles.detailRow}>
+        <Feather name="users" size={14} color="#666" />
+        <Text style={styles.detail}>
+          {item.members?.length || 0} members
+        </Text>
+      </View>
+
+      {item.start_date && item.end_date && (
+        <View style={styles.detailRow}>
+          <Feather name="calendar" size={14} color="#666" />
+          <Text style={styles.detail}>
+            {new Date(item.start_date).toLocaleDateString()} - {new Date(item.end_date).toLocaleDateString()}
+          </Text>
+        </View>
+      )}
+
+      <View style={styles.detailRow}>
+        <Feather name={item.is_journalists_only ? "edit" : "globe"} size={14} color="#666" />
+        <Text style={styles.detail}>
+          {item.is_journalists_only ? 'Journalists Only' : 'Whole School'}
+        </Text>
+      </View>
+
       <View style={styles.actionRow}>
-        {item.status !== 'approved' && (
+        {item.status === 'draft' && (
           <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => updateStatus(item.id, 'approved')}
+            style={[styles.actionButton, { backgroundColor: '#28a745' }]}
+            onPress={(e) => {
+              e.stopPropagation();
+              updateFolioStatus(item.id, 'open');
+            }}
           >
-            <MaterialIcons name="check" size={16} color="#28a745" />
-            <Text style={styles.actionText}>Approve</Text>
+            <Feather name="unlock" size={14} color="#fff" />
+            <Text style={[styles.actionText, { color: '#fff' }]}>Open</Text>
           </TouchableOpacity>
         )}
-        {item.status !== 'rejected' && (
+        {item.status === 'open' && (
           <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => updateStatus(item.id, 'rejected')}
+            style={[styles.actionButton, { backgroundColor: '#dc3545' }]}
+            onPress={(e) => {
+              e.stopPropagation();
+              updateFolioStatus(item.id, 'closed');
+            }}
           >
-            <MaterialIcons name="close" size={16} color="#dc3545" />
-            <Text style={styles.actionText}>Reject</Text>
+            <Feather name="lock" size={14} color="#fff" />
+            <Text style={[styles.actionText, { color: '#fff' }]}>Close</Text>
+          </TouchableOpacity>
+        )}
+        {item.status === 'closed' && (
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#007bff' }]}
+            onPress={(e) => {
+              e.stopPropagation();
+              updateFolioStatus(item.id, 'published');
+            }}
+          >
+            <Feather name="send" size={14} color="#fff" />
+            <Text style={[styles.actionText, { color: '#fff' }]}>Publish</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => deleteContribution(item.id)}
+          style={[styles.actionButton, { backgroundColor: '#6c757d' }]}
+          onPress={(e) => {
+            e.stopPropagation();
+            openDeleteModal(item);
+          }}
         >
-          <Ionicons name="trash-outline" size={16} color="#6c757d" />
-          <Text style={styles.actionText}>Delete</Text>
+          <Feather name="trash-2" size={14} color="#fff" />
+          <Text style={[styles.actionText, { color: '#fff' }]}>Delete</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 
+  const renderSubmissionItem = ({ item }) => (
+    <View style={styles.submissionCard}>
+      <View style={styles.submissionHeader}>
+        <Text style={styles.submissionTitle}>{item.title}</Text>
+        <View style={[styles.submissionStatusBadge, { 
+          backgroundColor: item.status === 'approved' ? '#28a745' : 
+                         item.status === 'rejected' ? '#dc3545' : 
+                         item.status === 'revision_requested' ? '#ffc107' : '#6c757d'
+        }]}>
+          <Text style={styles.statusText}>{item.status.replace('_', ' ').toUpperCase()}</Text>
+        </View>
+      </View>
+      
+      <Text style={styles.submissionMeta}>By: {item.user?.name || 'Unknown'}</Text>
+      <Text style={styles.submissionMeta}>Type: {item.type}</Text>
+      <Text style={styles.submissionMeta}>
+        Submitted: {new Date(item.submitted_at).toLocaleDateString()}
+      </Text>
+
+      {item.status === 'pending' && (
+        <View style={styles.reviewActions}>
+          <TouchableOpacity
+            style={[styles.reviewButton, { backgroundColor: '#28a745' }]}
+            onPress={() => reviewSubmission(selected.id, item.id, 'approved')}
+          >
+            <Feather name="check" size={16} color="#fff" />
+            <Text style={[styles.actionText, { color: '#fff' }]}>Approve</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.reviewButton, { backgroundColor: '#ffc107' }]}
+            onPress={() => reviewSubmission(selected.id, item.id, 'revision_requested', 'Please revise your submission')}
+          >
+            <Feather name="edit" size={16} color="#fff" />
+            <Text style={[styles.actionText, { color: '#fff' }]}>Request Revision</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.reviewButton, { backgroundColor: '#dc3545' }]}
+            onPress={() => reviewSubmission(selected.id, item.id, 'rejected', 'Submission does not meet requirements')}
+          >
+            <Feather name="x" size={16} color="#fff" />
+            <Text style={[styles.actionText, { color: '#fff' }]}>Reject</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {item.feedback && (
+        <View style={styles.feedbackBox}>
+          <Text style={styles.feedbackLabel}>Feedback:</Text>
+          <Text style={styles.feedbackText}>{item.feedback}</Text>
+        </View>
+      )}
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.screenTitle}>Manage Contributions</Text>
+      <View style={styles.header}>
+        <Text style={styles.screenTitle}>Manage My Folios</Text>
+        <Text style={styles.subtitle}>Folios where you are the lead organizer</Text>
+      </View>
+
       {loading && (
         <View style={styles.centeredContainer}>
           <ActivityIndicator size="large" color="#1a237e" />
         </View>
       )}
+
       {error && (
         <View style={styles.centeredContainer}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
+
       {!loading && !error && (
         <FlatList
-          data={contributions}
+          data={folios}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}
-          renderItem={renderItem}
+          renderItem={renderFolioItem}
           ListEmptyComponent={() => (
             <View style={styles.centeredContainer}>
-              <Text>No contributions found.</Text>
+              <Feather name="folder" size={64} color="#ccc" />
+              <Text style={styles.emptyText}>No folios found</Text>
+              <Text style={styles.emptySubtext}>You are not a lead organizer of any folios yet</Text>
             </View>
           )}
         />
       )}
-    {/* Preview Modal */}
-    <Modal
-      visible={previewVisible}
-      animationType="slide"
-      onRequestClose={() => setPreviewVisible(false)}
-    >
-      <SafeAreaView style={styles.modalContainer}>
-        <TouchableOpacity style={styles.closeButton} onPress={() => setPreviewVisible(false)}>
-          <Ionicons name="close" size={28} color="#333" />
-        </TouchableOpacity>
-        {selected && (
-          <ScrollView contentContainerStyle={styles.previewContent}>
-            <Text style={styles.previewTitle}>{selected.title}</Text>
-            <Text style={styles.previewMeta}>Category: {selected.category}</Text>
-            {selected.category === 'artwork' ? (
-              selected.media && selected.media.length ? (
-                selected.media.map((m) => (
-                  <Image
-                    key={m.id}
-                    source={{ uri: `${process.env.EXPO_PUBLIC_API_URL}/storage/${m.file_path}` }}
-                    style={styles.previewImage}
-                  />
-                ))
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDeleteModal}
+      >
+        <View style={styles.deleteModalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <View style={styles.deleteModalHeader}>
+              <View style={styles.deleteIconContainer}>
+                <Feather name="alert-triangle" size={48} color="#dc3545" />
+              </View>
+              <Text style={styles.deleteModalTitle}>Delete Folio?</Text>
+              <Text style={styles.deleteModalMessage}>
+                Are you sure you want to delete "{folioToDelete?.title}"? This action cannot be undone and will also delete:
+              </Text>
+              <View style={styles.deleteWarningList}>
+                <View style={styles.deleteWarningItem}>
+                  <Feather name="x-circle" size={16} color="#dc3545" />
+                  <Text style={styles.deleteWarningText}>All submissions to this folio</Text>
+                </View>
+                <View style={styles.deleteWarningItem}>
+                  <Feather name="x-circle" size={16} color="#dc3545" />
+                  <Text style={styles.deleteWarningText}>The associated group chat</Text>
+                </View>
+                <View style={styles.deleteWarningItem}>
+                  <Feather name="x-circle" size={16} color="#dc3545" />
+                  <Text style={styles.deleteWarningText}>All member associations</Text>
+                </View>
+              </View>
+            </View>
+            
+            <View style={styles.deleteModalActions}>
+              <TouchableOpacity
+                style={styles.deleteCancelButton}
+                onPress={closeDeleteModal}
+              >
+                <Text style={styles.deleteCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteConfirmButton}
+                onPress={confirmDelete}
+              >
+                <Feather name="trash-2" size={18} color="#fff" />
+                <Text style={styles.deleteConfirmButtonText}>Delete Folio</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Details Modal */}
+      <Modal
+        visible={detailsVisible}
+        animationType="slide"
+        onRequestClose={() => setDetailsVisible(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {selected?.title}
+            </Text>
+            <TouchableOpacity onPress={() => setDetailsVisible(false)}>
+              <Feather name="x" size={28} color="#333" />
+            </TouchableOpacity>
+          </View>
+
+          {selected && (
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              <View style={styles.infoSection}>
+                <Text style={styles.infoLabel}>Theme:</Text>
+                <Text style={styles.infoValue}>{selected.theme}</Text>
+              </View>
+
+              <View style={styles.infoSection}>
+                <Text style={styles.infoLabel}>Status:</Text>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selected.status) }]}>
+                  <Text style={styles.statusText}>{selected.status.toUpperCase()}</Text>
+                </View>
+              </View>
+
+              {selected.start_date && selected.end_date && (
+                <View style={styles.infoSection}>
+                  <Text style={styles.infoLabel}>Period:</Text>
+                  <Text style={styles.infoValue}>
+                    {new Date(selected.start_date).toLocaleDateString()} - {new Date(selected.end_date).toLocaleDateString()}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.infoSection}>
+                <Text style={styles.infoLabel}>Audience:</Text>
+                <Text style={styles.infoValue}>
+                  {selected.is_journalists_only ? 'Journalists Only' : 'Whole School'}
+                </Text>
+              </View>
+
+              <View style={styles.divider} />
+
+              <Text style={styles.sectionTitle}>Submissions ({submissions.length})</Text>
+
+              {loadingSubmissions ? (
+                <ActivityIndicator size="large" color="#1a237e" style={{ marginTop: 20 }} />
+              ) : submissions.length === 0 ? (
+                <View style={styles.emptySubmissions}>
+                  <Feather name="file-text" size={48} color="#ccc" />
+                  <Text style={styles.emptyText}>No submissions yet</Text>
+                </View>
               ) : (
-                <Text>No media files attached.</Text>
-              )
-            ) : (
-              <Text style={styles.previewText}>{selected.content}</Text>
-            )}
-          </ScrollView>
-        )}
-      </SafeAreaView>
-    </Modal>
+                <FlatList
+                  data={submissions}
+                  keyExtractor={(item) => item.id.toString()}
+                  renderItem={renderSubmissionItem}
+                  scrollEnabled={false}
+                />
+              )}
+            </ScrollView>
+          )}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -194,6 +437,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  header: {
+    padding: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  screenTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1a237e',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4,
+  },
   listContent: {
     padding: 16,
   },
@@ -201,96 +460,291 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 1 },
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 3,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    marginBottom: 12,
   },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1a237e',
+    marginBottom: 4,
+  },
+  theme: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  statusText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 8,
   },
   detail: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: 13,
+    color: '#666',
   },
-  status: (s) => ({
-    fontWeight: 'bold',
-    color: s === 'approved' ? '#28a745' : s === 'rejected' ? '#dc3545' : '#ffc107',
-  }),
   actionRow: {
     flexDirection: 'row',
     marginTop: 12,
+    gap: 8,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12,
-    backgroundColor: '#e9ecef',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    gap: 6,
   },
   actionText: {
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  screenTitle: {
-    marginTop: 16,
-    marginLeft: 16,
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 13,
+    fontWeight: '600',
   },
   errorText: {
     color: '#dc3545',
     fontSize: 16,
   },
-  previewContent: {
-    padding: 16,
+  emptyText: {
+    fontSize: 18,
+    color: '#666',
+    marginTop: 16,
   },
-  previewTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#1a237e',
-  },
-  previewMeta: {
+  emptySubtext: {
     fontSize: 14,
-    marginBottom: 12,
-    color: '#555',
-  },
-  previewText: {
-    fontSize: 16,
-    lineHeight: 22,
-    color: '#333',
-  },
-  previewImage: {
-    width: '100%',
-    height: 250,
-    resizeMode: 'contain',
-    marginBottom: 12,
+    color: '#999',
+    marginTop: 8,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f9fa',
   },
-  closeButton: {
-    alignSelf: 'flex-end',
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a237e',
+    flex: 1,
+  },
+  modalContent: {
+    padding: 20,
+  },
+  infoSection: {
+    marginBottom: 16,
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 4,
+  },
+  infoValue: {
+    fontSize: 16,
+    color: '#333',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 20,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1a237e',
+    marginBottom: 16,
+  },
+  submissionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  submissionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  submissionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+  },
+  submissionStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  submissionMeta: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 4,
+  },
+  reviewActions: {
+    flexDirection: 'row',
+    marginTop: 12,
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  reviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    gap: 6,
+  },
+  feedbackBox: {
+    marginTop: 12,
     padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 6,
+    borderLeftWidth: 3,
+    borderLeftColor: '#007bff',
+  },
+  feedbackLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 4,
+  },
+  feedbackText: {
+    fontSize: 13,
+    color: '#333',
+  },
+  emptySubmissions: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 500,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  deleteModalHeader: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  deleteIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  deleteModalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  deleteModalMessage: {
+    fontSize: 15,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  deleteWarningList: {
+    width: '100%',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    padding: 16,
+    gap: 12,
+  },
+  deleteWarningItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  deleteWarningText: {
+    fontSize: 14,
+    color: '#991B1B',
+    flex: 1,
+  },
+  deleteModalActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    gap: 12,
+    padding: 16,
+  },
+  deleteCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  deleteCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  deleteConfirmButton: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#dc3545',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  deleteConfirmButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
   },
 });
