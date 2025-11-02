@@ -433,7 +433,28 @@ export default function RegistrationScreen() {
                         
                       } catch (error) {
                         console.error('Error submitting application:', error);
-                        const errorMessage = error.response?.data?.message || 'Failed to submit application. Please try again.';
+                        console.error('Error response:', error.response?.data);
+                        console.error('Validation errors:', error.response?.data?.errors);
+                        
+                        let errorMessage = 'Failed to submit application. Please try again.';
+                        
+                        if (error.response?.data?.errors) {
+                          // Validation errors - show each field's error
+                          const errors = error.response.data.errors;
+                          const errorList = [];
+                          
+                          Object.keys(errors).forEach(field => {
+                            const fieldErrors = errors[field];
+                            fieldErrors.forEach(err => {
+                              errorList.push(`• ${field}: ${err}`);
+                            });
+                          });
+                          
+                          errorMessage = 'Please fix the following errors:\n\n' + errorList.join('\n');
+                        } else if (error.response?.data?.message) {
+                          errorMessage = error.response.data.message;
+                        }
+                        
                         setModalMessage(errorMessage);
                         setModalType('error');
                         setIsModalVisible(true);

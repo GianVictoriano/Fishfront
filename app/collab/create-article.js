@@ -501,12 +501,23 @@ export default function CreateArticleScreen() {
       formData.append('post_to_facebook', publishToFacebook ? '1' : '0');
 
       console.log('Form data prepared, processing images...');
+      console.log('Total images in state:', images.length);
+      console.log('Images array:', JSON.stringify(images, null, 2));
       
       // Process images if any
       for (let index = 0; index < images.length; index++) {
         const image = images[index];
         if (image.uri && image.type === 'image') {
           console.log(`Processing image ${index + 1}/${images.length}:`, image.uri);
+          
+          // Check if this is an image from Browse Works (already on server)
+          if (!image.local && image.uri.includes('/storage/')) {
+            console.log('Image is from server storage, sending file path');
+            // Extract the storage path from the URL
+            const storagePath = image.uri.split('/storage/')[1];
+            formData.append('existing_media[]', storagePath);
+            continue;
+          }
           
           if (Platform.OS === 'web') {
             try {

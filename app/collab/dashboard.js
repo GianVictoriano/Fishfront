@@ -1,8 +1,12 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '~/context/AuthContext';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+
+const API_URL = `${process.env.EXPO_PUBLIC_API_URL || 'http://172.20.10.2:8000'}/api`;
 
 const StatCard = ({ title, value, iconName, color, isMobile, cardStyle }) => (
   <View style={[styles.statCard, isMobile && styles.statCardMobile, cardStyle]}>
@@ -16,13 +20,28 @@ const StatCard = ({ title, value, iconName, color, isMobile, cardStyle }) => (
   </View>
 );
 
-const ActivityItem = ({ text, time, iconName, isMobile }) => (
-  <View style={styles.activityItem}>
-    <Feather name={iconName} size={isMobile ? 18 : 24} color="#555" />
-    <Text style={styles.activityText}>{text}</Text>
-    <Text style={styles.activityTime}>{time}</Text>
-  </View>
-);
+const ActivityItem = ({ text, time, iconName, isMobile }) => {
+  const getTimeAgo = (timestamp) => {
+    const now = new Date();
+    const past = new Date(timestamp);
+    const diffMs = now - past;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+  };
+
+  return (
+    <View style={styles.activityItem}>
+      <Feather name={iconName} size={isMobile ? 18 : 24} color="#555" />
+      <Text style={styles.activityText}>{text}</Text>
+      <Text style={styles.activityTime}>{getTimeAgo(time)}</Text>
+    </View>
+  );
+};
 
 const QuickAction = ({ title, iconName, href, isMobile }) => {
   const router = useRouter();
@@ -35,22 +54,141 @@ const QuickAction = ({ title, iconName, href, isMobile }) => {
 };
 
 export default function DashboardScreen() {
-  const { user, logout } = useAuth();
+  const { user, logout, hasModule } = useAuth();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState([]);
+  const [activities, setActivities] = useState([]);
 
   const handleLogout = () => {
     logout();
     router.push('/');
   };
 
-  const stats = [
-    { title: "In Review", value: "1", iconName: "file-text", color: "#FFA726" },
-    { title: "Approved", value: "1", iconName: "check-square", color: "#66BB6A" },
-    { title: "Pending Tasks", value: "2", iconName: "alert-circle", color: "#EF5350" },
-    { title: "Team Members", value: "2", iconName: "users", color: "#5C6BC0" },
-  ];
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('auth_token');
+      
+      if (!token) {
+        console.error('No auth token found');
+        setLoading(false);
+        return;
+      }
+
+      const response = await axios.get(`${API_URL}/dashboard/statistics`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = response.data.data;
+      const statsArray = [];
+
+      // Build stats based on user's modules
+      if (hasModule('review-content') && data.pending_reviews !== undefined) {
+        statsArray.push({
+          title: "Pending Reviews",
+          value: data.pending_reviews.toString(),
+          iconName: "file-text",
+          color: "#FFA726"
+        });
+      }
+
+      if (hasModule('collaborate')) {
+        if (data.total_group_chats !== undefined) {
+          statsArray.push({
+            title: "Group Chats",
+            value: data.total_group_chats.toString(),
+            iconName: "users",
+            color: "#5C6BC0"
+          });
+        }
+        if (data.active_group_chats !== undefined) {
+          statsArray.push({
+            title: "Active Chats",
+            value: data.active_group_chats.toString(),
+            iconName: "message-circle",
+            color: "#66BB6A"
+          });
+        }
+      }
+
+      if (hasModule('forum') && data.reported_topics !== undefined) {
+        statsArray.push({
+          title: "Reported Topics",
+          value: data.reported_topics.toString(),
+          iconName: "alert-triangle",
+          color: "#EF5350"
+        });
+      }
+
+      if (hasModule('requests') && data.pending_coverage_requests !== undefined) {
+        statsArray.push({
+          title: "Coverage Requests",
+          value: data.pending_coverage_requests.toString(),
+          iconName: "camera",
+          color: "#AB47BC"
+        });
+      }
+
+      if (hasModule('folio')) {
+        if (data.pending_folio_submissions !== undefined) {
+          statsArray.push({
+            title: "Pending Submissions",
+            value: data.pending_folio_submissions.toString(),
+            iconName: "book",
+            color: "#FF7043"
+          });
+        }
+        if (data.approved_folio_submissions !== undefined) {
+          statsArray.push({
+            title: "Approved Works",
+            value: data.approved_folio_submissions.toString(),
+            iconName: "check-circle",
+            color: "#66BB6A"
+          });
+        }
+      }
+
+      // User's own contributions
+      if (data.my_contributions) {
+        statsArray.push({
+          title: "My Pending",
+          value: data.my_contributions.pending.toString(),
+          iconName: "clock",
+          color: "#FFA726"
+        });
+      }
+
+      setStats(statsArray);
+      setActivities(data.recent_activity || []);
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      // Set default stats on error
+      setStats([
+        { title: "Error Loading", value: "0", iconName: "alert-circle", color: "#EF5350" },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#303F9F" />
+        <Text style={{ marginTop: 10, color: '#718096' }}>Loading dashboard...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1 }}>
@@ -62,36 +200,48 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {isMobile ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.statsContainerHorizontal}
-          >
-            {stats.map(stat => <StatCard key={stat.title} {...stat} isMobile={isMobile} cardStyle={{ width: width * 0.75 }} />)}
-          </ScrollView>
-        ) : (
-          <View style={styles.statsContainer}>
-            {stats.map(stat => <StatCard key={stat.title} {...stat} isMobile={isMobile} />)}
-          </View>
+        {stats.length > 0 && (
+          isMobile ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.statsContainerHorizontal}
+            >
+              {stats.map(stat => <StatCard key={stat.title} {...stat} isMobile={isMobile} cardStyle={{ width: width * 0.75 }} />)}
+            </ScrollView>
+          ) : (
+            <View style={styles.statsContainer}>
+              {stats.map(stat => <StatCard key={stat.title} {...stat} isMobile={isMobile} />)}
+            </View>
+          )
         )}
 
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={[styles.quickActionsGrid, isMobile && styles.mobileQuickActionsGrid]}>
-            <QuickAction title="Collaborate" iconName="plus-circle" href="/collab/collaborate" isMobile={isMobile} />
-            <QuickAction title="Review Content" iconName="eye" href="/collab/review-content" isMobile={isMobile} />
+            {hasModule('create-content') && (
+              <QuickAction title="Publish" iconName="send" href="/collab/create-content" isMobile={isMobile} />
+            )}
+            <QuickAction title="Go to Home" iconName="home" href="/home" isMobile={isMobile} />
           </View>
         </View>
 
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <View style={styles.activityList}>
-            <ActivityItem iconName="git-pull-request" text="VICTORIANO GIAN PATRICK submitted new content for review." time="2h ago" isMobile={isMobile} />
-            <ActivityItem iconName="check-circle" text="Intrams Basketball Tournament was approved." time="1d ago" isMobile={isMobile} />
-            <ActivityItem iconName="user-plus" text="gian patrick victoriano joined the team." time="3d ago" isMobile={isMobile} />
+        {activities.length > 0 && (
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionTitle}>Recent Activity</Text>
+            <View style={styles.activityList}>
+              {activities.map((activity, index) => (
+                <ActivityItem 
+                  key={index}
+                  iconName={activity.icon} 
+                  text={activity.text} 
+                  time={activity.time} 
+                  isMobile={isMobile} 
+                />
+              ))}
+            </View>
           </View>
-        </View>
+        )}
       </ScrollView>
     </View>
   );

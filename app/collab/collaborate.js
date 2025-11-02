@@ -483,23 +483,7 @@ export default function CollaborateScreen() {
               {senderName}
             </Text>
           )}
-          <View style={[
-            styles.messageBubble, 
-            isUploadNotification ? styles.uploadNotificationBubble : (isMe ? styles.myMessage : styles.theirMessage)
-          ]}>
-            {isUploadNotification && (
-              <View style={styles.uploadNotificationHeader}>
-                <Feather name="upload-cloud" size={16} color="#8B5CF6" />
-                <Text style={styles.uploadNotificationLabel}>File Upload</Text>
-              </View>
-            )}
-            <Text style={[
-              styles.messageText,
-              isUploadNotification && styles.uploadNotificationText
-            ]}>
-              {item.message}
-            </Text>
-          </View>
+
         </View>
       </View>
     );
@@ -760,6 +744,43 @@ export default function CollaborateScreen() {
     
     console.log('No pending image, proceeding with image selection');
     await proceedWithImageSelection();
+  };
+
+  const handleChooseScan = async () => {
+    console.log('handleChooseScan called');
+    
+    // Close the upload modal first
+    setIsUploadModalVisible(false);
+    
+    try {
+      console.log('About to call DocumentPicker.getDocumentAsync for scanning');
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain',
+        ],
+        copyToCacheDirectory: true
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        console.log('File selected for scanning:', file.name, file.mimeType);
+        
+        // Directly call the plagiarism check handler
+        await handlePlagiarismCheck('file', file);
+      } else {
+        console.log('File selection cancelled');
+      }
+    } catch (err) {
+      console.error('Error picking document for scan:', err);
+      setFeedbackModalConfig({
+        message: 'Failed to pick document for scanning. Please try again.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
   };
 
   const proceedWithImageSelection = async () => {
@@ -1241,7 +1262,16 @@ export default function CollaborateScreen() {
         try {
           const res = await apiClient.get(`/plagiarism-scans/${scanId}`);
           if (res.data.status === 'completed') {
-            setPlagiarismResult(res.data.result);
+            console.log('Plagiarism scan completed. Full response:', JSON.stringify(res.data, null, 2));
+            console.log('Score from backend:', res.data.score);
+            
+            // Store the complete result with score at top level for easy access
+            const resultWithScore = {
+              ...res.data.result,
+              score: res.data.score ? { aggregatedScore: res.data.score } : res.data.result?.score
+            };
+            
+            setPlagiarismResult(resultWithScore);
             setIsScanning(false);
             clearInterval(pollInterval);
           } else if (res.data.status === 'failed') {
@@ -1593,6 +1623,14 @@ export default function CollaborateScreen() {
                     <Feather name="image" size={20} color="white" style={{marginRight: 8}} />
                     <Text style={[modalStyles.textStyle, {fontSize: 16}]}>Image</Text>
                   </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[modalStyles.button, {backgroundColor: '#8B5CF6', flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15}]}
+                    onPress={handleChooseScan}
+                  >
+                    <Feather name="search" size={20} color="white" style={{marginRight: 8}} />
+                    <Text style={[modalStyles.textStyle, {fontSize: 16}]}>Scan</Text>
+                  </TouchableOpacity>
                 </View>
                 
                 <TouchableOpacity 
@@ -1621,24 +1659,102 @@ export default function CollaborateScreen() {
                     <Text style={modalStyles.modalText}>Scanning... please wait.</Text>
                   </View>
                 ) : (
-                  <ScrollView>
+                  <ScrollView style={{maxHeight: 400}}>
                     {plagiarismResult ? (
                       <View>
-                        <Text style={modalStyles.modalText}>File: {uploadedFile?.name}</Text>
-                        <Text style={getScoreStyle(plagiarismResult?.score || 0)}>
-                          Plagiarism Score: {plagiarismResult?.score ? plagiarismResult.score.toFixed(2) : 'N/A'}%
+                        <Text style={[modalStyles.modalText, {fontWeight: 'bold', fontSize: 16, marginBottom: 10}]}>
+                          File: {uploadedFile?.name}
                         </Text>
-                        {plagiarismResult.url && (
-                          <TouchableOpacity onPress={() => Linking.openURL(plagiarismResult.url)}>
-                            <Text style={modalStyles.linkText}>View Report</Text>
-                          </TouchableOpacity>
+                        
+                        {/* Plagiarism Score */}
+                        {plagiarismResult?.score?.aggregatedScore !== undefined ? (
+                          <Text style={[getScoreStyle(plagiarismResult.score.aggregatedScore), {fontSize: 18, fontWeight: 'bold', marginVertical: 8}]}>
+                            Plagiarism Score: {plagiarismResult.score.aggregatedScore.toFixed(2)}%
+                          </Text>
+                        ) : plagiarismResult?.result?.score !== undefined ? (
+                          <Text style={[getScoreStyle(plagiarismResult.result.score), {fontSize: 18, fontWeight: 'bold', marginVertical: 8}]}>
+                            Plagiarism Score: {plagiarismResult.result.score.toFixed(2)}%
+                          </Text>
+                        ) : null}
+                        
+                        {/* AI Detection Score */}
+                        {plagiarismResult?.ai_score !== undefined && plagiarismResult.ai_score !== null && (
+                          <Text style={[getScoreStyle(plagiarismResult.ai_score), {fontSize: 18, fontWeight: 'bold', marginVertical: 8}]}>
+                            AI Detection Score: {plagiarismResult.ai_score.toFixed(2)}%
+                          </Text>
                         )}
-                        <TouchableOpacity 
-                          style={[modalStyles.button, modalStyles.buttonClose]} 
-                          onPress={handleSendReviewMessage}
-                        >
-                          <Text style={modalStyles.textStyle}>Send to Review</Text>
-                        </TouchableOpacity>
+                        
+                        {/* Structure Analysis */}
+                        {plagiarismResult?.analysis && (
+                          <View style={{marginTop: 15, padding: 12, backgroundColor: '#F3F4F6', borderRadius: 8}}>
+                            <Text style={[modalStyles.modalText, {fontWeight: 'bold', fontSize: 15, marginBottom: 8}]}>
+                              📊 Structure Analysis
+                            </Text>
+                            {plagiarismResult.analysis.total_words !== null && (
+                              <Text style={modalStyles.modalText}>
+                                • Total Words: {plagiarismResult.analysis.total_words}
+                              </Text>
+                            )}
+                            {plagiarismResult.analysis.plagiarized_words !== null && (
+                              <Text style={[modalStyles.modalText, {color: plagiarismResult.analysis.plagiarized_words > 0 ? '#EF4444' : '#10B981'}]}>
+                                • Plagiarized Words: {plagiarismResult.analysis.plagiarized_words}
+                              </Text>
+                            )}
+                            {plagiarismResult.analysis.identical_words !== null && (
+                              <Text style={modalStyles.modalText}>
+                                • Identical Words: {plagiarismResult.analysis.identical_words}
+                              </Text>
+                            )}
+                            {plagiarismResult.analysis.similar_words !== null && (
+                              <Text style={modalStyles.modalText}>
+                                • Similar Words: {plagiarismResult.analysis.similar_words}
+                              </Text>
+                            )}
+                            {plagiarismResult.analysis.source_counts !== null && (
+                              <Text style={modalStyles.modalText}>
+                                • Sources Found: {plagiarismResult.analysis.source_counts}
+                              </Text>
+                            )}
+                          </View>
+                        )}
+                        
+                        {/* Legacy fallback for result structure */}
+                        {!plagiarismResult?.analysis && plagiarismResult?.result?.totalPlagiarismWords !== undefined && (
+                          <View style={{marginTop: 15, padding: 12, backgroundColor: '#F3F4F6', borderRadius: 8}}>
+                            <Text style={[modalStyles.modalText, {fontWeight: 'bold', fontSize: 15, marginBottom: 8}]}>
+                              📊 Structure Analysis
+                            </Text>
+                            <Text style={modalStyles.modalText}>
+                              • Total Words: {plagiarismResult.result.textWordCounts}
+                            </Text>
+                            <Text style={[modalStyles.modalText, {color: plagiarismResult.result.totalPlagiarismWords > 0 ? '#EF4444' : '#10B981'}]}>
+                              • Plagiarized Words: {plagiarismResult.result.totalPlagiarismWords}
+                            </Text>
+                            <Text style={modalStyles.modalText}>
+                              • Identical Words: {plagiarismResult.result.identicalWordCounts}
+                            </Text>
+                            <Text style={modalStyles.modalText}>
+                              • Similar Words: {plagiarismResult.result.similarWordCounts}
+                            </Text>
+                            <Text style={modalStyles.modalText}>
+                              • Sources Found: {plagiarismResult.result.sourceCounts}
+                            </Text>
+                          </View>
+                        )}
+                        
+                        {/* Sources */}
+                        {plagiarismResult?.sources && plagiarismResult.sources.length > 0 && (
+                          <View style={{marginTop: 15}}>
+                            <Text style={[modalStyles.modalText, {fontWeight: 'bold', fontSize: 15, marginBottom: 8}]}>
+                              🔗 Matching Sources:
+                            </Text>
+                            {plagiarismResult.sources.slice(0, 5).map((source, index) => (
+                              <Text key={index} style={[modalStyles.modalText, {fontSize: 13, marginLeft: 8}]}>
+                                {index + 1}. {source.url || source.title}
+                              </Text>
+                            ))}
+                          </View>
+                        )}
                       </View>
                     ) : (
                       <Text style={modalStyles.modalText}>{scanResult || 'No result yet.'}</Text>
