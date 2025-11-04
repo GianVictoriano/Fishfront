@@ -13,10 +13,13 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  Alert
+  Alert,
+  FlatList,
+  Animated
 } from 'react-native';
 import Navbar from '../../../components/Navbar';
 import NewsNavbar from '../../../components/newsnavbar';
+import LatestNewsSidebar from '../../../components/LatestNewsSidebar';
 import apiClient from '../../../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import useArticleTracking from '../../../hooks/useArticleTracking';
@@ -49,6 +52,92 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     width: '100%',
     textAlign: 'left',
+  },
+  noRelatedText: {
+    textAlign: 'center',
+    color: '#666',
+    marginTop: 20,
+    fontStyle: 'italic',
+    paddingHorizontal: 24,
+  },
+  relatedSection: {
+    marginTop: 40,
+    width: '100%',
+  },
+  relatedTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 16,
+    paddingHorizontal: 24,
+  },
+  relatedCard: {
+    width: 280,
+    marginRight: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  relatedImage: {
+    width: '100%',
+    height: 150,
+  },
+  relatedContent: {
+    padding: 12,
+  },
+  relatedCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  relatedCardDate: {
+    fontSize: 12,
+    color: '#888',
+  },
+  relatedCarousel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingHorizontal: 24,
+  },
+  carouselButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2541b2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  carouselButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  carouselContent: {
+    flexDirection: 'row',
+    gap: 16,
+    flex: 1,
+  },
+  hotTopicsSection: {
+    marginTop: 24,
+    marginBottom: 24,
+    width: '100%',
+  },
+  hotTopicsTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 16,
+    paddingHorizontal: 24,
   },
   title: {
     fontSize: 32,
@@ -180,14 +269,14 @@ const styles = StyleSheet.create({
     color: 'white',
     paddingTop: '20px',
   },
-    copyright: {
+  copyright: {
     textAlign: 'center',
     padding: '20px',
     borderTop: '1px solid #334155',
     color: '#94a3b8',
     fontSize: '0.9rem',
   },
-    footerLink: {
+  footerLink: {
     color: 'white',
     textDecoration: 'none',
     transition: 'color 0.2s ease',
@@ -204,12 +293,17 @@ export default function ArticleDetail() {
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeGenre, setActiveGenre] = useState('News');
   const [reactingType, setReactingType] = useState(null);
+  const [relatedIndex, setRelatedIndex] = useState(0);
+  const [hotTopicsIndex, setHotTopicsIndex] = useState(0);
+  const [hotTopics, setHotTopics] = useState([]);
   const [newsData, setNewsData] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   
-  // Add activeGenre state for navbar
-  const [activeGenre, setActiveGenre] = useState('News');
+  // Animation values
+  const relatedSlideAnim = useRef(new Animated.Value(0)).current;
+  const hotTopicsSlideAnim = useRef(new Animated.Value(0)).current;
   
   // Bookmark states
   const [selectedText, setSelectedText] = useState('');
@@ -220,6 +314,68 @@ export default function ArticleDetail() {
   const [bookmarkNotes, setBookmarkNotes] = useState('');
   const [showNotesModal, setShowNotesModal] = useState(false);
   const contentRef = useRef(null);
+
+  // Animate related stories slide
+  const animateRelatedSlide = (direction) => {
+    Animated.sequence([
+      Animated.timing(relatedSlideAnim, {
+        toValue: direction === 'next' ? -50 : 50,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(relatedSlideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  // Animate hot topics slide
+  const animateHotTopicsSlide = (direction) => {
+    Animated.sequence([
+      Animated.timing(hotTopicsSlideAnim, {
+        toValue: direction === 'next' ? -50 : 50,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(hotTopicsSlideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  // Handle related stories navigation
+  const handleRelatedNext = () => {
+    animateRelatedSlide('next');
+    setTimeout(() => {
+      setRelatedIndex(Math.min(newsData.length - 4, relatedIndex + 4));
+    }, 150);
+  };
+
+  const handleRelatedPrev = () => {
+    animateRelatedSlide('prev');
+    setTimeout(() => {
+      setRelatedIndex(Math.max(0, relatedIndex - 4));
+    }, 150);
+  };
+
+  // Handle hot topics navigation
+  const handleHotTopicsNext = () => {
+    animateHotTopicsSlide('next');
+    setTimeout(() => {
+      setHotTopicsIndex(Math.min(hotTopics.length - 4, hotTopicsIndex + 4));
+    }, 150);
+  };
+
+  const handleHotTopicsPrev = () => {
+    animateHotTopicsSlide('prev');
+    setTimeout(() => {
+      setHotTopicsIndex(Math.max(0, hotTopicsIndex - 4));
+    }, 150);
+  };
 
   // Initialize article tracking (time & scroll)
   const { handleScroll, currentScrollPercentage, timeSpent } = useArticleTracking(
@@ -405,11 +561,24 @@ export default function ArticleDetail() {
     setActiveGenre(genre);
     try {
       await AsyncStorage.setItem('activeNewsGenre', genre);
-      // Navigate back to news page with the selected genre
-      router.push('/news');
+      // Route to the correct tab/page for each genre
+      if (genre === 'News') {
+        router.push('/news');
+      } else if (genre === 'Creative') {
+        router.push('/creative');
+      } else {
+        router.push(`/news?genre=${genre.toLowerCase()}`);
+      }
     } catch (error) {
       console.log('Error saving active genre:', error);
-      router.push('/news');
+      // Fallback navigation if AsyncStorage fails
+      if (genre === 'News') {
+        router.push('/news');
+      } else if (genre === 'Creative') {
+        router.push('/creative');
+      } else {
+        router.push(`/news?genre=${genre.toLowerCase()}`);
+      }
     }
   };
 
@@ -472,7 +641,10 @@ export default function ArticleDetail() {
             return {
               ...otherArticle,
               id: otherArticle.id?.toString() || '',
-              similarity
+              similarity,
+              image: otherArticle.media && otherArticle.media.length > 0
+                ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.media[0].file_path.replace('public/', '')}`
+                : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070'
             };
           });
           
@@ -492,6 +664,35 @@ export default function ArticleDetail() {
       fetchRelatedArticles();
     }
   }, [article, articleId]);
+
+  // Fetch hot topics based on reactions
+  useEffect(() => {
+    const fetchHotTopics = async () => {
+      try {
+        const res = await apiClient.get('/public/articles');
+        if (Array.isArray(res.data?.data)) {
+          const articlesWithReactions = res.data.data
+            .filter(item => item.id?.toString() !== articleId)
+            .map(item => ({
+              ...item,
+              id: item.id?.toString() || '',
+              image: item.media && item.media.length > 0
+                ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${item.media[0].file_path.replace('public/', '')}`
+                : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+              totalReactions: (item.metrics?.like_count || 0) + (item.metrics?.heart_count || 0) + (item.metrics?.sad_count || 0) + (item.metrics?.wow_count || 0)
+            }))
+            .sort((a, b) => b.totalReactions - a.totalReactions)
+            .slice(0, 10);
+          
+          setHotTopics(articlesWithReactions);
+        }
+      } catch (err) {
+        console.error('Error fetching hot topics:', err);
+      }
+    };
+    
+    fetchHotTopics();
+  }, [articleId]);
 
   // Debug: Log tracking status
   useEffect(() => {
@@ -778,33 +979,93 @@ export default function ArticleDetail() {
             </View>
 
             <View style={styles.sidebar}>
-              <Text style={[styles.sidebarTitle, { color: '#dc3545' }]}>Related Stories</Text>
-              <Text style={styles.sidebarSubtitle}>Based on content similarity and machine learning</Text>
-              {newsData.length > 0 ? (
-                newsData.map((item, index) => (
-                  <TouchableOpacity key={item.id} style={styles.storyItem} onPress={() => router.push(`/news/article/${item.id}`)}>
-                    <View style={styles.relatedItemHeader}>
-                      <Text style={{ flex: 1 }}>
-                        <Text style={{ color: '#dc3545', fontWeight: '600' }}>
-                          {item.genre ? `${item.genre} | ` : ''}
-                        </Text>
-                        <Text style={{ fontWeight: '600', color: '#333' }}>
-                          {item.title}
-                        </Text>
-                      </Text>
-                      <View style={styles.similarityBadge}>
-                        <Text style={styles.similarityText}>{Math.round(item.similarity * 100)}%</Text>
-                      </View>
-                    </View>
-                    <Text style={{ color: '#666', fontSize: 12, marginTop: 4 }}>
-                      {item.published_at ? new Date(item.published_at).toLocaleDateString() : ''}
-                    </Text>
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <Text style={styles.noRelatedText}>No related articles found</Text>
-              )}
+              {/* Latest News for the current genre */}
+              <Text style={[styles.sidebarTitle, { color: '#2541b2', marginTop: 32 }]}>Latest {article?.genre} News</Text>
+              <LatestNewsSidebar genre={article?.genre} currentId={articleId} />
             </View>
+          </View>
+
+          {/* Related Stories with Arrow Navigation */}
+          <View style={styles.relatedSection}>
+            <Text style={styles.relatedTitle}>Related Stories</Text>
+            {newsData.length > 0 ? (
+              <View style={styles.relatedCarousel}>
+                {relatedIndex > 0 && (
+                  <TouchableOpacity 
+                    style={styles.carouselButton}
+                    onPress={handleRelatedPrev}
+                  >
+                    <MaterialIcons name="chevron-left" size={24} color="#fff" />
+                  </TouchableOpacity>
+                )}
+                
+                <Animated.View style={[styles.carouselContent, { transform: [{ translateX: relatedSlideAnim }] }]}>
+                  {newsData.slice(relatedIndex, relatedIndex + 4).map((item) => (
+                    <TouchableOpacity key={item.id} style={styles.relatedCard} onPress={() => router.push(`/news/article/${item.id}`)}>
+                      <Image source={{ uri: item.image || defaultImage }} style={styles.relatedImage} />
+                      <View style={styles.relatedContent}>
+                        <Text style={styles.relatedCardTitle} numberOfLines={2}>{item.title}</Text>
+                        <Text style={styles.relatedCardDate}>{item.published_at ? new Date(item.published_at).toLocaleDateString() : ''}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </Animated.View>
+                
+                {relatedIndex + 4 < newsData.length && (
+                  <TouchableOpacity 
+                    style={styles.carouselButton}
+                    onPress={handleRelatedNext}
+                  >
+                    <MaterialIcons name="chevron-right" size={24} color="#fff" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              <Text style={styles.noRelatedText}>No related articles found</Text>
+            )}
+          </View>
+
+          {/* Hot Topics Section */}
+          <View style={styles.hotTopicsSection}>
+            <Text style={styles.hotTopicsTitle}>Hot Topics</Text>
+            {hotTopics.length > 0 ? (
+              <View style={styles.relatedCarousel}>
+                {hotTopicsIndex > 0 && (
+                  <TouchableOpacity 
+                    style={styles.carouselButton}
+                    onPress={handleHotTopicsPrev}
+                  >
+                    <MaterialIcons name="chevron-left" size={24} color="#fff" />
+                  </TouchableOpacity>
+                )}
+                
+                <Animated.View style={[styles.carouselContent, { transform: [{ translateX: hotTopicsSlideAnim }] }]}>
+                  {hotTopics.slice(hotTopicsIndex, hotTopicsIndex + 4).map((item) => (
+                    <TouchableOpacity key={item.id} style={styles.relatedCard} onPress={() => router.push(`/news/article/${item.id}`)}>
+                      <Image source={{ uri: item.image }} style={styles.relatedImage} />
+                      <View style={styles.relatedContent}>
+                        <Text style={styles.relatedCardTitle} numberOfLines={2}>{item.title}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Text style={styles.relatedCardDate}>{item.published_at ? new Date(item.published_at).toLocaleDateString() : ''}</Text>
+                          <Text style={{ fontSize: 12, color: '#e53935', fontWeight: '600' }}>🔥 {item.totalReactions}</Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </Animated.View>
+                
+                {hotTopicsIndex + 4 < hotTopics.length && (
+                  <TouchableOpacity 
+                    style={styles.carouselButton}
+                    onPress={handleHotTopicsNext}
+                  >
+                    <MaterialIcons name="chevron-right" size={24} color="#fff" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              <Text style={styles.noRelatedText}>No hot topics found</Text>
+            )}
           </View>
 
           {/* View Bookmarks Button */}

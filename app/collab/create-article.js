@@ -32,15 +32,16 @@ const NativeRichEditor = forwardRef((props, ref) => {
   return <RichEditor ref={ref} {...props} />;
 });
 
-const NativeRichToolbar = ({ editor }) => {
+const NativeRichToolbar = ({ editor, onImageInsert }) => {
   if (!RichToolbar || !actions) return null;
   return (
     <RichToolbar
       editor={editor}
-      actions={Object.values(actions)}
+      actions={[...Object.values(actions), 'insertImage']}
       style={styles.richToolbar}
       iconTint="#1a237e"
       selectedIconTint="#3949ab"
+      onPressAddImage={onImageInsert}
     />
   );
 };
@@ -305,6 +306,54 @@ const SimpleWebEditor = ({ value, onChange }) => {
         >
           <MaterialIcons name="format-align-center" size={18} />
         </TouchableOpacity>
+
+        <View style={styles.separator} />
+        
+        {/* Image insertion button */}
+        <TouchableOpacity 
+          onPress={async () => {
+            // Handle image insertion directly for web
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = async (e) => {
+              const file = e.target.files[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                  const imageUri = event.target.result;
+                  const imageHtml = `<img src="${imageUri}" style="max-width: 100%; height: auto;" alt="Inserted image" /><br>`;
+                  
+                  const editor = editorRef.current;
+                  if (editor) {
+                    const selection = window.getSelection();
+                    if (selection.rangeCount > 0) {
+                      const range = selection.getRangeAt(0);
+                      range.deleteContents();
+                      const tempDiv = document.createElement('div');
+                      tempDiv.innerHTML = imageHtml;
+                      const fragment = document.createDocumentFragment();
+                      while (tempDiv.firstChild) {
+                        fragment.appendChild(tempDiv.firstChild);
+                      }
+                      range.insertNode(fragment);
+                      
+                      // Update content state
+                      if (onChange) {
+                        onChange(editor.innerHTML);
+                      }
+                    }
+                  }
+                };
+                reader.readAsDataURL(file);
+              }
+            };
+            input.click();
+          }}
+          style={styles.toolbarButton}
+        >
+          <MaterialIcons name="image" size={18} />
+        </TouchableOpacity>
       </View>
       
       <View
@@ -362,7 +411,7 @@ export default function CreateArticleScreen() {
     }, 100);
   };
 
-  const pickImage = async () => {
+  const pickInlineImage = async (forEditor = false) => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -376,7 +425,18 @@ export default function CreateArticleScreen() {
         quality: 0.8,
       });
       if (!result.canceled) {
-        setImages(prev => [...prev, { uri: result.assets[0].uri, type: 'image', local: true }]);
+        if (forEditor) {
+          // Insert image inline into the editor content
+          const imageUri = result.assets[0].uri;
+          
+          // For native editor, use the rich text editor's insertImage method
+          if (richText.current && richText.current.insertImage) {
+            richText.current.insertImage(imageUri);
+          }
+        } else {
+          // Add as main image
+          setImages(prev => [...prev, { uri: result.assets[0].uri, type: 'image', local: true }]);
+        }
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -464,6 +524,75 @@ export default function CreateArticleScreen() {
     }
   };
 
+  const extractAndUploadInlineImages = async (content) => {
+    // Create a temporary DOM element to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    
+    const images = tempDiv.querySelectorAll('img');
+    const uploadedImages = [];
+    
+    for (let i = 0; i < images.length; i++) {
+      const img = images[i];
+      const src = img.src;
+      
+      // Check if it's a local image (data URL or blob URL)
+      if (src.startsWith('data:') || src.startsWith('blob:')) {
+        try {
+          console.log('Processing inline image:', src.substring(0, 50) + '...');
+          
+          let blob;
+          if (src.startsWith('data:')) {
+            // Convert data URL to blob
+            const response = await fetch(src);
+            blob = await response.blob();
+          } else if (src.startsWith('blob:')) {
+            // Convert blob URL to blob
+            const response = await fetch(src);
+            blob = await response.blob();
+          }
+          
+          if (blob) {
+            // Upload the image using same logic as main images
+            const formData = new FormData();
+            const fileExt = blob.type.split('/')[1] || 'jpg';
+            formData.append('media[]', blob, `inline_image_${Date.now()}_${i}.${fileExt}`);
+            
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+            const token = await AsyncStorage.getItem('auth_token');
+            
+            const uploadResponse = await fetch(`${apiUrl}/api/upload-media`, {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${token}`,
+              },
+              body: formData,
+            });
+            
+            if (uploadResponse.ok) {
+              const uploadResult = await uploadResponse.json();
+              if (uploadResult.data && uploadResult.data.length > 0) {
+                const serverUrl = `${apiUrl?.replace('/api', '')}/storage/${uploadResult.data[0].file_path.replace('public/', '')}`;
+                uploadedImages.push({
+                  originalSrc: src,
+                  serverUrl: serverUrl
+                });
+                console.log('Inline image uploaded successfully:', serverUrl);
+              }
+            } else {
+              console.error('Failed to upload inline image:', uploadResponse.status);
+            }
+          }
+        } catch (error) {
+          console.error('Error processing inline image:', error);
+        }
+      }
+    }
+    
+    return uploadedImages;
+  };
+
   const removeMedia = (index) => {
     setImages(prev => prev.filter((_, i) => i !== index));
   };
@@ -492,15 +621,29 @@ export default function CreateArticleScreen() {
         return;
       }
 
+      // Process inline images first (only on web platform)
+      let processedContent = content;
+      if (Platform.OS === 'web') {
+        console.log('Processing inline images...');
+        const uploadedImages = await extractAndUploadInlineImages(content);
+        
+        // Replace local image references with server URLs
+        uploadedImages.forEach(({ originalSrc, serverUrl }) => {
+          processedContent = processedContent.replace(originalSrc, serverUrl);
+        });
+        
+        console.log(`Processed ${uploadedImages.length} inline images`);
+      }
+
       // Prepare form data
       const formData = new FormData();
       formData.append('title', title.trim());
-      formData.append('content', content.trim());
+      formData.append('content', processedContent.trim());
       formData.append('genre', genre || 'articles'); // Default to 'articles' if not selected
       formData.append('status', 'draft');
       formData.append('post_to_facebook', publishToFacebook ? '1' : '0');
 
-      console.log('Form data prepared, processing images...');
+      console.log('Form data prepared, processing main images...');
       
       // Process images if any
       for (let index = 0; index < images.length; index++) {
@@ -693,11 +836,14 @@ export default function CreateArticleScreen() {
               onChange={text => setContent(text)}
               editorStyle={{ backgroundColor: '#fff', color: '#333', placeholderColor: '#999' }}
             />
-            <NativeRichToolbar editor={richText} />
+            <NativeRichToolbar editor={richText} onImageInsert={() => pickInlineImage(true)} />
           </View>
         )}
 
         <View style={styles.mediaContainer}>
+          {images.length > 0 && (
+            <Text style={styles.mediaLabel}>Main Images (displayed at bottom of article)</Text>
+          )}
           {images.map((media, index) => (
             <View key={index} style={styles.mediaItem}>
               {media.type === 'image' ? (
@@ -717,7 +863,7 @@ export default function CreateArticleScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.footerButton} onPress={pickImage}>
+        <TouchableOpacity style={styles.footerButton} onPress={() => pickInlineImage(false)}>
           <Ionicons name="image" size={24} color={colors.primary || '#1a237e'} />
           <Text style={[styles.footerButtonText, {color: colors.primary || '#1a237e'}]}>Select Image</Text>
         </TouchableOpacity>
@@ -1545,7 +1691,7 @@ const styles = StyleSheet.create({
   genreButtonSelected: { backgroundColor: '#1a237e' },
   genreButtonText: { color: '#333' },
   genreButtonTextSelected: { color: '#fff' },
-  mediaContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 20 },
+  mediaLabel: { fontSize: 14, color: '#666', marginBottom: 8, fontStyle: 'italic' },
   mediaItem: { width: '48%', marginRight: '4%', marginBottom: 16, position: 'relative' },
   mediaImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8, backgroundColor: '#f5f5f5' },
   documentItem: { width: '100%', height: 120, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, justifyContent: 'center', alignItems: 'center', padding: 12, backgroundColor: '#f9f9f9' },
