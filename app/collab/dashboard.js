@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions, Modal, TextInput, FlatList, Dimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '~/context/AuthContext';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const StatCard = ({ title, value, iconName, color, isMobile, cardStyle }) => (
   <View style={[styles.statCard, isMobile && styles.statCardMobile, cardStyle]}>
@@ -24,6 +25,20 @@ const ActivityItem = ({ text, time, iconName, isMobile }) => (
   </View>
 );
 
+const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }) => (
+  <View style={styles.activityItem}>
+    <Feather name="calendar" size={isMobile ? 18 : 24} color="#555" />
+    <View style={styles.activityContent}>
+      <Text style={styles.activityTitle}>{title}</Text>
+      <View style={styles.activityDetails}>
+        <Text style={styles.activityDetail}>{date} at {time}</Text>
+        {location && <Text style={styles.activityDetail}>📍 {location}</Text>}
+        <Text style={styles.activityDetail}>by {creator}</Text>
+      </View>
+    </View>
+  </View>
+);
+
 const QuickAction = ({ title, iconName, href, isMobile }) => {
   const router = useRouter();
   return (
@@ -39,18 +54,110 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const [stats, setStats] = useState([
+    { title: "In Review", value: "0", iconName: "file-text", color: "#FFA726" },
+    { title: "Approved", value: "0", iconName: "check-square", color: "#66BB6A" },
+    { title: "Pending Tasks", value: "0", iconName: "alert-circle", color: "#EF5350" },
+    { title: "Active Projects", value: "0", iconName: "briefcase", color: "#5C6BC0" },
+  ]);
+  const [loading, setLoading] = useState(true);
+  const [upcomingActivities, setUpcomingActivities] = useState([]);
+  const [topContributors, setTopContributors] = useState([]);
+  const [showContributorsModal, setShowContributorsModal] = useState(false);
+  const [allContributors, setAllContributors] = useState([]);
+  const [contributorsSearch, setContributorsSearch] = useState('');
+  const [contributorsTimeframe, setContributorsTimeframe] = useState('30');
+  const [contributorsRole, setContributorsRole] = useState('all');
+  const [loadingContributors, setLoadingContributors] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const handleLogout = () => {
     logout();
     router.push('/');
   };
 
-  const stats = [
-    { title: "In Review", value: "1", iconName: "file-text", color: "#FFA726" },
-    { title: "Approved", value: "1", iconName: "check-square", color: "#66BB6A" },
-    { title: "Pending Tasks", value: "2", iconName: "alert-circle", color: "#EF5350" },
-    { title: "Team Members", value: "2", iconName: "users", color: "#5C6BC0" },
-  ];
+  useEffect(() => {
+    fetchDashboardStats();
+  }, []);
+
+  const fetchDashboardStats = async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      
+      const token = await AsyncStorage.getItem('auth_token');
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/dashboard-stats`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Dashboard data received:', data);
+        
+        setStats([
+          { title: "In Review", value: data.in_review.toString(), iconName: "file-text", color: "#FFA726" },
+          { title: "Approved", value: data.approved.toString(), iconName: "check-square", color: "#66BB6A" },
+          { title: "Pending Tasks", value: data.pending_tasks.toString(), iconName: "alert-circle", color: "#EF5350" },
+          { title: "Active Projects", value: data.active_projects.toString(), iconName: "briefcase", color: "#5C6BC0" },
+        ]);
+        
+        console.log('Setting upcoming activities:', data.upcoming_activities);
+        setUpcomingActivities(data.upcoming_activities || []);
+        
+        console.log('Setting top contributors:', data.top_contributors);
+        setTopContributors(data.top_contributors || []);
+      } else {
+        console.error('Failed to fetch dashboard stats');
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const fetchAllContributors = async () => {
+    setLoadingContributors(true);
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const params = new URLSearchParams({
+        search: contributorsSearch,
+        timeframe: contributorsTimeframe,
+        role: contributorsRole,
+      });
+      
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/contributors?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAllContributors(data.data || []);
+      } else {
+        console.error('Failed to fetch all contributors');
+      }
+    } catch (error) {
+      console.error('Error fetching all contributors:', error);
+    } finally {
+      setLoadingContributors(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showContributorsModal) {
+      fetchAllContributors();
+    }
+  }, [showContributorsModal, contributorsSearch, contributorsTimeframe, contributorsRole]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -60,6 +167,18 @@ export default function DashboardScreen() {
             <Text style={styles.title}>Welcome, {user?.profile?.name || 'Collaborator'}!</Text>
             <Text style={styles.subtitle}>Here's a summary of your workspace.</Text>
           </View>
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={() => fetchDashboardStats(true)}
+            disabled={refreshing}
+          >
+            <Feather 
+              name="refresh-cw" 
+              size={20} 
+              color={refreshing ? "#ccc" : "#303F9F"} 
+              style={{ transform: [{ rotate: refreshing ? '180deg' : '0deg' }] }}
+            />
+          </TouchableOpacity>
         </View>
 
         {isMobile ? (
@@ -85,14 +204,165 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
+          <Text style={styles.sectionTitle}>Upcoming Activities</Text>
           <View style={styles.activityList}>
-            <ActivityItem iconName="git-pull-request" text="VICTORIANO GIAN PATRICK submitted new content for review." time="2h ago" isMobile={isMobile} />
-            <ActivityItem iconName="check-circle" text="Intrams Basketball Tournament was approved." time="1d ago" isMobile={isMobile} />
-            <ActivityItem iconName="user-plus" text="gian patrick victoriano joined the team." time="3d ago" isMobile={isMobile} />
+            {upcomingActivities.length > 0 ? (
+              upcomingActivities.map((activity, index) => (
+                <UpcomingActivityItem
+                  key={activity.id}
+                  title={activity.title}
+                  date={activity.date}
+                  time={activity.time}
+                  location={activity.location}
+                  creator={activity.creator}
+                  isMobile={isMobile}
+                />
+              ))
+            ) : (
+              <View style={styles.noActivitiesContainer}>
+                <Feather name="calendar" size={32} color="#ccc" />
+                <Text style={styles.noActivitiesText}>No upcoming activities</Text>
+                <Text style={styles.noActivitiesSubtext}>You'll see activities you're enrolled in here</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Top Contributors (Last 30 Days)</Text>
+            <TouchableOpacity 
+              style={styles.seeAllButton}
+              onPress={() => setShowContributorsModal(true)}
+            >
+              <Text style={styles.seeAllText}>See All</Text>
+              <Feather name="chevron-right" size={16} color="#303F9F" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.contributorsList}>
+            {topContributors.length > 0 ? (
+              topContributors.map((contributor, index) => (
+                <View key={contributor.id} style={styles.contributorItem}>
+                  <View style={styles.contributorRank}>
+                    <Text style={styles.rankText}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.contributorInfo}>
+                    <Text style={styles.contributorName}>{contributor.name}</Text>
+                    <Text style={styles.contributorEmail}>{contributor.email}</Text>
+                    <View style={styles.contributorBadges}>
+                      <View style={[styles.badge, styles.approvedBadge]}>
+                        <Text style={styles.badgeText}>✓ {contributor.approved}</Text>
+                      </View>
+                      <View style={[styles.badge, styles.reviewBadge]}>
+                        <Text style={styles.badgeText}>⏳ {contributor.in_review}</Text>
+                      </View>
+                      <View style={[styles.badge, styles.pendingBadge]}>
+                        <Text style={styles.badgeText}>! {contributor.pending}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.contributorStats}>
+                    <Text style={styles.contributorCount}>{contributor.total_assigned}</Text>
+                    <Text style={styles.contributorLabel}>Assigned</Text>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.noContributorsContainer}>
+                <Feather name="users" size={32} color="#ccc" />
+                <Text style={styles.noContributorsText}>No contributor data available</Text>
+              </View>
+            )}
           </View>
         </View>
       </ScrollView>
+
+      {/* Contributors Modal */}
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={showContributorsModal}
+        onRequestClose={() => setShowContributorsModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowContributorsModal(false)}>
+              <Feather name="arrow-left" size={24} color="#303F9F" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>All Contributors</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {/* Search and Filters */}
+          <View style={styles.filtersContainer}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search contributors..."
+              value={contributorsSearch}
+              onChangeText={setContributorsSearch}
+            />
+            <View style={styles.filterRow}>
+              <TouchableOpacity 
+                style={[styles.filterButton, contributorsTimeframe === '7' && styles.filterButtonActive]}
+                onPress={() => setContributorsTimeframe('7')}
+              >
+                <Text style={[styles.filterText, contributorsTimeframe === '7' && styles.filterTextActive]}>7 Days</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.filterButton, contributorsTimeframe === '30' && styles.filterButtonActive]}
+                onPress={() => setContributorsTimeframe('30')}
+              >
+                <Text style={[styles.filterText, contributorsTimeframe === '30' && styles.filterTextActive]}>30 Days</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.filterButton, contributorsTimeframe === '90' && styles.filterButtonActive]}
+                onPress={() => setContributorsTimeframe('90')}
+              >
+                <Text style={[styles.filterText, contributorsTimeframe === '90' && styles.filterTextActive]}>90 Days</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Contributors List */}
+          {loadingContributors ? (
+            <View style={styles.loadingContainer}>
+              <Text>Loading contributors...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={allContributors}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item, index }) => (
+                <View style={styles.modalContributorItem}>
+                  <View style={styles.contributorRank}>
+                    <Text style={styles.rankText}>{index + 1}</Text>
+                  </View>
+                  <View style={styles.contributorInfo}>
+                    <Text style={styles.contributorName}>{item.name}</Text>
+                    <Text style={styles.contributorEmail}>{item.email}</Text>
+                    <View style={styles.contributorBadges}>
+                      <View style={[styles.badge, styles.approvedBadge]}>
+                        <Text style={styles.badgeText}>✓ {item.approved}</Text>
+                      </View>
+                      <View style={[styles.badge, styles.reviewBadge]}>
+                        <Text style={styles.badgeText}>⏳ {item.in_review}</Text>
+                      </View>
+                      <View style={[styles.badge, styles.pendingBadge]}>
+                        <Text style={styles.badgeText}>! {item.pending}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.contributorStats}>
+                    <Text style={styles.contributorCount}>{item.total_assigned}</Text>
+                    <Text style={styles.contributorLabel}>Assigned</Text>
+                  </View>
+                </View>
+              )}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -105,8 +375,15 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  refreshButton: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 20,
+    padding: 8,
     alignItems: 'center',
-    marginBottom: 30,
+    justifyContent: 'center',
   },
   logoutButton: {
     padding: 8,
@@ -244,8 +521,223 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#A0AEC0',
   },
+  activityContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  activityTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2D3748',
+    marginBottom: 4,
+  },
+  activityDetails: {
+    gap: 2,
+  },
+  activityDetail: {
+    fontSize: 12,
+    color: '#718096',
+  },
+  noActivitiesContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+  },
+  noActivitiesText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#A0AEC0',
+    marginTop: 8,
+  },
+  noActivitiesSubtext: {
+    fontSize: 14,
+    color: '#CBD5E0',
+    marginTop: 4,
+    textAlign: 'center',
+  },
 
   mobileQuickActionsGrid: {
     flexDirection: 'column',
+  },
+  // Contributors Section Styles
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#F7F8FA',
+    borderRadius: 16,
+  },
+  seeAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#303F9F',
+    marginRight: 4,
+  },
+  contributorsList: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+  },
+  contributorItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F7F8FA',
+  },
+  contributorRank: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#303F9F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  rankText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  contributorInfo: {
+    flex: 1,
+  },
+  contributorName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  contributorEmail: {
+    fontSize: 13,
+    color: '#718096',
+    marginTop: 2,
+  },
+  contributorBadges: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 6,
+  },
+  badge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 32,
+    alignItems: 'center',
+  },
+  approvedBadge: {
+    backgroundColor: '#D4EDDA',
+  },
+  reviewBadge: {
+    backgroundColor: '#FFF3CD',
+  },
+  pendingBadge: {
+    backgroundColor: '#F8D7DA',
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  contributorStats: {
+    alignItems: 'flex-end',
+  },
+  contributorCount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#303F9F',
+  },
+  contributorLabel: {
+    fontSize: 11,
+    color: '#A0AEC0',
+    marginTop: 2,
+  },
+  noContributorsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+  },
+  noContributorsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#A0AEC0',
+    marginTop: 8,
+  },
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2D3748',
+  },
+  filtersContainer: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  filterButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#F7F8FA',
+    alignItems: 'center',
+  },
+  filterButtonActive: {
+    backgroundColor: '#303F9F',
+  },
+  filterText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#718096',
+  },
+  filterTextActive: {
+    color: '#fff',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  modalContributorItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F7F8FA',
   },
 });
