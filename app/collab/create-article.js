@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, forwardRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image, Alert, Platform, Modal, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image, Alert, Platform, Modal, FlatList, ActivityIndicator, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,6 +8,8 @@ import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../utils/api';
 import { useBranding } from '~/context/BrandingContext';
+import ReactCrop from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 
 // --- Platform-Aware Rich Text Editor --- //
 
@@ -32,25 +34,86 @@ const NativeRichEditor = forwardRef((props, ref) => {
   return <RichEditor ref={ref} {...props} />;
 });
 
-const NativeRichToolbar = ({ editor }) => {
+const NativeRichToolbar = ({ editor, onImageInsert }) => {
   if (!RichToolbar || !actions) return null;
   return (
     <RichToolbar
       editor={editor}
-      actions={Object.values(actions)}
+      actions={[...Object.values(actions), 'insertImage']}
       style={styles.richToolbar}
       iconTint="#1a237e"
       selectedIconTint="#3949ab"
+      onPressAddImage={onImageInsert}
     />
   );
 };
 
 // --- Custom Web Rich Text Editor (Dependency-Free) --- //
 
-const SimpleWebEditor = ({ value, onChange }) => {
+const SimpleWebEditor = ({ value, onChange, onImageInsert, onEditorRef }) => {
   const editorRef = useRef(null);
   const [activeStyles, setActiveStyles] = useState(new Set());
   const {colors} = useBranding();
+  const [isInternalUpdate, setIsInternalUpdate] = useState(false);
+  
+  // Pass editor ref to parent component
+  useEffect(() => {
+    if (onEditorRef) {
+      onEditorRef(editorRef);
+    }
+  }, [editorRef, onEditorRef]);
+  
+  // Handle external value changes without overriding user input
+  const handleContentChange = () => {
+    if (editorRef.current) {
+      setIsInternalUpdate(true);
+      const newContent = editorRef.current.innerHTML;
+      onChange(newContent);
+    }
+  };
+
+  const addImageDeleteHandlers = (editor) => {
+    // Add hover and click handlers for image delete buttons
+    const imageContainers = editor.querySelectorAll('div[style*="text-align: center"]');
+    
+    imageContainers.forEach(container => {
+      const imageWrapper = container.querySelector('div[style*="position: relative"]');
+      const deleteBtn = container.querySelector('.image-delete-btn');
+      
+      if (deleteBtn && imageWrapper) {
+        // Show delete button on hover over the image wrapper
+        imageWrapper.addEventListener('mouseenter', () => {
+          deleteBtn.style.display = 'flex';
+        });
+        
+        imageWrapper.addEventListener('mouseleave', () => {
+          deleteBtn.style.display = 'none';
+        });
+        
+        // Delete image on click
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (confirm('Delete this image?')) {
+            container.remove();
+            handleContentChange();
+          }
+        });
+      }
+    });
+  };
+  
+  useEffect(() => {
+    if (editorRef.current && !isInternalUpdate) {
+      const currentContent = editorRef.current.innerHTML;
+      if (currentContent !== value) {
+        editorRef.current.innerHTML = value;
+        // Add delete handlers after content update
+        setTimeout(() => addImageDeleteHandlers(editorRef.current), 100);
+      }
+    }
+    setIsInternalUpdate(false);
+  }, [value, isInternalUpdate]);
+  
   const updateActiveStyles = () => {
     const styles = new Set();
     
@@ -305,6 +368,20 @@ const SimpleWebEditor = ({ value, onChange }) => {
         >
           <MaterialIcons name="format-align-center" size={18} />
         </TouchableOpacity>
+
+        <View style={styles.separator} />
+        
+        {/* Image insertion button */}
+        <TouchableOpacity 
+          onPress={() => {
+            if (onImageInsert) {
+              onImageInsert();
+            }
+          }}
+          style={styles.toolbarButton}
+        >
+          <MaterialIcons name="image" size={18} />
+        </TouchableOpacity>
       </View>
       
       <View
@@ -328,18 +405,37 @@ export default function CreateArticleScreen() {
   const [content, setContent] = useState('');
   const [genre, setGenre] = useState('');
   const [images, setImages] = useState([]);
-  const [browseVisible, setBrowseVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const scrollViewRef = useRef();
-  const richText = useRef();
-  
-  // Publish modal state
+  const [browseVisible, setBrowseVisible] = useState(false);
   const [publishModalVisible, setPublishModalVisible] = useState(false);
-  const [publishToFacebook, setPublishToFacebook] = useState(false);
-  const [completeGroupChat, setCompleteGroupChat] = useState(true);
-  const [selectedGroupId, setSelectedGroupId] = useState(null);
   const [completionModalVisible, setCompletionModalVisible] = useState(false);
   const [publishedArticleId, setPublishedArticleId] = useState(null);
+  const [publishToFacebook, setPublishToFacebook] = useState(false);
+  const [completeGroupChat, setCompleteGroupChat] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
+  const [groupChats, setGroupChats] = useState([]);
+  const [showGroupSelector, setShowGroupSelector] = useState(false);
+  const richText = useRef(null);
+  const scrollViewRef = useRef(null);
+  
+  // Image cropping states
+  const [cropModalVisible, setCropModalVisible] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [crop, setCrop] = useState({
+    unit: '%',
+    width: 50,
+    height: 50,
+    x: 25,
+    y: 25
+  });
+  const [completedCrop, setCompletedCrop] = useState(null);
+  const [isForEditor, setIsForEditor] = useState(false);
+  const imgRef = useRef(null);
+  const editorRef = useRef(null); // Reference to the web editor
+
+  const handleEditorRef = (ref) => {
+    editorRef.current = ref;
+  };
 
   const handleInsertContent = ({ title: groupTitle, content: draftText, image, group_id }) => {
     if (groupTitle) setTitle(groupTitle);
@@ -362,7 +458,181 @@ export default function CreateArticleScreen() {
     }, 100);
   };
 
-  const pickImage = async () => {
+  const getCroppedImg = (image, crop) => {
+    const canvas = document.createElement('canvas');
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+    
+    canvas.width = crop.width;
+    canvas.height = crop.height;
+    
+    const ctx = canvas.getContext('2d');
+    
+    ctx.drawImage(
+      image,
+      crop.x * scaleX,
+      crop.y * scaleY,
+      crop.width * scaleX,
+      crop.height * scaleY,
+      0,
+      0,
+      crop.width,
+      crop.height
+    );
+    
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          console.error('Canvas is empty');
+          return;
+        }
+        blob.name = 'cropped-image.jpg';
+        resolve(blob);
+      }, 'image/jpeg');
+    });
+  };
+
+  const handleCropComplete = async (crop) => {
+    setCompletedCrop(crop);
+  };
+
+  const handleCropConfirm = async () => {
+    console.log('=== Crop Confirm Clicked ===');
+    console.log('selectedImage:', selectedImage);
+    console.log('completedCrop:', completedCrop);
+    console.log('imgRef.current:', imgRef.current);
+    console.log('isForEditor:', isForEditor);
+    
+    if (!selectedImage || !completedCrop || !imgRef.current) {
+      console.error('Missing required data:', {
+        hasImage: !!selectedImage,
+        hasCrop: !!completedCrop,
+        hasImgRef: !!imgRef.current
+      });
+      return;
+    }
+    
+    try {
+      console.log('Starting crop process...');
+      const croppedBlob = await getCroppedImg(imgRef.current, completedCrop);
+      console.log('Cropped blob:', croppedBlob);
+      const reader = new FileReader();
+      
+      reader.onload = (event) => {
+        console.log('Reader onload triggered');
+        const croppedImageUri = event.target.result;
+        console.log('Cropped image URI length:', croppedImageUri?.length);
+        
+        if (isForEditor) {
+          console.log('Inserting into editor');
+          
+          // For web platform, get image dimensions to preserve original size
+          if (Platform.OS === 'web') {
+            // Create an image element to get original dimensions
+            const img = document.createElement('img');
+            img.onload = () => {
+              console.log('Original image dimensions:', img.width, 'x', img.height);
+              
+              // Use original dimensions but cap at editor width if too large
+              const maxWidth = 600; // Reasonable max width for editor
+              const width = img.width > maxWidth ? maxWidth : img.width;
+              const height = img.width > maxWidth ? (img.height * maxWidth / img.width) : img.height;
+              
+              console.log('Final dimensions:', width, 'x', height);
+              
+              // Insert cropped image inline into the editor content with proper dimensions and center alignment
+              const imageHtml = `<div style="text-align: center; margin: 10px 0; position: relative; display: inline-block;">
+                <div style="position: relative; display: inline-block;">
+                  <img src="${croppedImageUri}" style="width: ${width}px; height: ${height}px; max-width: 100%; height: auto; display: inline-block;" alt="Inserted image" />
+                  <span class="image-delete-btn" style="position: absolute; top: 5px; right: 5px; background: #ff4444; color: white; border-radius: 50%; width: 24px; height: 24px; display: none; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; font-weight: bold; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">×</span>
+                </div>
+              </div><br>`;
+              
+              // Get the current content from state to preserve it
+              const currentContent = content || '';
+              console.log('Current content from state:', currentContent);
+              
+              // Create new content by appending the image
+              const newContent = currentContent + imageHtml;
+              console.log('New content length:', newContent.length);
+              
+              // Update the content state first
+              setContent(newContent);
+              
+              // Then update the editor DOM to match
+              setTimeout(() => {
+                const editor = editorRef.current;
+                console.log('Editor ref after timeout:', editor);
+                if (editor) {
+                  editor.innerHTML = newContent;
+                  console.log('Editor innerHTML updated');
+                }
+              }, 50);
+            };
+            img.src = croppedImageUri;
+          } else {
+            // For native platforms, use responsive sizing with center alignment
+            const imageHtml = `<div style="text-align: center; margin: 10px 0;">
+              <img src="${croppedImageUri}" style="max-width: 100%; height: auto;" alt="Inserted image" />
+            </div><br>`;
+            
+            // Get the current content from state to preserve it
+            const currentContent = content || '';
+            console.log('Current content from state:', currentContent);
+            
+            // Create new content by appending the image
+            const newContent = currentContent + imageHtml;
+            console.log('New content length:', newContent.length);
+            
+            // Update the content state first
+            setContent(newContent);
+          }
+        } else {
+          console.log('Adding as main image');
+          // Add as main image
+          setImages(prev => {
+            console.log('Previous images:', prev);
+            const newImages = [...prev, { uri: croppedImageUri, type: 'image', local: true }];
+            console.log('New images:', newImages);
+            return newImages;
+          });
+        }
+        
+        console.log('Closing crop modal');
+        // Close crop modal
+        setCropModalVisible(false);
+        setSelectedImage(null);
+        setCompletedCrop(null);
+        setCrop({
+          unit: '%',
+          width: 50,
+          height: 50,
+          x: 25,
+          y: 25
+        });
+      };
+      
+      reader.readAsDataURL(croppedBlob);
+    } catch (error) {
+      console.error('Error cropping image:', error);
+      Alert.alert('Error', 'Failed to crop image.');
+    }
+  };
+
+  const handleCropCancel = () => {
+    setCropModalVisible(false);
+    setSelectedImage(null);
+    setCompletedCrop(null);
+    setCrop({
+      unit: '%',
+      width: 50,
+      height: 50,
+      x: 25,
+      y: 25
+    });
+  };
+
+  const pickInlineImage = async (forEditor = false) => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -371,12 +641,15 @@ export default function CreateArticleScreen() {
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
+        allowsEditing: false, // We'll handle cropping ourselves
+        aspect: undefined,
+        quality: 1,
       });
       if (!result.canceled) {
-        setImages(prev => [...prev, { uri: result.assets[0].uri, type: 'image', local: true }]);
+        const imageUri = result.assets[0].uri;
+        setIsForEditor(forEditor);
+        setSelectedImage(imageUri);
+        setCropModalVisible(true);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -464,6 +737,75 @@ export default function CreateArticleScreen() {
     }
   };
 
+  const extractAndUploadInlineImages = async (content) => {
+    // Create a temporary DOM element to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = content;
+    
+    const images = tempDiv.querySelectorAll('img');
+    const uploadedImages = [];
+    
+    for (let i = 0; i < images.length; i++) {
+      const img = images[i];
+      const src = img.src;
+      
+      // Check if it's a local image (data URL or blob URL)
+      if (src.startsWith('data:') || src.startsWith('blob:')) {
+        try {
+          console.log('Processing inline image:', src.substring(0, 50) + '...');
+          
+          let blob;
+          if (src.startsWith('data:')) {
+            // Convert data URL to blob
+            const response = await fetch(src);
+            blob = await response.blob();
+          } else if (src.startsWith('blob:')) {
+            // Convert blob URL to blob
+            const response = await fetch(src);
+            blob = await response.blob();
+          }
+          
+          if (blob) {
+            // Upload the image using same logic as main images
+            const formData = new FormData();
+            const fileExt = blob.type.split('/')[1] || 'jpg';
+            formData.append('media[]', blob, `inline_image_${Date.now()}_${i}.${fileExt}`);
+            
+            const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+            const token = await AsyncStorage.getItem('auth_token');
+            
+            const uploadResponse = await fetch(`${apiUrl}/api/upload-media`, {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${token}`,
+              },
+              body: formData,
+            });
+            
+            if (uploadResponse.ok) {
+              const uploadResult = await uploadResponse.json();
+              if (uploadResult.data && uploadResult.data.length > 0) {
+                const serverUrl = `${apiUrl?.replace('/api', '')}/storage/${uploadResult.data[0].file_path.replace('public/', '')}`;
+                uploadedImages.push({
+                  originalSrc: src,
+                  serverUrl: serverUrl
+                });
+                console.log('Inline image uploaded successfully:', serverUrl);
+              }
+            } else {
+              console.error('Failed to upload inline image:', uploadResponse.status);
+            }
+          }
+        } catch (error) {
+          console.error('Error processing inline image:', error);
+        }
+      }
+    }
+    
+    return uploadedImages;
+  };
+
   const removeMedia = (index) => {
     setImages(prev => prev.filter((_, i) => i !== index));
   };
@@ -492,17 +834,29 @@ export default function CreateArticleScreen() {
         return;
       }
 
+      // Process inline images first (only on web platform)
+      let processedContent = content;
+      if (Platform.OS === 'web') {
+        console.log('Processing inline images...');
+        const uploadedImages = await extractAndUploadInlineImages(content);
+        
+        // Replace local image references with server URLs
+        uploadedImages.forEach(({ originalSrc, serverUrl }) => {
+          processedContent = processedContent.replace(originalSrc, serverUrl);
+        });
+        
+        console.log(`Processed ${uploadedImages.length} inline images`);
+      }
+
       // Prepare form data
       const formData = new FormData();
       formData.append('title', title.trim());
-      formData.append('content', content.trim());
+      formData.append('content', processedContent.trim());
       formData.append('genre', genre || 'articles'); // Default to 'articles' if not selected
       formData.append('status', 'draft');
       formData.append('post_to_facebook', publishToFacebook ? '1' : '0');
 
-      console.log('Form data prepared, processing images...');
-      console.log('Total images in state:', images.length);
-      console.log('Images array:', JSON.stringify(images, null, 2));
+      console.log('Form data prepared, processing main images...');
       
       // Process images if any
       for (let index = 0; index < images.length; index++) {
@@ -693,7 +1047,12 @@ export default function CreateArticleScreen() {
         </View>
 
         {Platform.OS === 'web' ? (
-          <SimpleWebEditor value={content} onChange={setContent} />
+          <SimpleWebEditor 
+            value={content} 
+            onChange={setContent} 
+            onImageInsert={() => pickInlineImage(true)} 
+            onEditorRef={handleEditorRef}
+          />
         ) : (
           <View style={styles.editorContainer}>
             <NativeRichEditor
@@ -704,11 +1063,14 @@ export default function CreateArticleScreen() {
               onChange={text => setContent(text)}
               editorStyle={{ backgroundColor: '#fff', color: '#333', placeholderColor: '#999' }}
             />
-            <NativeRichToolbar editor={richText} />
+            <NativeRichToolbar editor={richText} onImageInsert={() => pickInlineImage(true)} />
           </View>
         )}
 
         <View style={styles.mediaContainer}>
+          {images.length > 0 && (
+            <Text style={styles.mediaLabel}>Main Images (displayed at bottom of article)</Text>
+          )}
           {images.map((media, index) => (
             <View key={index} style={styles.mediaItem}>
               {media.type === 'image' ? (
@@ -728,7 +1090,7 @@ export default function CreateArticleScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.footerButton} onPress={pickImage}>
+        <TouchableOpacity style={styles.footerButton} onPress={() => pickInlineImage(false)}>
           <Ionicons name="image" size={24} color={colors.primary || '#1a237e'} />
           <Text style={[styles.footerButtonText, {color: colors.primary || '#1a237e'}]}>Select Image</Text>
         </TouchableOpacity>
@@ -894,6 +1256,58 @@ export default function CreateArticleScreen() {
                 <Text style={[styles.completionButtonText, styles.completionButtonTextPrimary]}>Back to Dashboard</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Image Crop Modal */}
+      <Modal
+        visible={cropModalVisible}
+        animationType="fade"
+        transparent={false}
+        onRequestClose={handleCropCancel}
+      >
+        <View style={styles.cropModalContainer}>
+          <View style={styles.cropModalHeader}>
+            <Text style={styles.cropModalTitle}>Crop Image</Text>
+            <TouchableOpacity onPress={handleCropCancel}>
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
+          
+          {selectedImage && (
+            <View style={styles.cropImageContainer}>
+              <ReactCrop
+                crop={crop}
+                onChange={(_, percentCrop) => setCrop(percentCrop)}
+                onComplete={handleCropComplete}
+                aspect={undefined}
+                minWidth={50}
+                minHeight={50}
+              >
+                <img
+                  ref={imgRef}
+                  src={selectedImage}
+                  alt="Crop me"
+                  style={styles.cropImage}
+                />
+              </ReactCrop>
+            </View>
+          )}
+          
+          <View style={styles.cropModalFooter}>
+            <TouchableOpacity 
+              onPress={handleCropCancel}
+              style={styles.cropCancelButton}
+            >
+              <Text style={styles.cropCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={handleCropConfirm}
+              style={[styles.cropConfirmButton, { backgroundColor: colors.primary || '#1a237e' }]}
+            >
+              <Text style={styles.cropConfirmButtonText}>Confirm Crop</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1556,7 +1970,73 @@ const styles = StyleSheet.create({
   genreButtonSelected: { backgroundColor: '#1a237e' },
   genreButtonText: { color: '#333' },
   genreButtonTextSelected: { color: '#fff' },
-  mediaContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 20 },
+  mediaLabel: { fontSize: 14, color: '#666', marginBottom: 8, fontStyle: 'italic' },
+  
+  // Crop Modal Styles
+  cropModalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  cropModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    backgroundColor: '#fff',
+  },
+  cropModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  cropImageContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f5f5f5',
+  },
+  cropImage: {
+    maxWidth: '90%',
+    maxHeight: '70vh',
+    objectFit: 'contain',
+  },
+  cropModalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    backgroundColor: '#fff',
+    gap: 12,
+  },
+  cropCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cropCancelButtonText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+  },
+  cropConfirmButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cropConfirmButtonText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
+  },
   mediaItem: { width: '48%', marginRight: '4%', marginBottom: 16, position: 'relative' },
   mediaImage: { width: '100%', aspectRatio: 4 / 3, borderRadius: 8, backgroundColor: '#f5f5f5' },
   documentItem: { width: '100%', height: 120, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, justifyContent: 'center', alignItems: 'center', padding: 12, backgroundColor: '#f9f9f9' },

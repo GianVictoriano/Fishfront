@@ -1,7 +1,7 @@
 // app/screens/news/index.web.js
 import { Link, useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView } from 'react-native';
+import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AppNavbar from '../../../../components/AppNavbar';
 import NewsNavbar from '../../../../components/newsnavbar';
@@ -9,6 +9,7 @@ import RecommendedContent from '../../../../components/RecommendedContent';
 import useInteractionTracking from '../../../../hooks/useInteractionTracking';
 import apiClient from '../../../../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import useNewsStore from '../../../../store/newsStore';
 
 const styles = StyleSheet.create({
   container: {
@@ -231,8 +232,15 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: '#1a1a1a',
-    lineHeight: 1.4,
+    lineHeight: 22,
     marginBottom: 8,
+    marginTop: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    textAlign: 'left',
+    textIndent: 0,
   },
   compactTitle: {
     fontSize: 14,
@@ -253,17 +261,15 @@ const styles = StyleSheet.create({
   },
   headlineText: {
     fontSize: 14,
-    color: '#222',
-    fontWeight: '500',
-    marginBottom: 0,
-  },
-
-  cardTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 8,
     lineHeight: 28,
+    paddingVertical: 2,
+    marginVertical: 0,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   cardExcerpt: {
     fontSize: 16,
@@ -614,8 +620,11 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: '#1a1a1a',
-    lineHeight: 1.3,
+    lineHeight: 36, // Changed from 1.3 to fixed pixel value
     marginBottom: 12,
+    textAlign: 'left',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   featuredExcerptText: {
     fontSize: 15,
@@ -657,11 +666,32 @@ const styles = StyleSheet.create({
   loadMoreButtonHover: {
     backgroundColor: '#0056b3',
   },
-  loadMoreButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-    letterSpacing: 0.5,
+  skeletonCard: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 0,
+    marginBottom: 16,
+    padding: 16,
+    minHeight: 120,
+  },
+  skeletonImage: {
+    width: '100%',
+    height: 120,
+    backgroundColor: '#e9ecef',
+    borderRadius: 4,
+    marginBottom: 12,
+  },
+  skeletonText: {
+    height: 16,
+    backgroundColor: '#e9ecef',
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  skeletonTitle: {
+    height: 20,
+    backgroundColor: '#e9ecef',
+    borderRadius: 4,
+    marginBottom: 8,
+    width: '80%',
   },
 });
 
@@ -798,15 +828,12 @@ const NewsCard = ({ item, compact, bigTrending, isFirst, onInteraction }) => {
       </View>
       <View style={styles.cardContent}>
         <Text style={styles.cardCategory}>
-          {'   '}
           {item?.category || 'General'}
         </Text>
         <Text style={styles.cardTitle} numberOfLines={2}>
-          {'  '}
           {item?.title || 'Untitled Article'}
         </Text>
         <Text style={styles.cardTimeStamp}>
-          {'    '}
           {item?.date || ''}
         </Text>
       </View>
@@ -821,20 +848,71 @@ const HeadlineCard = ({ item }) => (
   </View>
 );
 
+const SkeletonLoader = () => (
+  <View style={styles.newsMainRow}>
+    <View style={styles.leftColWrapper}>
+      <Text style={styles.latestContentTitle}>Latest Content</Text>
+      <View style={styles.trendingCardWrapper}>
+        <View style={styles.skeletonCard}>
+          <View style={styles.skeletonImage} />
+          <View style={styles.skeletonTitle} />
+          <View style={styles.skeletonText} />
+          <View style={[styles.skeletonText, { width: '60%' }]} />
+        </View>
+      </View>
+      <FlatList
+        data={[1, 2, 3, 4, 5, 6]} // Show 6 skeleton cards
+        renderItem={() => (
+          <View style={styles.skeletonCard}>
+            <View style={styles.skeletonImage} />
+            <View style={styles.skeletonTitle} />
+            <View style={styles.skeletonText} />
+          </View>
+        )}
+        keyExtractor={(item, index) => `skeleton-${index}`}
+        numColumns={3}
+        columnWrapperStyle={styles.gridRow}
+        contentContainerStyle={styles.gridContainer}
+        scrollEnabled={false}
+      />
+    </View>
+    <View style={styles.rightCol}>
+      <ScrollView style={styles.rightColScroll} contentContainerStyle={{ paddingBottom: 16 }}>
+        <View style={styles.freshStoriesSection}>
+          <Text style={styles.freshStoriesHeader}>Trending Stories</Text>
+          <Text style={styles.freshStoriesSubheader}>Most visited in last 3 days</Text>
+          <View style={styles.freshStoryList}>
+            {[1, 2, 3].map((item, index) => (
+              <View key={`skeleton-trending-${index}`} style={styles.freshStoryItem}>
+                <View style={[styles.skeletonText, { height: 14, width: '90%' }]} />
+                <View style={[styles.skeletonText, { height: 12, width: '60%', marginTop: 4 }]} />
+              </View>
+            ))}
+          </View>
+        </View>
+      </ScrollView>
+    </View>
+  </View>
+);
+
 export default function NewsScreen() {
   const [newsData, setNewsData] = useState(fallbackNewsData);
   const [trendingStories, setTrendingStories] = useState([]);
-  const [activeGenre, setActiveGenre] = useState('News');
+  const { activeGenre, setActiveGenre } = useNewsStore();
   const [currentUser, setCurrentUser] = useState(null);
   const [displayedArticles, setDisplayedArticles] = useState(9); // For pagination on featured tabs
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { recordView, recordReaction, recordTimeSpent } = useInteractionTracking(currentUser?.id);
+
+  // State for request management
+  const [activeRequests, setActiveRequests] = useState(new Set());
 
   // Get current user for personalization
   useEffect(() => {
     const getCurrentUser = async () => {
       try {
-        const token = await AsyncStorage.getItem('auth_token'); // Fixed: use 'auth_token' not 'authToken'
+        const token = await AsyncStorage.getItem('auth_token'); 
         if (token) {
           const userData = await AsyncStorage.getItem('user_data');
           if (userData) {
@@ -852,63 +930,147 @@ export default function NewsScreen() {
     getCurrentUser();
   }, []);
 
-  // fetch trending stories (most visited in last 3 days)
+  // Cache management functions
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+  const getCachedData = async (key) => {
+    try {
+      const cached = await AsyncStorage.getItem(`news_cache_${key}`);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_DURATION) {
+          return data;
+        }
+      }
+    } catch (error) {
+      console.log('Cache read error:', error);
+    }
+    return null;
+  };
+
+  const setCachedData = async (key, data) => {
+    try {
+      const cacheData = {
+        data,
+        timestamp: Date.now()
+      };
+      await AsyncStorage.setItem(`news_cache_${key}`, JSON.stringify(cacheData));
+    } catch (error) {
+      console.log('Cache write error:', error);
+    }
+  };
+
+  // fetch trending stories (most visited in last 3 days) - only once on mount
   useEffect(() => {
-    apiClient.get('/public/trending-articles')
-      .then(res => {
+    const fetchTrendingStories = async () => {
+      const requestId = 'trending-stories';
+      if (activeRequests.has(requestId)) return;
+
+      // Check cache first
+      const cachedData = await getCachedData('trending-stories');
+      if (cachedData) {
+        setTrendingStories(cachedData);
+        return;
+      }
+
+      setActiveRequests(prev => new Set(prev).add(requestId));
+
+      try {
+        const res = await apiClient.get('/public/trending-articles');
         if (Array.isArray(res.data?.data)) {
-          const mapped = res.data.data.map(a => ({
+          const mapped = res.data.data.slice(0, 10).map(a => ({ // Limit to 10 items
             id: a.id?.toString() || '',
             title: a.title,
             category: a.genre || 'News',
             published_at: a.published_at,
-            image: a.media && a.media.length > 0 
-              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${a.media[0].file_path.replace('public/', '')}`  
+            image: a.media && a.media.length > 0
+              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${a.media[0].file_path.replace('public/', '')}`
               : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
           }));
           setTrendingStories(mapped);
+          // Cache the result
+          await setCachedData('trending-stories', mapped);
         }
-      })
-      .catch(() => setTrendingStories([]));
+      } catch (error) {
+        console.log('Failed to fetch trending stories:', error);
+        setTrendingStories([]);
+      } finally {
+        setActiveRequests(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(requestId);
+          return newSet;
+        });
+      }
+    };
+
+    fetchTrendingStories();
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
-    // Reset displayed articles count when changing tabs
-    setDisplayedArticles(9);
-    
-    // For tabs other than News and Creative, fetch featured (trending) content
-    const shouldUseFeatured = activeGenre !== 'News' && activeGenre !== 'Creative';
-    let url;
-    
-    if (shouldUseFeatured) {
-      // Fetch most viewed content from last 3 days for featured tabs
-      url = `/public/trending-articles?genre=${activeGenre.toLowerCase()}`;
-    } else {
-      // Fetch latest content for News tab
-      url = activeGenre === 'News' ? '/public/articles' : `/public/articles?genre=${activeGenre.toLowerCase()}`;
-    }
-    
-    apiClient.get(url)
-      .then(res => {
+    const fetchNewsData = async () => {
+      const requestId = `news-${activeGenre}`;
+      if (activeRequests.has(requestId)) return;
+
+      // Check cache first
+      const cacheKey = `news-${activeGenre}`;
+      const cachedData = await getCachedData(cacheKey);
+      if (cachedData) {
+        setNewsData(cachedData);
+        setLoading(false);
+        return;
+      }
+
+      setActiveRequests(prev => new Set(prev).add(requestId));
+      let isMounted = true;
+
+      setLoading(true);
+      // Reset displayed articles count when changing tabs
+      setDisplayedArticles(9);
+
+      try {
+        // For tabs other than News and Creative, fetch featured (trending) content
+        const shouldUseFeatured = activeGenre !== 'News' && activeGenre !== 'Creative';
+        const url = shouldUseFeatured
+          ? `/public/trending-articles?genre=${activeGenre.toLowerCase()}`
+          : (activeGenre === 'News' ? '/public/articles' : `/public/articles?genre=${activeGenre.toLowerCase()}`);
+
+        const res = await apiClient.get(url);
+
         if (isMounted && Array.isArray(res.data?.data)) {
-          const mapped = res.data.data.map(article => ({
+          // Limit initial load to improve performance
+          const limit = shouldUseFeatured ? 20 : 15;
+          const mapped = res.data.data.slice(0, limit).map(article => ({
             id: article.id?.toString() || '',
             title: article.title,
-            excerpt: '', // Removed content display
-            image: article.media && article.media.length > 0 
-              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`  
+            excerpt: '', // Removed content display to reduce payload
+            image: article.media && article.media.length > 0
+              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`
               : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
             date: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
             category: article.genre || 'News',
           }));
           setNewsData(mapped);
+          // Cache the result
+          await setCachedData(cacheKey, mapped);
         }
-      })
-      .catch(() => {
+      } catch (error) {
+        console.log(`Failed to fetch ${activeGenre} data:`, error);
         if (isMounted) setNewsData(fallbackNewsData);
-      });
-    return () => { isMounted = false; };
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+          setActiveRequests(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(requestId);
+            return newSet;
+          });
+        }
+      }
+
+      return () => { isMounted = false; };
+    };
+
+    fetchNewsData();
   }, [activeGenre]);
 
   // Determine if we're on a featured tab (Articles, Opinion, Sports, Editorial)
@@ -926,202 +1088,199 @@ export default function NewsScreen() {
     setDisplayedArticles(prev => prev + 8);
   };
 
-  const handleGenreChange = async (genre) => {
-    setActiveGenre(genre);
-    try {
-      await AsyncStorage.setItem('activeNewsGenre', genre);
-    } catch (error) {
-      console.log('Error saving active genre:', error);
-    }
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <AppNavbar />
-      <NewsNavbar activeGenre={activeGenre} onGenreChange={handleGenreChange} />
+      <NewsNavbar />
       
       <ScrollView contentContainerStyle={styles.newsPageScroll}>
-        <View style={styles.newsMainRow}>
-          {/* Full width layout for featured tabs (Articles, Opinion, Sports, Editorial) */}
-          {activeGenre !== 'News' && activeGenre !== 'Creative' ? (
-            <View style={{ width: '100%', maxWidth: 1300 }}>
-              <Text style={styles.latestContentTitle}>Featured Content</Text>
-              <View style={styles.threeColumnGrid}>
-                {featuredStory && (
-                  <TouchableOpacity 
-                    style={styles.featuredCardWide}
-                    onPress={() => {
-                      if (recordView) recordView(featuredStory.id, 'view');
-                      router.push(`/news/article/${featuredStory.id}`);
-                    }}
-                  >
-                    <View style={styles.featuredImageContainer}>
-                      <Image 
-                        source={{ uri: featuredStory.image || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070' }}
-                        style={styles.featuredImageStyle}
-                        resizeMode="cover"
-                      />
-                    </View>
-                    <View style={styles.featuredContentContainer}>
-                      <Text style={styles.featuredCategoryLabel}>{activeGenre.toUpperCase()}</Text>
-                      <Text style={styles.featuredTitleText}>{featuredStory.title}</Text>
-                      <Text style={styles.featuredExcerptText} numberOfLines={3}>
-                        {featuredStory.excerpt}
-                      </Text>
-                      <Text style={styles.featuredMetaInfo}>{featuredStory.date}</Text>
-                    </View>
-                  </TouchableOpacity>
-                )}
-                {gridStories.map((item) => (
-                  <View 
-                    key={item.id} 
-                    style={styles.regularCardNarrow}
-                  >
-                    <NewsCard 
-                      item={item} 
-                      compact 
-                      onInteraction={recordView}
-                    />
+        {loading ? (
+          <SkeletonLoader />
+        ) : (
+          <>
+            <View style={styles.newsMainRow}>
+              {/* Full width layout for featured tabs (Articles, Opinion, Sports, Editorial) */}
+              {activeGenre !== 'News' && activeGenre !== 'Creative' ? (
+                <View style={{ width: '100%', maxWidth: 1300 }}>
+                  <Text style={styles.latestContentTitle}>Featured Content</Text>
+                  <View style={styles.threeColumnGrid}>
+                    {featuredStory && (
+                      <TouchableOpacity
+                        style={styles.featuredCardWide}
+                        onPress={() => {
+                          if (recordView) recordView(featuredStory.id, 'view');
+                          router.push(`/news/article/${featuredStory.id}`);
+                        }}
+                      >
+                        <View style={styles.featuredImageContainer}>
+                          <Image
+                            source={{ uri: featuredStory.image || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070' }}
+                            style={styles.featuredImageStyle}
+                            resizeMode="cover"
+                          />
+                        </View>
+                        <View style={styles.featuredContentContainer}>
+                          <Text style={styles.featuredCategoryLabel}>{activeGenre.toUpperCase()}</Text>
+                          <Text style={styles.featuredTitleText}>{featuredStory.title}</Text>
+                          <Text style={styles.featuredExcerptText} numberOfLines={3}>
+                            {featuredStory.excerpt}
+                          </Text>
+                          <Text style={styles.featuredMetaInfo}>{featuredStory.date}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                    {gridStories.map((item) => (
+                      <View
+                        key={item.id}
+                        style={styles.regularCardNarrow}
+                      >
+                        <NewsCard
+                          item={item}
+                          compact
+                          onInteraction={recordView}
+                        />
+                      </View>
+                    ))}
                   </View>
-                ))}
-              </View>
-              {hasMoreArticles && (
-                <TouchableOpacity 
-                  style={styles.loadMoreButton}
-                  onPress={handleLoadMore}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.loadMoreButtonText}>Load More Articles</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ) : (
-            // Original two-column layout for News tab
-            <>
-              <View style={styles.leftColWrapper}>
-                <Text style={styles.latestContentTitle}>Latest Content</Text>
-                <View style={styles.trendingCardWrapper}>
-                  {featuredStory && (
-                    <TouchableOpacity style={styles.trendingContainer}>
-                      <NewsCard 
-                        item={featuredStory} 
-                        isFirst={true} 
-                        onInteraction={recordView}
-                      />
+                  {hasMoreArticles && (
+                    <TouchableOpacity
+                      style={styles.loadMoreButton}
+                      onPress={handleLoadMore}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.loadMoreButtonText}>Load More Articles</Text>
                     </TouchableOpacity>
                   )}
                 </View>
-                {/* Show recommendations only for News tab */}
-                {activeGenre === 'News' && (
-                  <RecommendedContent 
-                    userId={currentUser?.id} 
-                    onInteraction={recordView}
-                  />
-                )}
-                <FlatList
-                  data={gridStories}
-                  renderItem={({ item }) => (
-                    <NewsCard 
-                      item={item} 
-                      compact 
-                      onInteraction={recordView}
-                    />
-                  )}
-                  keyExtractor={item => item.id}
-                  numColumns={3}
-                  columnWrapperStyle={styles.gridRow}
-                  contentContainerStyle={styles.gridContainer}
-                  scrollEnabled={false}
-                />
-              </View>
-              {activeGenre === 'News' && (
-                <View style={styles.rightCol}>
-                  <ScrollView style={styles.rightColScroll} contentContainerStyle={{paddingBottom: 16}}>
-                    <View style={styles.freshStoriesSection}>
-                      <Text style={styles.freshStoriesHeader}>Trending Stories</Text>
-                      <Text style={styles.freshStoriesSubheader}>Most visited in last 3 days</Text>
-                      <View style={styles.freshStoryList}>
-                        {trendingStories.map((item, index) => (
-                          <TouchableOpacity key={item.id} onPress={() => router.push(`/news/article/${item.id}`)}>
-                            {index < 3 ? (
-                              <View style={styles.topTrendingItem}>
-                                <Image 
-                                  source={{ uri: item.image }} 
-                                  style={styles.topTrendingImage}
-                                  resizeMode="cover"
-                                />
-                                <View style={styles.topTrendingContent}>
-                                  <Text style={styles.topTrendingTitle} numberOfLines={2}>
-                                    {item.title}
-                                  </Text>
-                                  <View style={styles.topTrendingMeta}>
-                                    <Text style={styles.topTrendingCategory}>{item.category?.toUpperCase()}</Text>
-                                    <Text style={styles.topTrendingDate}>{item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</Text>
-                                  </View>
-                                </View>
-                              </View>
-                            ) : (
-                              <>
-                                <View style={styles.freshStoryItem}>
-                                  <Text style={styles.freshStoryTitle}>
-                                    <Text style={styles.freshStoryTitleBold}>{item.category?.toUpperCase()} |</Text> {item.title}
-                                  </Text>
-                                  <View style={styles.freshStoryMetaRow}>
-                                    <Text style={styles.freshStoryCategory}>{item.category?.toUpperCase()}</Text>
-                                    <Text style={styles.freshStoryDate}>  {item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''}</Text>
-                                  </View>
-                                </View>
-                                <View style={styles.freshStoryDivider} />
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        ))}
-                      </View>
+              ) : (
+                // Original two-column layout for News tab
+                <>
+                  <View style={styles.leftColWrapper}>
+                    <Text style={styles.latestContentTitle}>Latest Content</Text>
+                    <View style={styles.trendingCardWrapper}>
+                      {featuredStory && (
+                        <TouchableOpacity style={styles.trendingContainer}>
+                          <NewsCard
+                            item={featuredStory}
+                            isFirst={true}
+                            onInteraction={recordView}
+                          />
+                        </TouchableOpacity>
+                      )}
                     </View>
-                  </ScrollView>
-                </View>
+                    {/* Show recommendations only for News tab */}
+                    {activeGenre === 'News' && (
+                      <RecommendedContent
+                        userId={currentUser?.id}
+                        onInteraction={recordView}
+                      />
+                    )}
+                    <FlatList
+                      data={gridStories}
+                      renderItem={({ item }) => (
+                        <NewsCard
+                          item={item}
+                          compact
+                          onInteraction={recordView}
+                        />
+                      )}
+                      keyExtractor={item => item.id}
+                      numColumns={3}
+                      columnWrapperStyle={styles.gridRow}
+                      contentContainerStyle={styles.gridContainer}
+                      scrollEnabled={false}
+                    />
+                  </View>
+                  {activeGenre === 'News' && (
+                    <View style={styles.rightCol}>
+                      <ScrollView style={styles.rightColScroll} contentContainerStyle={{ paddingBottom: 16 }}>
+                        <View style={styles.freshStoriesSection}>
+                          <Text style={styles.freshStoriesHeader}>Trending Stories</Text>
+                          <Text style={styles.freshStoriesSubheader}>Most visited in last 3 days</Text>
+                          <View style={styles.freshStoryList}>
+                            {trendingStories.map((item, index) => (
+                              <TouchableOpacity key={item.id} onPress={() => router.push(`/news/article/${item.id}`)}>
+                                {index < 3 ? (
+                                  <View style={styles.topTrendingItem}>
+                                    <Image
+                                      source={{ uri: item.image }}
+                                      style={styles.topTrendingImage}
+                                      resizeMode="cover"
+                                    />
+                                    <View style={styles.topTrendingContent}>
+                                      <Text style={styles.topTrendingTitle} numberOfLines={2}>
+                                        {item.title}
+                                      </Text>
+                                      <View style={styles.topTrendingMeta}>
+                                        <Text style={styles.topTrendingCategory}>{item.category?.toUpperCase()}</Text>
+                                        <Text style={styles.topTrendingDate}>{item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</Text>
+                                      </View>
+                                    </View>
+                                  </View>
+                                ) : (
+                                  <>
+                                    <View style={styles.freshStoryItem}>
+                                      <Text style={styles.freshStoryTitle}>
+                                        <Text style={styles.freshStoryTitleBold}>{item.category?.toUpperCase()} |</Text> {item.title}
+                                      </Text>
+                                      <View style={styles.freshStoryMetaRow}>
+                                        <Text style={styles.freshStoryCategory}>{item.category?.toUpperCase()}</Text>
+                                        <Text style={styles.freshStoryDate}>  {item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''}</Text>
+                                      </View>
+                                    </View>
+                                    <View style={styles.freshStoryDivider} />
+                                  </>
+                                )}
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+                      </ScrollView>
+                    </View>
+                  )}
+                </>
               )}
-            </>
-          )}
-        </View>
+            </View>
 
-        {/* Footer Section */}
-        <footer style={styles.footer}>
-          <View style={styles.footerContent}>
-            <View style={styles.footerSection}>
-              <Text style={styles.footerHeading}>Contact Us</Text>
-              <View style={styles.contactItem}>
-                <MaterialIcons name="facebook" size={20} color="#93c5fd" style={styles.contactIcon} />
-                <Text
-                  style={styles.footerLink}
-                  onPress={() => window.open('https://facebook.com/fishermannetwork', '_blank')}
-                >
-                  fishermannetwork
-                </Text>
+            {/* Footer Section */}
+            <View style={styles.footer}>
+              <View style={styles.footerContent}>
+                <View style={styles.footerSection}>
+                  <Text style={styles.footerHeading}>Contact Us</Text>
+                  <View style={styles.contactItem}>
+                    <MaterialIcons name="facebook" size={20} color="#93c5fd" style={styles.contactIcon} />
+                    <Text
+                      style={styles.footerLink}
+                      onPress={() => window.open('https://facebook.com/fishermannetwork', '_blank')}
+                    >
+                      fishermannetwork
+                    </Text>
+                  </View>
+                  <View style={styles.contactItem}>
+                    <MaterialIcons name="email" size={20} color="#93c5fd" style={styles.contactIcon} />
+                    <Text
+                      style={styles.footerLink}
+                      onPress={() => window.open('mailto:info@fisherman.network')}
+                    >
+                      info@fisherman.network
+                    </Text>
+                  </View>
+                  <View style={styles.contactItem}>
+                    <MaterialIcons name="phone" size={20} color="#93c5fd" style={styles.contactIcon} />
+                    <Text style={styles.contactText}>+63 2 8123 4567</Text>
+                  </View>
+                  <View style={styles.contactItem}>
+                    <MaterialIcons name="smartphone" size={20} color="#93c5fd" style={styles.contactIcon} />
+                    <Text style={styles.contactText}>+63 912 345 6789</Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.contactItem}>
-                <MaterialIcons name="email" size={20} color="#93c5fd" style={styles.contactIcon} />
-                <Text
-                  style={styles.footerLink}
-                  onPress={() => window.open('mailto:info@fisherman.network')}
-                >
-                  info@fisherman.network
-                </Text>
-              </View>
-              <View style={styles.contactItem}>
-                <MaterialIcons name="phone" size={20} color="#93c5fd" style={styles.contactIcon} />
-                <Text style={styles.contactText}>+63 2 8123 4567</Text>
-              </View>
-              <View style={styles.contactItem}>
-                <MaterialIcons name="smartphone" size={20} color="#93c5fd" style={styles.contactIcon} />
-                <Text style={styles.contactText}>+63 912 345 6789</Text>
+              <View style={styles.copyright}>
+                <Text>&copy; {new Date().getFullYear()} Fisherman's Network. All rights reserved.</Text>
               </View>
             </View>
-          </View>
-          <View style={styles.copyright}>
-            &copy; {new Date().getFullYear()} Fisherman's Network. All rights reserved.
-          </View>
-        </footer>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

@@ -1,10 +1,11 @@
 // app/screens/news/index.web.js
 import { Link, useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView } from 'react-native';
+import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView, ActivityIndicator } from 'react-native';
 import Navbar from '../../../../components/Navbar';
 import NewsNavbar from '../../../../components/newsnavbar';
 import apiClient from '../../../../utils/api';
+import useNewsStore from '../../../../store/newsStore';
 
 const styles = StyleSheet.create({
   container: {
@@ -602,10 +603,12 @@ const HeadlineCard = ({ item }) => (
 
 export default function NewsScreen() {
   const [newsData, setNewsData] = useState(fallbackNewsData);
-  const [activeGenre, setActiveGenre] = useState('News');
+  const { activeGenre } = useNewsStore();
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
+    setLoading(true);
     const url = activeGenre === 'News' ? '/public/articles' : `/public/articles?genre=${activeGenre.toLowerCase()}`;
     
     apiClient.get(url)
@@ -626,7 +629,11 @@ export default function NewsScreen() {
       })
       .catch(() => {
         if (isMounted) setNewsData(fallbackNewsData);
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
       });
+
     return () => { isMounted = false; };
   }, [activeGenre]);
 
@@ -637,11 +644,16 @@ export default function NewsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Navbar />
-      <NewsNavbar activeGenre={activeGenre} onGenreChange={setActiveGenre} />
+      <NewsNavbar />
       
       <ScrollView contentContainerStyle={styles.newsPageScroll}>
-        <View style={styles.newsMainRow}>
-          <View style={styles.leftColWrapper}>
+        {loading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#2541b2" />
+          </View>
+        ) : (
+          <View style={styles.newsMainRow}>
+            <View style={styles.leftColWrapper}>
             <Text style={styles.latestContentTitle}>Latest Content</Text>
             <View style={styles.trendingCardWrapper}>
               {featuredStory && (
@@ -659,48 +671,49 @@ export default function NewsScreen() {
               contentContainerStyle={styles.gridContainer}
               scrollEnabled={false}
             />
-          </View>
-          <View style={styles.rightCol}>
-            <ScrollView style={styles.rightColScroll} contentContainerStyle={{paddingBottom: 16}}>
-              {headlineStories.map(item => (
-                <HeadlineCard item={item} key={item.id} />
-              ))}
-              <View style={styles.freshStoriesSection}>
-                <Text style={styles.freshStoriesHeader}>Fresh stories</Text>
-                <Text style={styles.freshStoriesSubheader}>TODAY: BROWSE OUR EDITOR'S HAND PICKED ARTICLES!</Text>
-                <View style={styles.freshStoryList}>
-                  <View style={styles.freshStoryItem}>
-                    <Text style={styles.freshStoryTitle}><Text style={styles.freshStoryTitleBold}>LITERARY |</Text> gutom na rin ako, kaso pamasaha na lang ang meron ako</Text>
-                    <View style={styles.freshStoryMetaRow}>
-                      <Text style={styles.freshStoryCategory}>LITERARY</Text>
-                      <Text style={styles.freshStoryDate}>  March 21, 2025</Text>
+            </View>
+            <View style={styles.rightCol}>
+              <ScrollView style={styles.rightColScroll} contentContainerStyle={{paddingBottom: 16}}>
+                {headlineStories.map(item => (
+                  <HeadlineCard item={item} key={item.id} />
+                ))}
+                <View style={styles.freshStoriesSection}>
+                  <Text style={styles.freshStoriesHeader}>Fresh stories</Text>
+                  <Text style={styles.freshStoriesSubheader}>TODAY: BROWSE OUR EDITOR'S HAND PICKED ARTICLES!</Text>
+                  <View style={styles.freshStoryList}>
+                    <View style={styles.freshStoryItem}>
+                      <Text style={styles.freshStoryTitle}><Text style={styles.freshStoryTitleBold}>LITERARY |</Text> gutom na rin ako, kaso pamasaha na lang ang meron ako</Text>
+                      <View style={styles.freshStoryMetaRow}>
+                        <Text style={styles.freshStoryCategory}>LITERARY</Text>
+                        <Text style={styles.freshStoryDate}>  March 21, 2025</Text>
+                      </View>
                     </View>
-                  </View>
-                  <View style={styles.freshStoryDivider} />
-                  <View style={styles.freshStoryItem}>
-                    <Text style={styles.freshStoryTitle}><Text style={styles.freshStoryTitleBold}>NEWS |</Text> BatStateU, SP strengthen global ties; propose community solutions</Text>
-                    <View style={styles.freshStoryMetaRow}>
-                      <Text style={styles.freshStoryCategory}>NEWS</Text>
-                      <Text style={styles.freshStoryDate}>  March 19, 2025</Text>
+                    <View style={styles.freshStoryDivider} />
+                    <View style={styles.freshStoryItem}>
+                      <Text style={styles.freshStoryTitle}><Text style={styles.freshStoryTitleBold}>NEWS |</Text> BatStateU, SP strengthen global ties; propose community solutions</Text>
+                      <View style={styles.freshStoryMetaRow}>
+                        <Text style={styles.freshStoryCategory}>NEWS</Text>
+                        <Text style={styles.freshStoryDate}>  March 19, 2025</Text>
+                      </View>
                     </View>
-                  </View>
-                  <View style={styles.freshStoryDivider} />
-                  <View style={styles.freshStoryItem}>
-                    <Text style={styles.freshStoryTitle}><Text style={styles.freshStoryTitleBold}>EDITORIAL |</Text> Pulling Out the Thorns</Text>
-                    <View style={styles.freshStoryMetaRow}>
-                      <Text style={styles.freshStoryCategory}>EDITORIAL</Text>
-                      <Text style={styles.freshStoryDate}>  March 11, 2025</Text>
+                    <View style={styles.freshStoryDivider} />
+                    <View style={styles.freshStoryItem}>
+                      <Text style={styles.freshStoryTitle}><Text style={styles.freshStoryTitleBold}>EDITORIAL |</Text> Pulling Out the Thorns</Text>
+                      <View style={styles.freshStoryMetaRow}>
+                        <Text style={styles.freshStoryCategory}>EDITORIAL</Text>
+                        <Text style={styles.freshStoryDate}>  March 11, 2025</Text>
+                      </View>
                     </View>
-                  </View>
-                  <View style={styles.freshStoryDivider} />
-                  <View style={styles.freshStoryItem}>
-                    <Text style={styles.freshStoryTitle}>People Power is not a relic of the past. It is a reminder, a warning, and a call to action.</Text>
+                    <View style={styles.freshStoryDivider} />
+                    <View style={styles.freshStoryItem}>
+                      <Text style={styles.freshStoryTitle}>People Power is not a relic of the past. It is a reminder, a warning, and a call to action.</Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
-        </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

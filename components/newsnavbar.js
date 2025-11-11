@@ -2,17 +2,20 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import useNewsStore from '../store/newsStore';
 
 // This NewsNavbar is exclusive to news.js and appears under the main Navbar
-export default function NewsNavbar({ onGenreChange, activeGenre }) {
+export default function NewsNavbar() {
   const router = useRouter();
+  const { activeGenre, setActiveGenre } = useNewsStore();
   const sections = ['News', 'Articles', 'Opinion', 'Sports', 'Editorial', 'Creative'];
 
   const handleSectionPress = (section) => {
+    setActiveGenre(section);
     if (section === 'Creative') {
       router.push('/creative');
-    } else if (onGenreChange) {
-      onGenreChange(section);
+    } else {
+      router.push('/news');
     }
   };
 
