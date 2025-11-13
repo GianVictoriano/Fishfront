@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, ActivityIndicator, TouchableOpacity, StyleSheet, SafeAreaView, Modal, ScrollView, Alert } from 'react-native';
+import { View, Text, Image, ActivityIndicator, TouchableOpacity, StyleSheet, SafeAreaView, Modal, ScrollView, Alert, TextInput, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import apiClient from '../../utils/api';
@@ -20,6 +20,8 @@ export default function ReviewImagePreviewScreen() {
   const [groupMembers, setGroupMembers] = useState([]);
   const [leadReviewer, setLeadReviewer] = useState(null);
   const [selectedForwardTo, setSelectedForwardTo] = useState(null);
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [rejectComment, setRejectComment] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -28,6 +30,10 @@ export default function ReviewImagePreviewScreen() {
       try {
         const response = await apiClient.get(`/review-images/${id}`);
         setImageData(response.data);
+        
+        console.log('Fetched image data:', response.data);
+        console.log('Image ID from response:', response.data.id);
+        console.log('ID from URL params:', id);
         
         // Fetch group info and members
         if (response.data.group) {
@@ -126,33 +132,91 @@ export default function ReviewImagePreviewScreen() {
     }
   };
 
-  const handleReject = async () => {
-    Alert.alert(
-      'Reject Image',
-      'Are you sure you want to reject this image?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: async () => {
-            setLoading(true);
-            try {
-              await apiClient.patch(`/review-images/${id}/reject`);
-              setConfirmation('The image draft was rejected!');
-              setTimeout(() => {
-                setConfirmation(null);
-                router.replace('/collab/review-content');
-              }, 1500);
-            } catch (e) {
-              Alert.alert('Error', 'Failed to reject image.');
-            } finally {
-              setLoading(false);
-            }
+  const handleReject = () => {
+    console.log('Reject button clicked');
+    // Show comment modal first
+    setCommentModalVisible(true);
+  };
+
+  const performRejection = async () => {
+    setLoading(true);
+    try {
+      console.log('ID from URL params:', id);
+      console.log('Type of ID:', typeof id);
+      
+      // Save the comment as a review comment first
+      const commentData = {
+        review_image_id: parseInt(id), // Convert to number for database
+        comment: rejectComment,
+        start_index: 0,
+        end_index: 1, // Must be greater than start_index for validation
+        highlighted_text: 'Image rejection comment'
+      };
+
+      console.log('ID parameter:', id);
+      console.log('Comment data being sent:', JSON.stringify(commentData, null, 2));
+      await apiClient.post('/review-comments', commentData);
+      
+      // Then reject the image
+      console.log('Rejecting image');
+      await apiClient.patch(`/review-images/${parseInt(id)}/reject`);
+      setConfirmation('The image was rejected with comment!');
+      setTimeout(() => {
+        setConfirmation(null);
+        router.replace('/collab/review-content');
+      }, 1500);
+    } catch (e) {
+      console.error('Error during rejection:', e);
+      console.error('Error response data:', e.response?.data);
+      console.error('Error status:', e.response?.status);
+      
+      let errorMessage = 'Failed to reject image.';
+      if (e.response?.data?.errors) {
+        console.error('Validation errors:', e.response.data.errors);
+        errorMessage = `Validation error: ${JSON.stringify(e.response.data.errors)}`;
+      } else if (e.response?.data?.message) {
+        errorMessage = e.response.data.message;
+      }
+      
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setLoading(false);
+      setRejectComment(''); // Clear comment after use
+    }
+  };
+
+  const handleRejectWithComment = async () => {
+    console.log('handleRejectWithComment called');
+    console.log('rejectComment:', rejectComment);
+    
+    if (!rejectComment.trim()) {
+      Alert.alert('Error', 'Please provide a comment for the rejection.');
+      return;
+    }
+
+    // Close comment modal first
+    setCommentModalVisible(false);
+    console.log('Comment modal closed');
+    
+    // Handle web vs native differently
+    if (Platform.OS === 'web') {
+      // On web, perform rejection directly (Alert.alert doesn't work)
+      await performRejection();
+    } else {
+      // On native, show confirmation dialog
+      Alert.alert(
+        'Reject Image',
+        'Are you sure you want to reject this image?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Reject',
+            style: 'destructive',
+            onPress: performRejection
           }
-        }
-      ]
-    );
+        ]
+      );
+    }
   };
 
   if (loading) {
@@ -320,6 +384,55 @@ export default function ReviewImagePreviewScreen() {
                 >
                   <Feather name="check" size={16} color="#fff" style={{ marginRight: 6 }} />
                   <Text style={styles.modalConfirmText}>Finalize & Approve</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+        
+        {/* Comment Modal for Rejection */}
+        <Modal visible={commentModalVisible} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Feather name="message-circle" size={24} color="#EF4444" />
+                <Text style={styles.modalTitle}>Rejection Comment</Text>
+                <TouchableOpacity onPress={() => setCommentModalVisible(false)}>
+                  <Feather name="x" size={24} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+              
+              <Text style={styles.modalMessage}>
+                Please provide a comment explaining why this image is being rejected.
+              </Text>
+              
+              <TextInput
+                style={styles.commentInput}
+                multiline
+                numberOfLines={4}
+                placeholder="Enter your rejection comment here..."
+                value={rejectComment}
+                onChangeText={setRejectComment}
+                textAlignVertical="top"
+              />
+              
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalCancelButton]}
+                  onPress={() => {
+                    setCommentModalVisible(false);
+                    setRejectComment('');
+                  }}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalRejectButton]}
+                  onPress={handleRejectWithComment}
+                  disabled={!rejectComment.trim()}
+                >
+                  <Feather name="x" size={16} color="#fff" style={{ marginRight: 6 }} />
+                  <Text style={styles.modalRejectText}>Reject</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -600,5 +713,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     marginBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  commentInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#1F2937',
+    minHeight: 100,
+    marginBottom: 16,
+    textAlignVertical: 'top',
+  },
+  modalRejectButton: {
+    backgroundColor: '#EF4444',
+  },
+  modalRejectText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 15,
   },
 });

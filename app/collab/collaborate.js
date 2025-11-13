@@ -252,12 +252,15 @@ export default function CollaborateScreen() {
   // Folio submission confirmation state
   const [folioConfirmModalVisible, setFolioConfirmModalVisible] = useState(false);
 
+  // Important notes state
+  const [importantNotes, setImportantNotes] = useState([]);
+  const [importantNote, setImportantNote] = useState('');
+  const [isImportantNoteModalVisible, setIsImportantNoteModalVisible] = useState(false);
+  const [importantNoteConfirmModalVisible, setImportantNoteConfirmModalVisible] = useState(false);
+  const [noteToDelete, setNoteToDelete] = useState(null);
+
   const selectedGroupIdRef = useRef(selectedGroupId);
   const isScanningRef = useRef(false);
-
-  useEffect(() => {
-    selectedGroupIdRef.current = selectedGroupId;
-  }, [selectedGroupId]);
 
   const fetchGroupChats = useCallback(async () => {
     try {
@@ -399,6 +402,78 @@ export default function CollaborateScreen() {
       checkPendingUploads();
     }
   }, [selectedGroupId, currentUser]);
+
+  // Fetch important notes when group changes
+  const fetchImportantNotes = useCallback(async () => {
+    if (!selectedGroupId) {
+      setImportantNotes([]);
+      return;
+    }
+
+    try {
+      const response = await apiClient.get(`/important-notes?group_chat_id=${selectedGroupId}`);
+      setImportantNotes(response.data);
+    } catch (error) {
+      console.error('Failed to fetch important notes:', error);
+    }
+  }, [selectedGroupId]);
+
+  useEffect(() => {
+    fetchImportantNotes();
+  }, [fetchImportantNotes]);
+
+  const handleSaveImportantNote = async () => {
+    if (!importantNote.trim() || !selectedGroupId || !currentUser) return;
+
+    try {
+      const response = await apiClient.post('/important-notes', {
+        group_chat_id: selectedGroupId,
+        content: importantNote.trim(),
+      });
+
+      setImportantNotes(prev => [response.data, ...prev]);
+      setImportantNote('');
+      setIsImportantNoteModalVisible(false);
+
+      setFeedbackModalConfig({
+        message: 'Important note added successfully!',
+        type: 'success'
+      });
+      setFeedbackModalVisible(true);
+    } catch (error) {
+      console.error('Failed to save important note:', error);
+      setFeedbackModalConfig({
+        message: 'Failed to save important note. Please try again.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
+  };
+
+  const handleDeleteImportantNote = async (noteId) => {
+    setNoteToDelete(noteId);
+    setImportantNoteConfirmModalVisible(true);
+  };
+
+  const deleteImportantNote = async (noteId) => {
+    try {
+      await apiClient.delete(`/important-notes/${noteId}`);
+      setImportantNotes(prev => prev.filter(note => note.id !== noteId));
+      
+      setFeedbackModalConfig({
+        message: 'Important note deleted successfully!',
+        type: 'success'
+      });
+      setFeedbackModalVisible(true);
+    } catch (error) {
+      console.error('Failed to delete important note:', error);
+      setFeedbackModalConfig({
+        message: 'Failed to delete important note. Please try again.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
+  };
 
   const inputRef = useRef(null);
   const searchInputRef = useRef(null);
@@ -1483,11 +1558,9 @@ export default function CollaborateScreen() {
               </View>
               <View style={{alignItems: 'flex-end'}}>
                 <TouchableOpacity
-                  onPress={async () => {
-                    console.log('Header upload button pressed');
-                    // Check for pending uploads before showing modal
-                    await checkPendingUploads();
-                    setIsUploadModalVisible(true);
+                  onPress={() => {
+                    console.log('Notes button pressed');
+                    setIsImportantNoteModalVisible(true);
                   }}
                   style={{
                     backgroundColor: '#4285F4',
@@ -1503,7 +1576,7 @@ export default function CollaborateScreen() {
                   activeOpacity={0.8}
                 >
                   <Feather name="upload" size={18} color="#fff" />
-                  <Text style={{color: '#fff', fontWeight: 'bold', marginLeft: 8}}>Upload File</Text>
+                  <Text style={{color: '#fff', fontWeight: 'bold', marginLeft: 8}}>Notes</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2069,6 +2142,187 @@ export default function CollaborateScreen() {
                 >
                   <Text style={modalStyles.textStyle}>OK</Text>
                 </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Important Notes Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={isImportantNoteModalVisible}
+            onRequestClose={() => setIsImportantNoteModalVisible(false)}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 400, maxWidth: 500, width: '90%'}]}>
+                <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 20}}>
+                  <Feather name="sticky-note" size={28} color="#1a237e" />
+                  <Text style={[modalStyles.modalTitle, {fontSize: 22, marginLeft: 12, marginBottom: 0}]}>
+                    Important Notes
+                  </Text>
+                </View>
+
+                <Text style={{fontSize: 14, color: '#6B7280', marginBottom: 20}}>
+                  Add important notes that all group members can see. These notes are visible to everyone in this chat.
+                </Text>
+
+                {/* Display Existing Notes */}
+                {importantNotes.length > 0 && (
+                  <View style={{marginBottom: 20, width: '90%'}}>
+                    <Text style={[modalStyles.modalText, {fontWeight: 'bold', marginBottom: 8}]}>
+                      Existing Notes ({importantNotes.length})
+                    </Text>
+                    <ScrollView style={{maxHeight: 200}}>
+                      {importantNotes.map((note) => (
+                        <View
+                          key={note.id}
+                          style={{
+                            backgroundColor: '#F9FAFB',
+                            borderRadius: 8,
+                            padding: 12,
+                            marginBottom: 8,
+                            borderLeftWidth: 3,
+                            borderLeftColor: '#1a237e',
+                          }}
+                        >
+                          <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6}}>
+                            <Text style={{fontSize: 12, color: '#6B7280'}}>
+                              {note.user?.name} • {new Date(note.created_at).toLocaleDateString()}
+                            </Text>
+                            {currentUser?.id === note.user?.id && (
+                              <TouchableOpacity
+                                onPress={() => handleDeleteImportantNote(note.id)}
+                                style={{padding: 4}}
+                              >
+                                <Feather name="trash-2" size={14} color="#EF4444" />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                          <Text style={{fontSize: 14, color: '#374151', lineHeight: 20}}>
+                            {note.content}
+                          </Text>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Add Note Section */}
+                <View style={{marginBottom: 20, width: '90%'}}>
+                  <Text style={[modalStyles.modalText, {fontWeight: 'bold', marginBottom: 8}]}>
+                    Add New Note
+                  </Text>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: '#E5E7EB',
+                      borderRadius: 8,
+                      padding: 12,
+                      fontSize: 14,
+                      minHeight: 80,
+                      textAlignVertical: 'top',
+                    }}
+                    multiline
+                    numberOfLines={4}
+                    placeholder="Write your important note here..."
+                    value={importantNote}
+                    onChangeText={setImportantNote}
+                  />
+                </View>
+
+                <View style={{flexDirection: 'row', gap: 12, width: '100%'}}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#F3F4F6',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => {
+                      setIsImportantNoteModalVisible(false);
+                      setImportantNote('');
+                    }}
+                  >
+                    <Text style={{color: '#374151', fontWeight: '600', fontSize: 15}}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: importantNote.trim() ? '#1a237e' : '#D1D5DB',
+                      alignItems: 'center',
+                    }}
+                    onPress={handleSaveImportantNote}
+                    disabled={!importantNote.trim()}
+                  >
+                    <Text style={{color: '#fff', fontWeight: '700', fontSize: 15}}>
+                      {importantNotes.length > 0 ? 'Add Note' : 'Save Note'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Important Note Delete Confirmation Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={importantNoteConfirmModalVisible}
+            onRequestClose={() => {
+              setImportantNoteConfirmModalVisible(false);
+              setNoteToDelete(null);
+            }}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 200, maxWidth: 400}]}>
+                <View style={{alignItems: 'center', marginBottom: 20}}>
+                  <Feather name="alert-triangle" size={48} color="#F59E0B" />
+                </View>
+                <Text style={[modalStyles.modalTitle, {fontSize: 20, textAlign: 'center'}]}>
+                  Delete Important Note?
+                </Text>
+                <Text style={[modalStyles.modalText, {textAlign: 'center', marginBottom: 30, fontSize: 15}]}>
+                  Are you sure you want to delete this important note? This action cannot be undone.
+                </Text>
+
+                <View style={{flexDirection: 'row', gap: 12, width: '100%'}}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#F3F4F6',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => {
+                      setImportantNoteConfirmModalVisible(false);
+                      setNoteToDelete(null);
+                    }}
+                  >
+                    <Text style={{color: '#374151', fontWeight: '600', fontSize: 15}}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#EF4444',
+                      alignItems: 'center',
+                    }}
+                    onPress={async () => {
+                      if (noteToDelete) {
+                        await deleteImportantNote(noteToDelete);
+                        setImportantNoteConfirmModalVisible(false);
+                        setNoteToDelete(null);
+                      }
+                    }}
+                  >
+                    <Text style={{color: '#fff', fontWeight: '700', fontSize: 15}}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </Modal>
