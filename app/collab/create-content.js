@@ -71,6 +71,9 @@ export default function CreateContentScreen() {
   // Activity confirmation modal state
   const [activityConfirmModalVisible, setActivityConfirmModalVisible] = useState(false);
 
+  // Publish type modal state
+  const [publishTypeModalVisible, setPublishTypeModalVisible] = useState(false);
+
   // Handle incoming parameters from coverage request approval
   useEffect(() => {
     if (params.openActivity === 'true') {
@@ -243,6 +246,16 @@ export default function CreateContentScreen() {
     } else if (type === 'PublishOnTop') {
       Alert.alert('Coming Soon', 'Publish on Top of Scrum feature is under development.');
     }
+  };
+
+  const handlePublishNews = () => {
+    setPublishTypeModalVisible(false);
+    router.push('/collab/create-article');
+  };
+
+  const handlePublishLiteraryWork = () => {
+    setPublishTypeModalVisible(false);
+    router.push('/collab/create-literary-work');
   };
 
   const handleCreateScrumBoard = async () => {
@@ -450,7 +463,7 @@ export default function CreateContentScreen() {
           icon="arrow-up-bold-box-outline"
           title="Publish"
           description="Create and publish a new article."
-          onPress={() => router.push('/collab/create-article')}
+          onPress={() => setPublishTypeModalVisible(true)}
           iconColor={colors.primary}
         />
       </View>
@@ -1356,6 +1369,73 @@ export default function CreateContentScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Publish Type Selection Modal */}
+      <Modal
+        visible={publishTypeModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPublishTypeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.publishTypeModal}>
+            <View style={styles.publishTypeHeader}>
+              <View style={styles.publishTypeHeaderIcon}>
+                <MaterialCommunityIcons name="arrow-up-bold-box-outline" size={28} color={colors.primary} />
+              </View>
+              <View style={styles.publishTypeHeaderText}>
+                <Text style={styles.publishTypeTitle}>Select Publish Type</Text>
+                <Text style={styles.publishTypeSubtitle}>Choose the type of content you want to publish</Text>
+              </View>
+              <TouchableOpacity 
+                style={styles.publishTypeCloseButton} 
+                onPress={() => setPublishTypeModalVisible(false)}
+              >
+                <Feather name="x" size={24} color="#6c757d" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.publishTypeBody}>
+              <TouchableOpacity 
+                style={styles.publishTypeOption}
+                onPress={handlePublishNews}
+              >
+                <View style={styles.publishTypeOptionIcon}>
+                  <MaterialCommunityIcons name="newspaper" size={32} color="#1a237e" />
+                </View>
+                <View style={styles.publishTypeOptionContent}>
+                  <Text style={styles.publishTypeOptionTitle}>News</Text>
+                  <Text style={styles.publishTypeOptionDescription}>Create and publish news articles, announcements, and updates</Text>
+                </View>
+                <Feather name="chevron-right" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.publishTypeOption}
+                onPress={handlePublishLiteraryWork}
+              >
+                <View style={styles.publishTypeOptionIcon}>
+                  <MaterialCommunityIcons name="book-open-variant" size={32} color="#1a237e" />
+                </View>
+                <View style={styles.publishTypeOptionContent}>
+                  <Text style={styles.publishTypeOptionTitle}>Literary Work</Text>
+                  <Text style={styles.publishTypeOptionDescription}>Publish poems, stories, essays, and other literary pieces</Text>
+                </View>
+                <Feather name="chevron-right" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.publishTypeFooter}>
+              <TouchableOpacity
+                style={styles.publishTypeCancelButton}
+                onPress={() => setPublishTypeModalVisible(false)}
+              >
+                <Text style={styles.publishTypeCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2014,6 +2094,107 @@ const styles = StyleSheet.create({
   },
   datePickerConfirmText: {
     color: '#fff',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  // Publish Type Modal Styles
+  publishTypeModal: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 480,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  publishTypeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  publishTypeHeaderIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  publishTypeHeaderText: {
+    flex: 1,
+  },
+  publishTypeTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  publishTypeSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+  },
+  publishTypeCloseButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+  },
+  publishTypeBody: {
+    padding: 20,
+  },
+  publishTypeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginBottom: 12,
+  },
+  publishTypeOptionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  publishTypeOptionContent: {
+    flex: 1,
+  },
+  publishTypeOptionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  publishTypeOptionDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+  },
+  publishTypeFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  publishTypeCancelButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+  },
+  publishTypeCancelText: {
+    color: '#374151',
     fontWeight: '600',
     fontSize: 15,
   },

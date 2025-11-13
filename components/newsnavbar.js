@@ -7,12 +7,14 @@ import useNewsStore from '../store/newsStore';
 export default function NewsNavbar() {
   const router = useRouter();
   const { activeGenre, setActiveGenre } = useNewsStore();
-  const sections = ['News', 'Articles', 'Opinion', 'Sports', 'Editorial', 'Creative'];
+  const sections = ['News', 'Articles', 'Opinion', 'Sports', 'Editorial', 'Creative', 'Literary Works'];
 
   const handleSectionPress = (section) => {
     setActiveGenre(section);
     if (section === 'Creative') {
       router.push('/creative');
+    } else if (section === 'Literary Works') {
+      router.push('/news/literary-works');
     } else {
       router.push('/news');
     }
