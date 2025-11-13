@@ -157,9 +157,11 @@ export default function ReviewImagePreviewScreen() {
       console.log('Comment data being sent:', JSON.stringify(commentData, null, 2));
       await apiClient.post('/review-comments', commentData);
       
-      // Then reject the image
-      console.log('Rejecting image');
-      await apiClient.patch(`/review-images/${parseInt(id)}/reject`);
+      // Then reject the image with comment
+      console.log('Rejecting image with comment');
+      await apiClient.patch(`/review-images/${parseInt(id)}/reject`, {
+        comment: rejectComment
+      });
       setConfirmation('The image was rejected with comment!');
       setTimeout(() => {
         setConfirmation(null);

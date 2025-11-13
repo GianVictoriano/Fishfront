@@ -1,11 +1,13 @@
 // app/screens/user/creative/creative.web.js
 import { useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView } from 'react-native';
+import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView, Modal, Dimensions } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AppNavbar from '../../../../components/AppNavbar';
 import NewsNavbar from '../../../../components/newsnavbar';
 import apiClient from '../../../../utils/api';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
@@ -161,9 +163,80 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 14,
   },
+  // Modal styles for full-screen artwork view
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '90%',
+    height: '90%',
+    maxWidth: 1200,
+    backgroundColor: '#000',
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  modalImage: {
+    width: '100%',
+    height: '75%',
+    resizeMode: 'contain',
+  },
+  modalCaption: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  modalExcerpt: {
+    fontSize: 16,
+    color: '#ccc',
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  modalMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalAuthor: {
+    fontSize: 14,
+    color: '#aaa',
+  },
+  modalDate: {
+    fontSize: 14,
+    color: '#aaa',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
 });
 
-const CreativeCard = ({ item }) => {
+const CreativeCard = ({ item, onImageClick }) => {
   const router = useRouter();
   const [isHovered, setIsHovered] = useState(false);
   
@@ -186,7 +259,11 @@ const CreativeCard = ({ item }) => {
   };
 
   const handlePress = () => {
-    router.push(`/news/article/${item.id}`);
+    if (onImageClick) {
+      onImageClick(item);
+    } else {
+      router.push(`/news/article/${item.id}`);
+    }
   };
 
   return (
@@ -279,6 +356,26 @@ const dummyArtworks = [
 export default function CreativeScreen() {
   const [creativeWorks, setCreativeWorks] = useState(dummyArtworks);
   const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedArtwork, setSelectedArtwork] = useState(null);
+
+  const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+
+  const handleImageClick = (artwork) => {
+    setSelectedArtwork(artwork);
+    setModalVisible(true);
+  };
+
+  const closeModal = () => {
+    setModalVisible(false);
+    setSelectedArtwork(null);
+  };
+
+  const getImageUrl = (url) => {
+    if (!url) return defaultImage;
+    if (url.startsWith('http')) return url;
+    return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${url}`;
+  };
 
   useEffect(() => {
     const fetchCreativeContent = async () => {
@@ -354,7 +451,7 @@ export default function CreativeScreen() {
           ) : (
             <div style={styles.galleryGrid}>
               {creativeWorks.map(item => (
-                <CreativeCard key={item.id} item={item} />
+                <CreativeCard key={item.id} item={item} onImageClick={handleImageClick} />
               ))}
             </div>
           )}
@@ -398,6 +495,45 @@ export default function CreativeScreen() {
           </View>
         </footer>
       </ScrollView>
+
+      {/* Full-Screen Artwork Modal */}
+      <Modal
+        visible={modalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
+              <Text style={styles.closeButtonText}>×</Text>
+            </TouchableOpacity>
+            
+            <Image
+              source={{ uri: getImageUrl(selectedArtwork?.image) }}
+              style={styles.modalImage}
+              resizeMode="contain"
+            />
+            
+            <View style={styles.modalCaption}>
+              <Text style={styles.modalTitle}>
+                {selectedArtwork?.title || 'Untitled'}
+              </Text>
+              <Text style={styles.modalExcerpt} numberOfLines={3}>
+                {selectedArtwork?.excerpt || 'No description available.'}
+              </Text>
+              <View style={styles.modalMeta}>
+                <Text style={styles.modalAuthor}>
+                  By {selectedArtwork?.author || 'Anonymous'}
+                </Text>
+                <Text style={styles.modalDate}>
+                  {selectedArtwork?.date || ''}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

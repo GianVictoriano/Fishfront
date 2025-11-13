@@ -24,6 +24,8 @@ export default function ReviewPreviewScreen() {
   const [showCommentButton, setShowCommentButton] = useState(false);
   const [selectionPosition, setSelectionPosition] = useState(null);
   const [showCommentsSection, setShowCommentsSection] = useState(false);
+  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [rejectComment, setRejectComment] = useState('');
   const contentRef = useRef(null);
 
   useEffect(() => {
@@ -656,6 +658,8 @@ function ApproveRejectButtons() {
   const [leadReviewer, setLeadReviewer] = useState(null);
   const [selectedForwardTo, setSelectedForwardTo] = useState(null);
   const [reviewItem, setReviewItem] = useState(null);
+  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [rejectComment, setRejectComment] = useState('');
 
   useEffect(() => {
     const fetchReviewItemAndMembers = async () => {
@@ -796,10 +800,23 @@ function ApproveRejectButtons() {
     }
   };
 
-  const handleReject = async () => {
+  const handleReject = () => {
+    setRejectModalVisible(true);
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!rejectComment.trim()) {
+      Alert.alert('Error', 'Please enter a rejection comment.');
+      return;
+    }
+
     setLoading(true);
     try {
-      await apiClient.patch(`/review-content/${id}/reject`);
+      await apiClient.patch(`/review-content/${id}/reject`, {
+        comment: rejectComment.trim()
+      });
+      setRejectModalVisible(false);
+      setRejectComment('');
       setConfirmation('The draft was rejected!');
       setTimeout(() => {
         setConfirmation(null);
@@ -972,6 +989,65 @@ function ApproveRejectButtons() {
               >
                 <Feather name="send" size={16} color="#fff" style={{marginRight: 6}} />
                 <Text style={styles.modalForwardText}>Forward</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Reject Comment Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={rejectModalVisible}
+        onRequestClose={() => setRejectModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.forwardModal}>
+            <View style={styles.modalHeader}>
+              <Feather name="x-circle" size={24} color="#EF4444" />
+              <Text style={styles.modalTitle}>Reject Document</Text>
+              <TouchableOpacity onPress={() => {
+                setRejectModalVisible(false);
+                setRejectComment('');
+              }}>
+                <Feather name="x" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={{padding: 20}}>
+              <Text style={styles.modalSubtitle}>
+                Please provide a reason for rejection
+              </Text>
+              
+              <TextInput
+                style={styles.rejectCommentInput}
+                multiline
+                numberOfLines={4}
+                placeholder="Enter your rejection reason here..."
+                value={rejectComment}
+                onChangeText={setRejectComment}
+                textAlignVertical="top"
+              />
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => {
+                  setRejectModalVisible(false);
+                  setRejectComment('');
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalForwardButton, {backgroundColor: '#EF4444'}, !rejectComment.trim() && styles.buttonDisabled]}
+                onPress={handleRejectConfirm}
+                disabled={!rejectComment.trim() || loading}
+              >
+                <Feather name="x" size={16} color="#fff" style={{marginRight: 6}} />
+                <Text style={styles.modalForwardText}>Reject</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1328,6 +1404,17 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 15,
+  },
+  rejectCommentInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    color: '#1F2937',
+    backgroundColor: '#fff',
+    minHeight: 100,
+    marginTop: 10,
   },
   finalizeWarning: {
     alignItems: 'center',

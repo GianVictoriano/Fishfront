@@ -61,7 +61,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
   return (
     <SafeAreaView edges={['bottom']} style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.tabBarContainer}>
-        {state.routes.slice(0, 3).map((route, index) => { // Take only the first 3 routes
+        {state.routes.slice(0, 6).map((route, index) => { // Take only the first 6 routes
           const { options } = descriptors[route.key];
           const label =
             options.tabBarLabel !== undefined
@@ -153,6 +153,8 @@ const Sidebar = ({ isMinimized }) => {
           {hasModule('folio') && <SidebarLink href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('applicants') && <SidebarLink href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('requests') && <SidebarLink href="/collab/manage-requests" text="Manage Requests" iconName="file-text" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('archives') && <SidebarLink href="/collab/archives" text="Archives" iconName="archive" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('manage-media') && <SidebarLink href="/collab/manage-media" text="Manage Media" iconName="folder" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {(user?.profile?.level === 2 || user?.profile?.level === 3) && (
               <SidebarLink href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />
           )}
@@ -171,6 +173,8 @@ const Sidebar = ({ isMinimized }) => {
             if (hasModule('folio')) links.push(<SidebarLink key="manage-folio" href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('applicants')) links.push(<SidebarLink key="manage-applicants" href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('requests')) links.push(<SidebarLink key="manage-requests" href="/collab/manage-requests" text="Manage Requests" iconName="file-text" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('archives')) links.push(<SidebarLink key="archives" href="/collab/archives" text="Archives" iconName="archive" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('manage-media')) links.push(<SidebarLink key="manage-media" href="/collab/manage-media" text="Manage Media" iconName="folder" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (user?.profile?.level === 2 || user?.profile?.level === 3) links.push(<SidebarLink key="manage-users" href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             // Only show first 7 when minimized
             return isMinimized ? links.slice(0, 7) : links;
@@ -256,6 +260,24 @@ export default function CollaboratorLayout() {
             }}
           />
         )}
+        {hasModule('archives') && (
+          <Tabs.Screen
+            name="archives"
+            options={{
+              title: 'Archives',
+              tabBarIcon: ({ color, size }) => <Feather name="archive" size={size} color={colors.text_primary} />,
+            }}
+          />
+        )}
+        {hasModule('manage-media') && (
+          <Tabs.Screen
+            name="manage-media"
+            options={{
+              title: 'Media',
+              tabBarIcon: ({ color, size }) => <Feather name="folder" size={size} color={colors.text_primary} />,
+            }}
+          />
+        )}
         {(user?.profile?.level === 2 || user?.profile?.level === 3) && (
           <Tabs.Screen
             name="more"
@@ -325,6 +347,24 @@ export default function CollaboratorLayout() {
           options={{
             title: 'Collaborate',
             tabBarIcon: ({ color, size }) => <Feather name="users" size={size} color={colors.text_primary} />,
+          }}
+        />
+      )}
+      {hasModule('archives') && (
+        <Tabs.Screen
+          name="archives"
+          options={{
+            title: 'Archives',
+            tabBarIcon: ({ color, size }) => <Feather name="archive" size={size} color={colors.text_primary} />,
+          }}
+        />
+      )}
+      {hasModule('manage-media') && (
+        <Tabs.Screen
+          name="manage-media"
+          options={{
+            title: 'Media',
+            tabBarIcon: ({ color, size }) => <Feather name="folder" size={size} color={colors.text_primary} />,
           }}
         />
       )}

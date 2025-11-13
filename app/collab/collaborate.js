@@ -142,7 +142,7 @@ const StandaloneSearchInput = React.memo(React.forwardRef(({ style, placeholder,
           paddingHorizontal: 12,
           paddingRight: 40, // Make room for reset button
           fontSize: 16,
-          color: '#333',
+          color: '#333'
         }}
         placeholder={placeholder}
         value={text}
@@ -258,6 +258,17 @@ export default function CollaborateScreen() {
   const [isImportantNoteModalVisible, setIsImportantNoteModalVisible] = useState(false);
   const [importantNoteConfirmModalVisible, setImportantNoteConfirmModalVisible] = useState(false);
   const [noteToDelete, setNoteToDelete] = useState(null);
+
+  // Versions state
+  const [isVersionsModalVisible, setIsVersionsModalVisible] = useState(false);
+  const [versions, setVersions] = useState({ documents: [], images: [] });
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
+  
+  // Rejection comments modal state
+  const [isRejectionCommentsModalVisible, setIsRejectionCommentsModalVisible] = useState(false);
+  const [rejectionComments, setRejectionComments] = useState([]);
+  const [isLoadingRejectionComments, setIsLoadingRejectionComments] = useState(false);
+  const [selectedFileForComments, setSelectedFileForComments] = useState(null);
 
   const selectedGroupIdRef = useRef(selectedGroupId);
   const isScanningRef = useRef(false);
@@ -475,6 +486,56 @@ export default function CollaborateScreen() {
     }
   };
 
+  const fetchVersions = async () => {
+    if (!selectedGroupId) {
+      setVersions({ documents: [], images: [] });
+      return;
+    }
+
+    setIsLoadingVersions(true);
+    try {
+      const response = await apiClient.get(`/review-content/versions?group_id=${selectedGroupId}`);
+      setVersions(response.data);
+    } catch (error) {
+      console.error('Failed to fetch versions:', error);
+      setFeedbackModalConfig({
+        message: 'Failed to fetch versions. Please try again.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    } finally {
+      setIsLoadingVersions(false);
+    }
+  };
+
+  const fetchRejectionComments = useCallback(async (file) => {
+    setIsLoadingRejectionComments(true);
+    setSelectedFileForComments(file);
+    try {
+      // Determine the type and ID for the polymorphic relationship
+      const versionableType = file.file ? 'App\\Models\\ReviewContent' : 'App\\Models\\ReviewImage';
+      const versionableId = file.id;
+      
+      // Fetch important notes for this specific file and version
+      const response = await apiClient.get(`/important-notes`, {
+        params: {
+          versionable_type: versionableType,
+          versionable_id: versionableId,
+          version: file.version
+        }
+      });
+      
+      setRejectionComments(response.data || []);
+      setIsRejectionCommentsModalVisible(true);
+    } catch (error) {
+      console.error('Failed to fetch rejection comments:', error);
+      setRejectionComments([]);
+      setIsRejectionCommentsModalVisible(true);
+    } finally {
+      setIsLoadingRejectionComments(false);
+    }
+  }, []);
+
   const inputRef = useRef(null);
   const searchInputRef = useRef(null);
 
@@ -558,12 +619,15 @@ export default function CollaborateScreen() {
               {senderName}
             </Text>
           )}
-
+          <View style={[styles.messageBubble, isMe ? styles.myMessageBubble : styles.theirMessageBubble]}>
+            <Text style={[styles.messageText, isMe ? styles.myMessageText : styles.theirMessageText]}>
+              {item.message}
+            </Text>
+          </View>
         </View>
       </View>
     );
   }, []);
-
 
   // Function to extract text from document on frontend
   const extractTextFromDocument = async (file) => {
@@ -1557,61 +1621,88 @@ export default function CollaborateScreen() {
                 })()}
               </View>
               <View style={{alignItems: 'flex-end'}}>
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('Notes button pressed');
-                    setIsImportantNoteModalVisible(true);
-                  }}
-                  style={{
-                    backgroundColor: '#4285F4',
-                    borderRadius: 6,
-                    paddingVertical: 10,
-                    paddingHorizontal: 16,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    minHeight: 44, // Ensure adequate touch target
-                    justifyContent: 'center',
-                    marginTop: -47 ,
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Feather name="upload" size={18} color="#fff" />
-                  <Text style={{color: '#fff', fontWeight: 'bold', marginLeft: 8}}>Notes</Text>
-                </TouchableOpacity>
+                <View style={{flexDirection: 'row', gap: 8}}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      console.log('Versions button pressed');
+                      fetchVersions();
+                      setIsVersionsModalVisible(true);
+                    }}
+                    style={{
+                      backgroundColor: '#10B981',
+                      borderRadius: 6,
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      minHeight: 44, // Ensure adequate touch target
+                      justifyContent: 'center',
+                      marginTop: -47,
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Feather name="git-branch" size={18} color="#fff" />
+                    <Text style={{color: '#fff', fontWeight: 'bold', marginLeft: 8}}>Versions</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    onPress={() => {
+                      console.log('Notes button pressed');
+                      setIsImportantNoteModalVisible(true);
+                    }}
+                    style={{
+                      backgroundColor: '#4285F4',
+                      borderRadius: 6,
+                      paddingVertical: 10,
+                      paddingHorizontal: 16,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      minHeight: 44, // Ensure adequate touch target
+                      justifyContent: 'center',
+                      marginTop: -47,
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Feather name="upload" size={18} color="#fff" />
+                    <Text style={{color: '#fff', fontWeight: 'bold', marginLeft: 8}}>Notes</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-            {isMessagesLoading ? (
-              <ActivityIndicator size="large" color="#0000ff" style={styles.loadingContainer} />
-            ) : messages.length > 0 ? (
-              <FlatList
-                data={messages}
-                renderItem={renderMessage}
-                keyExtractor={(item, index) => item.id?.toString() || `msg-${index}`}
-                style={styles.messageList}
-                inverted
-                keyboardDismissMode="interactive"
-                keyboardShouldPersistTaps="handled"
-                removeClippedSubviews={true}
-                windowSize={10}
-                maxToRenderPerBatch={5}
-                updateCellsBatchingPeriod={100}
-                initialNumToRender={15}
-                getItemLayout={null}
+            <View style={{flex: 1, flexDirection: 'column'}}>
+              {isMessagesLoading ? (
+                <ActivityIndicator size="large" color="#0000ff" style={styles.loadingContainer} />
+              ) : messages.length > 0 ? (
+                <FlatList
+                  data={messages}
+                  renderItem={renderMessage}
+                  keyExtractor={(item, index) => item.id?.toString() || `msg-${index}`}
+                  style={styles.messageList}
+                  inverted
+                  keyboardDismissMode="interactive"
+                  keyboardShouldPersistTaps="handled"
+                  removeClippedSubviews={true}
+                  windowSize={10}
+                  maxToRenderPerBatch={5}
+                  updateCellsBatchingPeriod={100}
+                  initialNumToRender={15}
+                  getItemLayout={null}
+                />
+              ) : (
+                <Text style={styles.emptyMessage}>No messages yet. Start the conversation!</Text>
+              )}
+              <StandaloneChatInput 
+                onSend={handleSend}
+                onUpload={async () => {
+                  // Check for pending uploads before showing modal
+                  await checkPendingUploads();
+                  setIsUploadModalVisible(true);
+                }}
+                styles={styles}
+                brandColor={colors.primary}
+                uploadButtonColor={colors.tertiary}
               />
-            ) : (
-              <Text style={styles.emptyMessage}>No messages yet. Start the conversation!</Text>
-            )}
-            <StandaloneChatInput 
-              onSend={handleSend}
-              onUpload={async () => {
-                // Check for pending uploads before showing modal
-                await checkPendingUploads();
-                setIsUploadModalVisible(true);
-              }}
-              styles={styles}
-              brandColor={colors.primary}
-              uploadButtonColor={colors.tertiary}
-            />
+            </View>
           </>
         ) : (
           <View style={styles.loadingContainer}>
@@ -2326,6 +2417,288 @@ export default function CollaborateScreen() {
               </View>
             </View>
           </Modal>
+
+          {/* Versions Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={isVersionsModalVisible}
+            onRequestClose={() => setIsVersionsModalVisible(false)}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 500, maxWidth: 600, width: '90%'}]}>
+                <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 20}}>
+                  <Feather name="git-branch" size={28} color="#10B981" />
+                  <Text style={[modalStyles.modalTitle, {fontSize: 22, marginLeft: 12, marginBottom: 0}]}>
+                    File Versions
+                  </Text>
+                </View>
+
+                <Text style={{fontSize: 14, color: '#6B7280', marginBottom: 20}}>
+                  All document and image versions uploaded to this group chat, ordered by most recent.
+                </Text>
+
+                {isLoadingVersions ? (
+                  <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+                    <ActivityIndicator size="large" color="#10B981" />
+                    <Text style={{marginTop: 10, color: '#6B7280'}}>Loading versions...</Text>
+                  </View>
+                ) : (
+                  <ScrollView style={{maxHeight: 350}}>
+                    {/* Documents Section */}
+                    {versions.documents.length > 0 && (
+                      <View style={{marginBottom: 20}}>
+                        <Text style={[modalStyles.modalText, {fontWeight: 'bold', marginBottom: 8, color: '#10B981'}]}>
+                          📄 Documents ({versions.documents.length})
+                        </Text>
+                        {versions.documents.map((doc) => (
+                          <TouchableOpacity
+                            key={doc.id}
+                            style={{
+                              backgroundColor: '#F9FAFB',
+                              borderRadius: 8,
+                              padding: 12,
+                              marginBottom: 8,
+                              borderLeftWidth: 3,
+                              borderLeftColor: doc.status === 'approved' ? '#10B981' : doc.status === 'rejected' ? '#EF4444' : '#F59E0B',
+                            }}
+                            onPress={() => {
+                              if (doc.status === 'rejected') {
+                                fetchRejectionComments(doc);
+                              }
+                            }}
+                            disabled={doc.status !== 'rejected'}
+                          >
+                            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4}}>
+                              <Text style={{fontWeight: '600', fontSize: 14, color: '#1F2937'}}>
+                                Version {doc.version}
+                              </Text>
+                              <View style={{
+                                paddingHorizontal: 6,
+                                paddingVertical: 2,
+                                borderRadius: 4,
+                                backgroundColor: doc.status === 'approved' ? '#D1FAE5' : doc.status === 'rejected' ? '#FEE2E2' : '#FEF3C7',
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4
+                              }}>
+                                <Text style={{
+                                  fontSize: 11,
+                                  fontWeight: '600',
+                                  color: doc.status === 'approved' ? '#065F46' : doc.status === 'rejected' ? '#991B1B' : '#92400E'
+                                }}>
+                                  {doc.status}
+                                </Text>
+                                {doc.status === 'rejected' && (
+                                  <Feather name="message-circle" size={10} color="#991B1B" />
+                                )}
+                              </View>
+                            </View>
+                            <Text style={{fontSize: 12, color: '#6B7280', marginBottom: 4}}>
+                              {doc.file.split('/').pop()}
+                            </Text>
+                            <Text style={{fontSize: 11, color: '#9CA3AF'}}>
+                              By {doc.user?.name || 'Unknown'} • {new Date(doc.uploaded_at).toLocaleDateString()}
+                            </Text>
+                            {doc.status === 'rejected' && (
+                              <Text style={{fontSize: 10, color: '#991B1B', fontStyle: 'italic', marginTop: 4}}>
+                                Tap to view rejection comments
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    {/* Images Section */}
+                    {versions.images.length > 0 && (
+                      <View style={{marginBottom: 20}}>
+                        <Text style={[modalStyles.modalText, {fontWeight: 'bold', marginBottom: 8, color: '#10B981'}]}>
+                          🖼️ Images ({versions.images.length})
+                        </Text>
+                        {versions.images.map((image) => (
+                          <TouchableOpacity
+                            key={image.id}
+                            style={{
+                              backgroundColor: '#F9FAFB',
+                              borderRadius: 8,
+                              padding: 12,
+                              marginBottom: 8,
+                              borderLeftWidth: 3,
+                              borderLeftColor: image.status === 'approved' ? '#10B981' : image.status === 'rejected' ? '#EF4444' : '#F59E0B',
+                            }}
+                            onPress={() => {
+                              if (image.status === 'rejected') {
+                                fetchRejectionComments(image);
+                              }
+                            }}
+                            disabled={image.status !== 'rejected'}
+                          >
+                            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4}}>
+                              <Text style={{fontWeight: '600', fontSize: 14, color: '#1F2937'}}>
+                                Version {image.version}
+                              </Text>
+                              <View style={{
+                                paddingHorizontal: 6,
+                                paddingVertical: 2,
+                                borderRadius: 4,
+                                backgroundColor: image.status === 'approved' ? '#D1FAE5' : image.status === 'rejected' ? '#FEE2E2' : '#FEF3C7',
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4
+                              }}>
+                                <Text style={{
+                                  fontSize: 11,
+                                  fontWeight: '600',
+                                  color: image.status === 'approved' ? '#065F46' : image.status === 'rejected' ? '#991B1B' : '#92400E'
+                                }}>
+                                  {image.status}
+                                </Text>
+                                {image.status === 'rejected' && (
+                                  <Feather name="message-circle" size={10} color="#991B1B" />
+                                )}
+                              </View>
+                            </View>
+                            <Text style={{fontSize: 12, color: '#6B7280', marginBottom: 4}}>
+                              {image.file.split('/').pop()}
+                            </Text>
+                            <Text style={{fontSize: 11, color: '#9CA3AF'}}>
+                              By {image.user?.name || 'Unknown'} • {new Date(image.uploaded_at).toLocaleDateString()}
+                            </Text>
+                            {image.status === 'rejected' && (
+                              <Text style={{fontSize: 10, color: '#991B1B', fontStyle: 'italic', marginTop: 4}}>
+                                Tap to view rejection comments
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
+                    {versions.documents.length === 0 && versions.images.length === 0 && (
+                      <View style={{alignItems: 'center', paddingVertical: 40}}>
+                        <Feather name="inbox" size={48} color="#D1D5DB" />
+                        <Text style={{marginTop: 10, color: '#6B7280', fontSize: 14}}>
+                          No files uploaded yet
+                        </Text>
+                      </View>
+                    )}
+                  </ScrollView>
+                )}
+
+                <View style={{flexDirection: 'row', gap: 12, width: '100%', marginTop: 20}}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#F3F4F6',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setIsVersionsModalVisible(false)}
+                  >
+                    <Text style={{color: '#374151', fontWeight: '600', fontSize: 15}}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Rejection Comments Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={isRejectionCommentsModalVisible}
+            onRequestClose={() => setIsRejectionCommentsModalVisible(false)}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 400, maxWidth: 500, width: '90%'}]}>
+                <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 20}}>
+                  <Feather name="message-circle" size={28} color="#EF4444" />
+                  <Text style={[modalStyles.modalTitle, {fontSize: 22, marginLeft: 12, marginBottom: 0}]}>
+                    Rejection Comments
+                  </Text>
+                </View>
+
+                {selectedFileForComments && (
+                  <View style={{backgroundColor: '#F9FAFB', borderRadius: 8, padding: 12, marginBottom: 20}}>
+                    <Text style={{fontWeight: '600', fontSize: 14, color: '#1F2937', marginBottom: 4}}>
+                      {groupChats.find(g => g.id === selectedGroupId)?.name || 'Group Chat'}
+                    </Text>
+                    <Text style={{fontSize: 12, color: '#6B7280'}}>
+                      Version {selectedFileForComments.version} • Status: {selectedFileForComments.status}
+                    </Text>
+                  </View>
+                )}
+
+                {isLoadingRejectionComments ? (
+                  <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+                    <ActivityIndicator size="large" color="#EF4444" />
+                    <Text style={{marginTop: 10, color: '#6B7280'}}>Loading comments...</Text>
+                  </View>
+                ) : (
+                  <ScrollView style={{maxHeight: 250}}>
+                    {rejectionComments.length === 0 ? (
+                      <View style={{alignItems: 'center', paddingVertical: 40}}>
+                        <Feather name="message-square" size={48} color="#D1D5DB" />
+                        <Text style={{marginTop: 10, color: '#6B7280', fontSize: 14}}>
+                          No rejection comments found
+                        </Text>
+                      </View>
+                    ) : (
+                      rejectionComments.map((comment) => (
+                        <View key={comment.id} style={{
+                          backgroundColor: '#F9FAFB',
+                          borderRadius: 8,
+                          padding: 12,
+                          marginBottom: 8,
+                          borderLeftWidth: 3,
+                          borderLeftColor: '#EF4444',
+                          width: '90%'
+                        }}>
+                          <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
+                            <Text style={{fontWeight: '600', fontSize: 14, color: '#1F2937'}}>
+                              {comment.user?.name || 'Unknown'}
+                            </Text>
+                            <Text style={{fontSize: 11, color: '#9CA3AF'}}>
+                              {new Date(comment.created_at).toLocaleDateString()}
+                            </Text>
+                          </View>
+                          <Text style={{fontSize: 14, color: '#374151', lineHeight: 20}}>
+                            {comment.content}
+                          </Text>
+                          {comment.version && (
+                            <Text style={{fontSize: 10, color: '#6B7280', fontStyle: 'italic', marginTop: 4}}>
+                              Comment on version {comment.version}
+                            </Text>
+                          )}
+                        </View>
+                      ))
+                    )}
+                  </ScrollView>
+                )}
+
+                <View style={{marginTop: 20}}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#F3F4F6',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => {
+                      setIsRejectionCommentsModalVisible(false);
+                      setRejectionComments([]);
+                      setSelectedFileForComments(null);
+                    }}
+                  >
+                    <Text style={{color: '#374151', fontWeight: '600', fontSize: 15}}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </View>
     </KeyboardAvoidingView>
   );
@@ -2347,7 +2720,10 @@ const styles = StyleSheet.create({
   },
   rightPanel: { 
     flex: 1, 
-    padding: 20, 
+    paddingLeft: 20, 
+    paddingRight: 20, 
+    paddingTop: 20, 
+    paddingBottom: 0,
     display: 'flex', 
     flexDirection: 'column',
     position: 'relative',
@@ -2369,7 +2745,6 @@ const styles = StyleSheet.create({
   },
   messageList: { 
     flex: 1,
-    marginBottom: 70,
   },
   emptyMessage: { 
     flex: 1,
@@ -2463,6 +2838,24 @@ const styles = StyleSheet.create({
     borderRadius: 15, 
     maxWidth: '80%' 
   },
+  myMessageBubble: {
+    backgroundColor: '#007bff',
+    alignSelf: 'flex-end',
+  },
+  theirMessageBubble: {
+    backgroundColor: '#e9ecef',
+    alignSelf: 'flex-start',
+  },
+  messageText: {
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  myMessageText: {
+    color: '#ffffff',
+  },
+  theirMessageText: {
+    color: '#2c3e50',
+  },
   myMessage: { 
     backgroundColor: '#d1eaff', 
     alignSelf: 'flex-end' 
@@ -2531,36 +2924,35 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   inputContainer: { 
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    bottom: 20,
     flexDirection: 'row', 
-    alignItems: 'flex-end', 
-    backgroundColor: '#fff', 
+    alignItems: 'center', 
+    backgroundColor: '#ffffff', 
     borderRadius: 25, 
     paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    marginHorizontal: 20,
+    marginBottom: 20,
     shadowColor: '#000', 
     shadowOpacity: 0.15, 
     shadowRadius: 8, 
     shadowOffset: { width: 0, height: 4 }, 
-    elevation: 8, 
-    gap: 12,
+    elevation: 8,
     borderWidth: 1,
     borderColor: '#e1e5e9',
+    minHeight: 50,
+    gap: 12,
   },
   input: { 
     flex: 1, 
-    minHeight: 45,
-    maxHeight: 47,
+    minHeight: 40,
+    maxHeight: 100,
     fontSize: 16, 
     color: '#2c3e50',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 8,
     backgroundColor: '#f8f9fa',
-    borderRadius: 22,
-    textAlignVertical: 'top',
+    borderRadius: 20,
+    textAlignVertical: 'center',
     borderWidth: 1,
     borderColor: '#e9ecef',
   },
@@ -2597,10 +2989,10 @@ const styles = StyleSheet.create({
     borderBottomColor: '#eee', 
     backgroundColor: '#f8f9fa' 
   },
-  backButtonText: { 
-    fontSize: 16, 
-    fontWeight: '600', 
-    marginLeft: 10, 
-    color: '#333' 
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 10,
+    color: '#333'
   },
 });
