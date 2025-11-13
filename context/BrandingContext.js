@@ -4,7 +4,7 @@ import apiClient, { API_URL } from '../utils/api';
 
 // Define fallback assets using platform-specific paths
 const FALLBACK_LOGO_URL = require('../assets/images/fish.jpg');
-const FALLBACK_BACKGROUND_URL = require('../assets/images/bg.png');
+const FALLBACK_BACKGROUND_URL = "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070";
 
 // 1. Create the context with a default shape
 const BrandingContext = createContext({
@@ -51,11 +51,11 @@ export const BrandingProvider = ({ children }) => {
 
       // If the fetched URL is valid, use it; otherwise, stick with the fallback.
       const finalLogoUrl = logo_url
-        ? (Platform.OS === 'web' ? logo_url : { uri: logo_url })
+        ? { uri: logo_url }
         : FALLBACK_LOGO_URL;
       const finalBackgroundUrl = background_url
-        ? (Platform.OS === 'web' ? background_url : { uri: background_url })
-        : FALLBACK_BACKGROUND_URL;
+        ? { uri: background_url }
+        : { uri: FALLBACK_BACKGROUND_URL };
 
       console.log('[BrandingContext] Setting final image URLs:', { finalLogoUrl, finalBackgroundUrl });
       setLogoUrl(finalLogoUrl);
@@ -78,7 +78,7 @@ export const BrandingProvider = ({ children }) => {
       }
       console.log('[BrandingContext] Reverting to local fallback assets.');
       setLogoUrl(FALLBACK_LOGO_URL);
-      setBackgroundUrl(FALLBACK_BACKGROUND_URL);
+      setBackgroundUrl({ uri: FALLBACK_BACKGROUND_URL });
     } finally {
       setLoading(false);
     }

@@ -1,8 +1,8 @@
 import { Link, useRouter } from 'expo-router';
 import { useState, useEffect } from 'react';
-import { ActivityIndicator, Image, Modal, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch } from 'react-native';
+import { ActivityIndicator, Image, Modal, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Navbar from '~/components/Navbar';
 import { useAuth } from '~/context/AuthContext';
@@ -10,7 +10,7 @@ import apiClient from '~/utils/api';
 
 const InfoCard = ({ icon, label, value }) => (
   <View style={styles.infoCard}>
-    <Feather name={icon} size={24} color="#374151" />
+    <MaterialIcons name={icon} size={24} color="#374151" />
     <View style={styles.infoTextContainer}>
       <Text style={styles.infoLabel}>{label}</Text>
       <Text style={styles.infoValue}>{value || 'Not set'}</Text>
@@ -24,10 +24,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [bookmarks, setBookmarks] = useState([]);
   const [loadingBookmarks, setLoadingBookmarks] = useState(true);
-  const [isAnonymous, setIsAnonymous] = useState(false);
   const [activeTab, setActiveTab] = useState('details'); // 'details' or 'bookmarks'
   const [stats, setStats] = useState({ posts: 0, comments: 0 });
-  const [savingAnonymous, setSavingAnonymous] = useState(false);
 
   const bottomNavItems = [
     { 
@@ -38,13 +36,13 @@ export default function ProfileScreen() {
     },
     { 
       title: 'News', 
-      icon: 'newspaper', 
+      icon: 'article', 
       onPress: () => router.push('/news'),
       active: false
     },
     { 
       title: 'Profile', 
-      icon: 'user', 
+      icon: 'person', 
       onPress: () => router.push('/profile'),
       active: true
     },
@@ -62,12 +60,12 @@ export default function ProfileScreen() {
       try {
         setLoadingBookmarks(true);
         const [bookmarksRes, topicsRes, commentsRes] = await Promise.all([
-          apiClient.get('/bookmarks').catch(() => ({ data: [] })), // Handle 405 error gracefully
+          apiClient.get('/bookmarks'),
           apiClient.get('/topics').catch(() => ({ data: [] })),
           apiClient.get('/topics').catch(() => ({ data: [] })) // We'll count comments from topics
         ]);
         
-        setBookmarks(bookmarksRes.data || []);
+        setBookmarks(bookmarksRes.data);
         
         // Calculate stats
         const userTopics = Array.isArray(topicsRes.data) ? topicsRes.data.filter(t => t.user_id === user.id) : [];
@@ -75,12 +73,8 @@ export default function ProfileScreen() {
           posts: userTopics.length,
           comments: 0 // Will be updated when we have comments endpoint
         });
-        
-        // Load anonymous mode preference
-        setIsAnonymous(user.profile?.is_anonymous === 1 || user.profile?.is_anonymous === true);
       } catch (error) {
         console.error('Error fetching data:', error);
-        setBookmarks([]); // Set empty bookmarks on error
       } finally {
         setLoadingBookmarks(false);
       }
@@ -96,33 +90,6 @@ export default function ProfileScreen() {
       setBookmarks(bookmarks.filter(b => b.id !== bookmarkId));
     } catch (error) {
       console.error('Error deleting bookmark:', error);
-      // Silently handle error - bookmarks endpoint might not exist yet
-    }
-  };
-
-  // Handle anonymous mode toggle
-  const handleAnonymousToggle = async (value) => {
-    setIsAnonymous(value);
-    setSavingAnonymous(true);
-    
-    try {
-      const response = await apiClient.put('/profile', { is_anonymous: value ? 1 : 0 });
-      console.log('Anonymous mode updated:', value);
-      
-      // Update user data in AsyncStorage and context
-      const updatedUser = response.data.user;
-      await AsyncStorage.setItem('user_data', JSON.stringify(updatedUser));
-      
-      // Force re-render by updating the user in auth context if available
-      if (window.location) {
-        window.location.reload();
-      }
-    } catch (error) {
-      console.error('Error updating anonymous mode:', error);
-      // Revert on error
-      setIsAnonymous(!value);
-    } finally {
-      setSavingAnonymous(false);
     }
   };
 
@@ -147,27 +114,21 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {Platform.OS === 'web' ? (
-        <Navbar />
-      ) : (
-        <>
-          <TouchableOpacity style={styles.menuButton} onPress={() => setNavVisible(true)}>
-            <Feather name="menu" size={28} color="#fff" />
-          </TouchableOpacity>
-          <Modal
-            animationType="slide"
-            transparent
-            visible={navVisible}
-            onRequestClose={() => setNavVisible(false)}
-          >
-            <TouchableOpacity style={styles.modalOverlayNav} activeOpacity={1} onPressOut={() => setNavVisible(false)}>
-              <View style={styles.modalViewNav}>
-                <Navbar onLinkPress={() => setNavVisible(false)} />
-              </View>
-            </TouchableOpacity>
-          </Modal>
-        </>
-      )}
+      <TouchableOpacity style={styles.menuButton} onPress={() => setNavVisible(true)}>
+        <MaterialIcons name="menu" size={28} color="#fff" />
+      </TouchableOpacity>
+      <Modal
+        animationType="slide"
+        transparent
+        visible={navVisible}
+        onRequestClose={() => setNavVisible(false)}
+      >
+        <TouchableOpacity style={styles.modalOverlayNav} activeOpacity={1} onPressOut={() => setNavVisible(false)}>
+          <View style={styles.modalViewNav}>
+            <Navbar onLinkPress={() => setNavVisible(false)} />
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Clean Header */}
@@ -200,78 +161,46 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Tab Navigation */}
+        {/* Tab Selector */}
         <View style={styles.tabContainer}>
           <TouchableOpacity 
             style={[styles.tab, activeTab === 'details' && styles.activeTab]}
             onPress={() => setActiveTab('details')}
           >
-            <Feather name="user" size={20} color={activeTab === 'details' ? '#1a237e' : '#6B7280'} />
             <Text style={[styles.tabText, activeTab === 'details' && styles.activeTabText]}>Details</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.tab, activeTab === 'bookmarks' && styles.activeTab]}
             onPress={() => setActiveTab('bookmarks')}
           >
-            <Feather name="bookmark" size={20} color={activeTab === 'bookmarks' ? '#1a237e' : '#6B7280'} />
             <Text style={[styles.tabText, activeTab === 'bookmarks' && styles.activeTabText]}>Bookmarks</Text>
-            {bookmarks.length > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{bookmarks.length}</Text>
-              </View>
-            )}
           </TouchableOpacity>
         </View>
 
-        <View style={styles.profileContent}>
+        {/* Content */}
+        <View style={styles.content}>
           {activeTab === 'details' ? (
             <>
-              {/* Anonymous Mode Toggle */}
-              <View style={[styles.section, styles.privacySection]}>
-                <Text style={[styles.sectionTitle, styles.privacyTitle]}>Privacy Settings</Text>
-                <View style={styles.toggleCard}>
-                  <View style={styles.toggleInfo}>
-                    <Text style={styles.toggleLabel}>Anonymous Mode</Text>
-                    <Text style={styles.toggleDescription}>Hide your identity in public interactions</Text>
-                    {isAnonymous && user.profile?.anonymous_name && (
-                      <View style={styles.anonymousNameBadge}>
-                        <Feather name="user-check" size={14} color="#4F46E5" />
-                        <Text style={styles.anonymousNameText}>
-                          Your public name: {user.profile.anonymous_name}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Switch
-                    value={isAnonymous}
-                    onValueChange={handleAnonymousToggle}
-                    trackColor={{ false: '#E5E7EB', true: '#C7D2FE' }}
-                    thumbColor={isAnonymous ? '#4F46E5' : '#F9FAFB'}
-                    ios_backgroundColor="#E5E7EB"
-                    disabled={savingAnonymous}
-                  />
-                </View>
-              </View>
 
               {/* Profile Information */}
               <View style={[styles.section, styles.infoSection]}>
                 <Text style={[styles.sectionTitle, styles.infoTitle]}>Profile Information</Text>
-                <InfoCard icon="book-open" label="Program" value={user.profile?.program} />
-                <InfoCard icon="grid" label="Section" value={user.profile?.section} />
-                <InfoCard icon="align-left" label="Description" value={user.profile?.description} />
+                <InfoCard icon="book" label="Program" value={user.profile?.program} />
+                <InfoCard icon="grid-on" label="Section" value={user.profile?.section} />
+                <InfoCard icon="subject" label="Description" value={user.profile?.description} />
               </View>
 
               {/* Action Buttons */}
               <View style={styles.actionsSection}>
                 <Link href="/edit-profile" asChild>
                   <TouchableOpacity style={styles.primaryButton}>
-                    <Feather name="edit-2" size={18} color="#fff" />
+                    <MaterialIcons name="edit" size={18} color="#fff" />
                     <Text style={styles.primaryButtonText}>Edit Profile</Text>
                   </TouchableOpacity>
                 </Link>
 
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                  <Feather name="log-out" size={18} color="#DC2626" />
+                  <MaterialIcons name="logout" size={18} color="#DC2626" />
                   <Text style={styles.logoutButtonText}>Logout</Text>
                 </TouchableOpacity>
               </View>
@@ -289,7 +218,7 @@ export default function ProfileScreen() {
                   </View>
                 ) : bookmarks.length === 0 ? (
                   <View style={styles.emptyState}>
-                    <Feather name="bookmark" size={64} color="#D1D5DB" />
+                    <MaterialIcons name="bookmark-border" size={64} color="#D1D5DB" />
                     <Text style={styles.emptyTitle}>No Bookmarks Yet</Text>
                     <Text style={styles.emptyDescription}>
                       Start highlighting and saving your favorite quotes from articles!
@@ -300,7 +229,7 @@ export default function ProfileScreen() {
                     <View key={bookmark.id} style={styles.bookmarkCard}>
                       <View style={styles.bookmarkHeader}>
                         <View style={styles.bookmarkArticleInfo}>
-                          <Feather name="file-text" size={16} color="#6B7280" />
+                          <MaterialIcons name="description" size={16} color="#6B7280" />
                           <Text style={styles.bookmarkArticleTitle} numberOfLines={1}>
                             {bookmark.article?.title || 'Article'}
                           </Text>
@@ -309,7 +238,7 @@ export default function ProfileScreen() {
                           onPress={() => handleDeleteBookmark(bookmark.id)}
                           style={styles.deleteButton}
                         >
-                          <Feather name="trash-2" size={18} color="#EF4444" />
+                          <MaterialIcons name="delete" size={18} color="#EF4444" />
                         </TouchableOpacity>
                       </View>
                       
@@ -317,7 +246,7 @@ export default function ProfileScreen() {
                       
                       {bookmark.notes && (
                         <View style={styles.bookmarkNotes}>
-                          <Feather name="message-circle" size={14} color="#6B7280" />
+                          <MaterialIcons name="chat-bubble-outline" size={14} color="#6B7280" />
                           <Text style={styles.bookmarkNotesText}>{bookmark.notes}</Text>
                         </View>
                       )}
@@ -336,7 +265,7 @@ export default function ProfileScreen() {
                             style={styles.viewArticleButton}
                           >
                             <Text style={styles.viewArticleText}>View Article</Text>
-                            <Feather name="arrow-right" size={14} color="#1a237e" />
+                            <MaterialIcons name="arrow-forward" size={14} color="#1a237e" />
                           </TouchableOpacity>
                         )}
                       </View>
@@ -349,31 +278,29 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
 
-      {/* Bottom Navigation - Only show on mobile */}
-      {Platform.OS !== 'web' && (
-        <View style={styles.bottomNav}>
-          {bottomNavItems.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.bottomNavItem}
-              onPress={item.onPress}
-              activeOpacity={0.7}
-            >
-              <Feather
-                name={item.icon}
-                size={24}
-                color={item.active ? '#1a237e' : '#9ca3af'}
-              />
-              <Text style={[
-                styles.bottomNavText,
-                item.active && styles.bottomNavTextActive
-              ]}>
-                {item.title}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNav}>
+        {bottomNavItems.map((item, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.bottomNavItem}
+            onPress={item.onPress}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons
+              name={item.icon}
+              size={24}
+              color={item.active ? '#3b82f6' : '#9ca3af'}
+            />
+            <Text style={[
+              styles.bottomNavText,
+              item.active && styles.bottomNavTextActive
+            ]}>
+              {item.title}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </SafeAreaView>
   );
 }
@@ -390,7 +317,7 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     backgroundColor: '#FFFFFF',
-    paddingTop: Platform.OS === 'web' ? 60 : 80,
+    paddingTop: 80,
     paddingBottom: 30,
     alignItems: 'center',
     borderBottomWidth: 1,
@@ -426,178 +353,101 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 24,
+    fontWeight: '700',
     color: '#111827',
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 12,
     color: '#6B7280',
+    textTransform: 'uppercase',
   },
   statDivider: {
     width: 1,
-    height: 32,
+    height: 40,
     backgroundColor: '#E5E7EB',
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#d3d6db',
-    marginHorizontal: 20,
-    marginTop: 20,
-    borderRadius: 8,
-    padding: 4,
+    backgroundColor: '#F9FAFB',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
   tab: {
     flex: 1,
-    flexDirection: 'row',
+    paddingVertical: 16,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 6,
-    gap: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
   activeTab: {
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: '#4F46E5',
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
     color: '#6B7280',
   },
   activeTabText: {
-    color: '#111827',
+    color: '#4F46E5',
     fontWeight: '600',
   },
-  badge: {
-    backgroundColor: '#111827',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minWidth: 20,
-    alignItems: 'center',
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  profileContent: {
+  content: {
     padding: 20,
   },
   section: {
-    marginBottom: 32,
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  privacySection: {
-    backgroundColor: '#FAFAFF',
-    borderColor: '#E9D5FF',
-  },
-  infoSection: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
-  },
-  bookmarksSection: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FED7AA',
+    marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: '#111827',
-    marginBottom: 12,
-    paddingLeft: 4,
-    borderLeftWidth: 3,
+    marginBottom: 16,
   },
-  privacyTitle: {
-    borderLeftColor: '#8B5CF6',
+  infoSection: {
+    gap: 12,
   },
   infoTitle: {
-    borderLeftColor: '#10B981',
-  },
-  bookmarksTitle: {
-    borderLeftColor: '#F59E0B',
-  },
-  toggleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    padding: 16,
-  },
-  toggleInfo: {
-    flex: 1,
-    marginRight: 16,
-  },
-  toggleLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#111827',
-    marginBottom: 2,
-  },
-  toggleDescription: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  anonymousNameBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#EEF2FF',
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  anonymousNameText: {
-    fontSize: 12,
-    color: '#4F46E5',
-    fontWeight: '600',
+    marginBottom: 12,
   },
   infoCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
+    padding: 16,
     borderRadius: 8,
-    padding: 14,
-    marginBottom: 8,
+    gap: 12,
   },
   infoTextContainer: {
-    marginLeft: 12,
     flex: 1,
   },
   infoLabel: {
     fontSize: 12,
     color: '#6B7280',
-    marginBottom: 2,
+    marginBottom: 4,
+    textTransform: 'uppercase',
   },
   infoValue: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#111827',
     fontWeight: '500',
   },
   actionsSection: {
-    marginTop: 8,
     gap: 12,
+    marginTop: 8,
   },
   primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#111827',
-    borderRadius: 8,
-    paddingVertical: 14,
     gap: 8,
+    paddingVertical: 14,
+    backgroundColor: '#4F46E5',
+    borderRadius: 8,
   },
   primaryButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',
   },
@@ -605,10 +455,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
-    paddingVertical: 14,
-    gap: 8,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
@@ -741,7 +591,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
-    paddingBottom: Platform.OS === 'android' ? 24 : 8, // Extra padding for Android system nav
+    paddingBottom: Platform.OS === 'android' ? 40 : 8,
     paddingTop: 12,
   },
   bottomNavItem: {
@@ -756,7 +606,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   bottomNavTextActive: {
-    color: '#1a237e',
+    color: '#3b82f6',
     fontWeight: '600',
   },
 });

@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     alignItems: 'flex-start',
-    minHeight: '100vh',
+
   },
   detailWrapper: {
     width: '100%',
@@ -193,7 +193,6 @@ const styles = StyleSheet.create({
   },
   rowMain: {
     flexDirection: 'row',
-    minHeight: '100%',
     padding: 24,
   },
   articleContainer: {
@@ -694,6 +693,22 @@ export default function ArticleDetail() {
     fetchHotTopics();
   }, [articleId]);
 
+  // Debug: Log the HTML content to see image URLs
+  useEffect(() => {
+    if (article && article.content) {
+      console.log('📝 Article HTML content:', article.content);
+      
+      // Extract all image sources from the HTML
+      const imgRegex = /<img[^>]+src="([^"]+)"/g;
+      const matches = [];
+      let match;
+      while ((match = imgRegex.exec(article.content)) !== null) {
+        matches.push(match[1]);
+      }
+      console.log('🖼️ Found image URLs in HTML:', matches);
+    }
+  }, [article]);
+
   // Debug: Log tracking status
   useEffect(() => {
     if (articleId && currentUser?.id) {
@@ -888,6 +903,58 @@ export default function ArticleDetail() {
     );
   };
 
+  // Custom renderers to handle image URLs in HTML content
+  const renderers = {
+    img: ({ TDefaultRenderer, ...props }) => {
+      const { src } = props.tnode.attributes;
+      
+      // Debug log to see what image sources are being processed
+      console.log('🖼️ Processing image src:', src);
+      
+      // Convert relative image paths to absolute URLs
+      let imageSrc = src;
+      if (src && !src.startsWith('http') && !src.startsWith('data:')) {
+        // Handle relative paths from storage
+        if (src.includes('storage/')) {
+          const cleanPath = src.replace(/^\/?storage\//, '');
+          imageSrc = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${cleanPath}`;
+          console.log('🔄 Converted storage path to:', imageSrc);
+        }
+        // Handle paths starting with public/
+        else if (src.startsWith('public/')) {
+          imageSrc = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/${src}`;
+          console.log('🔄 Converted public path to:', imageSrc);
+        }
+        // Handle other relative paths
+        else if (src.startsWith('/')) {
+          imageSrc = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${src}`;
+          console.log('🔄 Converted absolute path to:', imageSrc);
+        } else {
+          imageSrc = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/${src}`;
+          console.log('🔄 Converted relative path to:', imageSrc);
+        }
+      }
+      
+      return <TDefaultRenderer {...props} source={{ uri: imageSrc }} />;
+    },
+  };
+
+  // Debug: Log the HTML content to see image URLs
+  useEffect(() => {
+    if (article && article.content) {
+      console.log('📝 Article HTML content:', article.content);
+      
+      // Extract all image sources from the HTML
+      const imgRegex = /<img[^>]+src="([^"]+)"/g;
+      const matches = [];
+      let match;
+      while ((match = imgRegex.exec(article.content)) !== null) {
+        matches.push(match[1]);
+      }
+      console.log('🖼️ Found image URLs in HTML:', matches);
+    }
+  }, [article]);
+
   return (
     <SafeAreaView style={styles.container}>
       {renderBookmarkButton()}
@@ -927,7 +994,15 @@ export default function ArticleDetail() {
                           h1: { fontSize: 32, fontWeight: '700', marginBottom: 12, color: '#1a1a1a' },
                           h2: { fontSize: 28, fontWeight: '700', marginBottom: 10, color: '#1a1a1a' },
                           h3: { fontSize: 24, fontWeight: '600', marginBottom: 8, color: '#1a1a1a' },
+                          img: { 
+                            width: '100%', 
+                            height: 'auto', 
+                            maxWidth: 900, 
+                            resizeMode: 'contain',
+                            marginVertical: 12 
+                          },
                         }}
+                        // renderers={renderers} // Temporarily disabled for testing
                         enableExperimentalMarginCollapsing={true}
                         systemFonts={['system-ui', '-apple-system', 'BlinkMacSystemFont']}
                       />
@@ -942,7 +1017,15 @@ export default function ArticleDetail() {
                           h1: { fontSize: 32, fontWeight: '700', marginBottom: 12, color: '#1a1a1a' },
                           h2: { fontSize: 28, fontWeight: '700', marginBottom: 10, color: '#1a1a1a' },
                           h3: { fontSize: 24, fontWeight: '600', marginBottom: 8, color: '#1a1a1a' },
+                          img: { 
+                            width: '100%', 
+                            height: 'auto', 
+                            maxWidth: 900, 
+                            resizeMode: 'contain',
+                            marginVertical: 12 
+                          },
                         }}
+                        // renderers={renderers} // Temporarily disabled for testing
                       />
                     </View>
                   )}

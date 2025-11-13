@@ -19,10 +19,17 @@ const SUBMISSION_TYPES = [
   // },
   {
     id: 'coverage',
-    title: 'Submit Request',
+    title: 'Request Cover',
     description: 'Suggest a topic or event you\'d like us to cover',
     icon: 'record-voice-over',
     color: '#f59e0b',
+  },
+  {
+    id: 'documentation',
+    title: 'Request Documentation',
+    description: 'Request official documents, certificates, or records',
+    icon: 'description',
+    color: '#10b981',
   },
 ];
 
@@ -89,6 +96,9 @@ const Contribute = () => {
         newErrors.numJournalists = 'Please specify number of journalists (minimum 1)';
       }
     }
+
+    // Validate documentation-specific fields (if any needed in future)
+    // For now, documentation requests only require title and content
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -112,17 +122,30 @@ const Contribute = () => {
       setEventLocation('');
       setNumJournalists('1');
     }
+
+    // Reset documentation fields when switching to different type
+    if (type !== 'documentation') {
+      // Add any documentation-specific field resets here if needed
+    }
     
     setSubmissionType(type);
     if (type === 'literature') {
       setStep('category');
     } else {
       setStep('form');
-      setFormTitle(type === 'story' ? 'Share Your Story' : 'Request Coverage');
+      setFormTitle(
+        type === 'story' ? 'Share Your Story' : 
+        type === 'coverage' ? 'Request Coverage' :
+        type === 'documentation' ? 'Request Documentation' : 'Submit Request'
+      );
       setFormSubtitle(
         type === 'story' 
           ? 'Tell us about your personal experiences or opinions' 
-          : 'Suggest a topic or event you\'d like us to cover'
+          : type === 'coverage'
+          ? 'Suggest a topic or event you\'d like us to cover'
+          : type === 'documentation'
+          ? 'Request official documents, certificates, or records'
+          : 'Contribute your content to our community'
       );
     }
   };
@@ -424,7 +447,8 @@ const Contribute = () => {
         <View style={styles.formGroup}>
           <Text style={styles.label}>
             {submissionType === 'literature' ? 'Content' : 
-             submissionType === 'story' ? 'Your Story' : 'Your Request'}
+             submissionType === 'story' ? 'Your Story' : 
+             submissionType === 'documentation' ? 'Your Request' : 'Your Request'}
           </Text>
           <TextInput
             ref={textInputRef}
@@ -434,6 +458,7 @@ const Contribute = () => {
             placeholder={
               submissionType === 'literature' ? 'Enter your content here...' :
               submissionType === 'story' ? 'Tell us your story...' :
+              submissionType === 'documentation' ? 'Describe the documents you need...' :
               'Tell us what you\'d like us to cover...'
             }
             placeholderTextColor="#94a3b8"

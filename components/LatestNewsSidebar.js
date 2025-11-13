@@ -17,8 +17,8 @@ export default function LatestNewsSidebar({ genre, currentId }) {
     apiClient.get(url)
       .then(res => {
         let articles = Array.isArray(res.data?.data) ? res.data.data : [];
-        // Exclude current article and limit to 5
-        articles = articles.filter(a => a.id?.toString() !== currentId).slice(0, 5);
+        // Exclude current article; show all others
+        articles = articles.filter(a => a.id?.toString() !== currentId);
         setLatest(articles);
       })
       .catch(() => setLatest([]))

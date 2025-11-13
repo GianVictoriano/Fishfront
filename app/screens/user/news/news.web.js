@@ -286,8 +286,25 @@ const styles = StyleSheet.create({
   },
   readMoreButtonText: {
     color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
+    fontWeight: '700',
+    fontSize: 16,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+    position: 'relative',
+    zIndex: 1,
+  },
+  loadMoreButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+    position: 'relative',
+    zIndex: 1,
   },
   rightCol: {
     flex: 3,
@@ -510,7 +527,10 @@ const styles = StyleSheet.create({
   footer: {
     backgroundColor: '#3a505b',
     color: 'white',
-    padding: '40px 20px 20px',
+    paddingTop: 40,
+    paddingLeft: 20,
+    paddingRight: 20,
+    paddingBottom: 20,
     marginTop: '40px',
     marginLeft: -24,
     marginRight: -24,
@@ -522,7 +542,9 @@ const styles = StyleSheet.create({
   footerContent: {
     marginLeft: '30px',
     maxWidth: '1200px',
-    margin: '0 auto',
+    marginTop: 0,
+    marginRight: 0,
+    marginBottom: 0,
     flexWrap: 'wrap',
     gap: '40px',
     marginBottom: '0px',
@@ -532,7 +554,7 @@ const styles = StyleSheet.create({
     minWidth: '250px',
   },
   footerHeading: {
-    fontSize: '1.25rem',
+    fontSize: 20,
     fontWeight: '600',
     marginBottom: '20px',
     color: 'white',
@@ -565,7 +587,7 @@ const styles = StyleSheet.create({
     padding: '20px',
     borderTop: '1px solid #334155',
     color: '#94a3b8',
-    fontSize: '0.9rem',
+    fontSize: 14,
   },
   threeColumnGrid: {
     display: 'grid',
@@ -654,17 +676,26 @@ const styles = StyleSheet.create({
   },
   loadMoreButton: {
     alignSelf: 'center',
-    backgroundColor: '#007BFF',
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 6,
-    marginTop: 32,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+    marginTop: 24,
     marginBottom: 16,
     cursor: 'pointer',
-    transition: 'background-color 0.2s ease',
+    transition: 'all 0.15s ease',
+    ':hover': {
+      backgroundColor: '#f9fafb',
+      borderColor: '#9ca3af'
+    }
   },
-  loadMoreButtonHover: {
-    backgroundColor: '#0056b3',
+  loadMoreButtonText: {
+    color: '#374151',
+    fontWeight: '500',
+    fontSize: 14,
+    textAlign: 'center',
   },
   skeletonCard: {
     backgroundColor: '#f8f9fa',
@@ -715,8 +746,10 @@ const NewsCard = ({ item, compact, bigTrending, isFirst, onInteraction }) => {
   
   const getImageUrl = (url) => {
     if (!url) return defaultImage;
-    if (url.startsWith('http')) return url;
-    return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${url}`;
+    // Convert to string if it's a number or other type
+    const urlStr = String(url);
+    if (urlStr.startsWith('http')) return urlStr;
+    return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
   };
   
   const [imageUri, setImageUri] = useState(getImageUrl(item?.image));
@@ -937,8 +970,9 @@ export default function NewsScreen() {
     try {
       const cached = await AsyncStorage.getItem(`news_cache_${key}`);
       if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < CACHE_DURATION) {
+        const parsed = JSON.parse(cached);
+        const { data, timestamp } = parsed || {};
+        if (data && typeof timestamp === 'number' && Date.now() - timestamp < CACHE_DURATION) {
           return data;
         }
       }

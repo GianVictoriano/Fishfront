@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
+import { Platform } from 'react-native';
 import useInteractionTracking from './useInteractionTracking';
 
 /**
@@ -90,7 +91,7 @@ const useArticleTracking = (articleId, userId) => {
 
   // Set up web scroll listener
   useEffect(() => {
-    if (typeof window !== 'undefined' && articleId && userId) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && articleId && userId) {
       // Throttle scroll events
       let scrollTimeout;
       const throttledScroll = () => {

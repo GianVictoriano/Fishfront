@@ -63,10 +63,14 @@ export default function SignInScreen() {
   }, [user]);
 
   return (
-    <ImageBackground source={backgroundUrl} style={styles.background} resizeMode="cover">
+    <ImageBackground 
+      source={typeof backgroundUrl === 'number' ? backgroundUrl : (backgroundUrl?.uri ? backgroundUrl : { uri: String(backgroundUrl || '') })} 
+      style={styles.background} 
+      resizeMode="cover"
+    >
       <SafeAreaView style={styles.container}>
         <View style={styles.card}>
-          {logoUrl && <Image source={logoUrl} style={styles.logo} resizeMode="contain" />}
+          {logoUrl && <Image source={typeof logoUrl === 'number' ? logoUrl : (logoUrl?.uri ? logoUrl : { uri: String(logoUrl || '') })} style={styles.logo} resizeMode="contain" />}
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to continue to Fisherman</Text>
           

@@ -71,10 +71,12 @@ const RecommendedContent = ({ userId, onInteraction }) => {
 
   const getImageUrl = (url) => {
     if (!url) return 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
-    if (url.startsWith('http')) return url;
+    // Convert to string if it's a number or other type
+    const urlStr = String(url);
+    if (urlStr.startsWith('http')) return urlStr;
     // Handle both /storage/ path (from recommendations) and media file paths (from trending)
-    if (url.startsWith('/storage/')) return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${url}`;
-    return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${url.replace('public/', '')}`;
+    if (urlStr.startsWith('/storage/')) return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
+    return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${urlStr.replace('public/', '')}`;
   };
 
   const formatDate = (dateString) => {
@@ -167,7 +169,9 @@ const RecommendedContent = ({ userId, onInteraction }) => {
         <div style={{ 
           display: 'flex', 
           flexDirection: 'row',
-          padding: '12px 16px',
+          paddingTop: 12,
+          paddingHorizontal: 16,
+          paddingBottom: 12,
           gap: '12px',
         }}>
           {recommendations.map((item) => (

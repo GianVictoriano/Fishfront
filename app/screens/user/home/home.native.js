@@ -1,5 +1,4 @@
-// app/screens/home/index.native.js
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   StyleSheet, 
   Text, 
@@ -8,202 +7,231 @@ import {
   Image, 
   TouchableOpacity, 
   Dimensions, 
-  Modal, 
   SafeAreaView, 
-  ImageBackground 
+  ImageBackground,
+  Platform
 } from 'react-native';
 import { useBranding } from '../../../../context/BrandingContext';
-import HeroCarousel from '../../../components/HeroCarousel';
-import AppNavbar from '../../../../components/AppNavbar';
-import SvgWave from '../../../components/SvgWave';
 import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
+import apiClient from '../../../../utils/api';
 
 const { width } = Dimensions.get('window');
 
-const publications = {
-  featured: {
-    title: 'Building a Sustainable Community: The Fisherman Approach',
-    image: 'https://via.placeholder.com/350x200?text=Featured+Publication',
-    summary: 'Discover how our latest publication is helping organizations grow better, empower communities, and foster resilience through real-world stories and data-driven insights.',
-    link: '#',
-  },
-  recent: [
-    {
-      id: 1,
-      title: 'The Future of Coastal Fisheries',
-      image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=compress&w=600',
-      summary: 'Insights into sustainable fishing practices and their global impact.',
-      link: '#',
-    },
-    {
-      id: 2,
-      title: 'Community-Driven Marine Conservation',
-      image: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=compress&w=600',
-      summary: 'How local communities are leading the way in marine protection.',
-      link: '#',
-    },
-    {
-      id: 3,
-      title: 'Innovations in Aquaculture',
-      image: 'https://images.pexels.com/photos/3225517/pexels-photo-3225517.jpeg?auto=compress&w=600',
-      summary: 'Technological advances that are shaping the future of aquaculture.',
-      link: '#',
-    },
-    {
-      id: 4,
-      title: 'Women in Fisheries',
-      image: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=600',
-      summary: 'Celebrating the vital role of women in the fishing industry.',
-      link: '#',
-    },
-    {
-      id: 5,
-      title: 'Sustainable Seafood Trends',
-      image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=compress&w=600',
-      summary: 'Exploring the latest trends in sustainable seafood and responsible sourcing.',
-      link: '#',
-    },
-    {
-      id: 6,
-      title: 'Fisheries and Climate Change',
-      image: 'https://images.unsplash.com/photo-1464983953574-0892a716854b?auto=compress&w=600',
-      summary: 'How climate change is impacting global fisheries and what can be done.',
-      link: '#',
-    },
-    {
-      id: 7,
-      title: 'Youth in Marine Science',
-      image: 'https://images.pexels.com/photos/1108099/pexels-photo-1108099.jpeg?auto=compress&w=600',
-      summary: 'The growing role of young scientists in marine research and innovation.',
-      link: '#',
-    },
-    {
-      id: 8,
-      title: 'Traditional Fishing Practices',
-      image: 'https://images.pexels.com/photos/356286/pexels-photo-356286.jpeg?auto=compress&w=600',
-      summary: 'A look at time-honored fishing methods and their relevance today.',
-      link: '#',
-    },
-  ],
-};
-
 const HomeScreen = () => {
-  const [navVisible, setNavVisible] = useState(false);
   const { backgroundUrl } = useBranding();
   const router = useRouter();
+  
+  console.log('[HomeScreen] backgroundUrl received:', backgroundUrl);
+  console.log('[HomeScreen] backgroundUrl type:', typeof backgroundUrl);
 
-  const handleLinkPress = () => {
-    setNavVisible(false);
-  };
+  const bottomNavItems = [
+    {
+      title: 'Home',
+      icon: 'home',
+      onPress: () => router.push('/home'),
+      active: true
+    },
+    {
+      title: 'News',
+      icon: 'article',
+      onPress: () => router.push('/news'),
+      active: false
+    },
+    {
+      title: 'Profile',
+      icon: 'person',
+      onPress: () => router.push('/profile'),
+      active: false
+    },
+  ];
+
+  // trending state
+  const [trending, setTrending] = React.useState([]);
+  const [trendingLoading, setTrendingLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchTrending = async () => {
+      try {
+        const res = await apiClient.get('/public/trending-articles?limit=4');
+        const data = res.data?.data || [];
+        // map to id title image
+        const items = data.map(a => ({
+          id: a.id?.toString() || '',
+          title: a.title,
+          image: a.media && a.media.length ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api','')}/storage/${a.media[0].file_path.replace('public/','')}` : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070'
+        }));
+        setTrending(items);
+      } catch(e){
+        console.log('Failed trending', e);
+      } finally {
+        setTrendingLoading(false);
+      }
+    };
+    fetchTrending();
+  }, []);
+
+  const menuItems = [
+    { 
+      title: 'News', 
+      icon: 'article', 
+      onPress: () => router.push('/news'),
+      color: '#3b82f6'
+    },
+    { 
+      title: 'Articles', 
+      icon: 'description', 
+      onPress: () => router.push('/articles'),
+      color: '#10b981'
+    },
+    { 
+      title: 'Contribute', 
+      icon: 'edit', 
+      onPress: () => router.push('/contribute'),
+      color: '#f59e0b'
+    },
+    { 
+      title: 'Profile', 
+      icon: 'person', 
+      onPress: () => router.push('/profile'),
+      color: '#8b5cf6'
+    },
+  ];
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Mobile Menu Button */}
-      <TouchableOpacity 
-        style={styles.menuButton} 
-        onPress={() => setNavVisible(true)}
-      >
-        <Text style={styles.menuButtonText}>☰</Text>
-      </TouchableOpacity>
-      
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={navVisible}
-        onRequestClose={() => setNavVisible(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
-          onPressOut={() => setNavVisible(false)}
-        >
-          <View style={styles.modalView}>
-            <AppNavbar onLinkPress={handleLinkPress} />
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      <ScrollView>
+      <ScrollView style={styles.scrollView}>
         {/* Hero Section */}
-        <View style={{ height: 570, width: '100%', position: 'relative' }}>
-          <ImageBackground
-            source={{ uri: backgroundUrl || "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070" }}
-            style={[styles.hero, { height: '100%' }]}
-            resizeMode="cover"
-          >
-            <View style={styles.heroOverlay}>
-              <View style={[styles.heroContentRow, { flexDirection: 'column' }]}>
-                <View style={[styles.heroLeft, { alignItems: 'center', paddingRight: 0 }]}>
-                  <Text style={[styles.heroTitle, { textAlign: 'center', marginLeft: 0 }]}>
-                    Building a Sustainable Community
-                  </Text>
-                  <Text style={[styles.heroSummary, { textAlign: 'center', marginLeft: 0 }]}>
-                    Discover how our latest publication is helping organizations grow better and empower communities.
-                  </Text>
-                  <TouchableOpacity 
-                    style={styles.promoButton}
-                    onPress={() => router.push('/publications/featured')}
-                  >
-                    <Text style={styles.promoButtonText}>Read Featured</Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={[styles.heroRight, { 
-                  flexDirection: 'row', 
-                  justifyContent: 'center',
-                  marginTop: 20,
-                  marginRight: 0
-                }]}> 
-                  <HeroCarousel />
-                </View>
-              </View>
+        <ImageBackground
+          source={
+            !backgroundUrl || backgroundUrl === null
+              ? { uri: "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070" }
+              : typeof backgroundUrl === 'number'
+                ? backgroundUrl
+                : typeof backgroundUrl === 'string'
+                  ? { uri: backgroundUrl }
+                  : backgroundUrl
+          }
+          style={styles.hero}
+          resizeMode="cover"
+        >
+          <View style={styles.heroOverlay}>
+            <View style={styles.heroContent}>
+              <Text style={styles.welcomeText}>Welcome to</Text>
+              <Text style={styles.appName}>Fisherman</Text>
+              <Text style={styles.tagline}>
+                Building sustainable communities through impactful stories and research
+              </Text>
             </View>
-          </ImageBackground>
-          <View style={{ position: 'absolute', bottom: -20, left: 0, right: 0, height: 120 }}>
-            <SvgWave color={'#f3f6fa'} height={120} />
           </View>
+        </ImageBackground>
+
+        {/* Trending News */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Trending News</Text>
+          {trendingLoading ? (
+            <Text style={{ marginTop:8,fontSize:14}}>Loading...</Text>
+          ) : (
+            <View style={{marginTop:12}}>
+              {trending.map(item => (
+                <TouchableOpacity key={item.id} onPress={() => router.push(`/news/article/${item.id}`)} style={styles.trendingCard}>
+                  <Image source={{ uri: item.image }} style={styles.trendingImage} />
+                  <Text style={styles.trendingTitle} numberOfLines={2}>{item.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
-        {/* Publications Grid */}
+        {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recently Published Articles</Text>
-          <View style={styles.publicationGrid}>
-            {publications.recent.slice(0, 4).map((article) => (
-              <View key={article.id} style={styles.publicationItem}>
-                <Image 
-                  source={{ uri: article.image }} 
-                  style={styles.publicationImage} 
-                />
-                <Text style={styles.publicationTitle}>{article.title}</Text>
-                <Text style={styles.publicationSummary}>{article.summary}</Text>
-                <TouchableOpacity 
-                  style={styles.readButton}
-                  onPress={() => router.push(`/publications/${article.id}`)}
-                >
-                  <Text style={styles.readButtonText}>Read More</Text>
-                </TouchableOpacity>
-              </View>
+          <Text style={styles.sectionTitle}>Get Started</Text>
+          <View style={styles.menuGrid}>
+            {menuItems.map((item, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[styles.menuItem, { borderLeftColor: item.color }]}
+                onPress={item.onPress}
+              >
+                <View style={[styles.iconContainer, { backgroundColor: item.color }]}>
+                  <MaterialIcons name={item.icon} size={24} color="white" />
+                </View>
+                <Text style={styles.menuItemTitle}>{item.title}</Text>
+                <Text style={styles.menuItemDescription}>
+                  {item.title === 'News' && 'Stay updated with latest news and updates'}
+                  {item.title === 'Articles' && 'Read in-depth articles and publications'}
+                  {item.title === 'Contribute' && 'Share your stories and research'}
+                  {item.title === 'Profile' && 'Manage your account and preferences'}
+                </Text>
+                <MaterialIcons name="arrow-forward" size={20} color="#9ca3af" />
+              </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* Recruitment Section */}
-        <View style={[styles.section, styles.recruitmentSection]}>
-          <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?auto=compress&w=400' }}
-            style={styles.recruitmentImage}
-          />
-          <Text style={styles.sectionTitle}>Join Our Team!</Text>
+        {/* About Section */}
+        <View style={[styles.section, styles.aboutSection]}>
+          <Text style={styles.sectionTitle}>About Fisherman</Text>
           <Text style={styles.aboutText}>
-            We're looking for passionate writers, editors, and researchers to join our publication team.
+            We are a platform dedicated to fostering sustainable development through storytelling and research.
+            Our mission is to connect communities, amplify voices, and drive positive change.
           </Text>
-          <TouchableOpacity 
-            style={styles.readButton}
-            onPress={() => router.push('/careers')}
+
+          {/* Stats Row */}
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>500+</Text>
+              <Text style={styles.statLabel}>Articles</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>1000+</Text>
+              <Text style={styles.statLabel}>Community Members</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>50+</Text>
+              <Text style={styles.statLabel}>Contributors</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Join Community */}
+        <View style={[styles.section, styles.joinSection]}>
+          <Text style={styles.sectionTitle}>Join Our Community</Text>
+          <Text style={styles.joinText}>
+            Become part of a growing community of writers, researchers, and readers passionate about making a difference.
+          </Text>
+          <TouchableOpacity
+            style={styles.joinButton}
+            onPress={() => router.push('/registration')}
           >
-            <Text style={styles.readButtonText}>View Openings</Text>
+            <Text style={styles.joinButtonText}>Get Started Today</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNav}>
+        {bottomNavItems.map((item, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.bottomNavItem}
+            onPress={item.onPress}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons
+              name={item.icon}
+              size={24}
+              color={item.active ? '#3b82f6' : '#9ca3af'}
+            />
+            <Text style={[
+              styles.bottomNavText,
+              item.active && styles.bottomNavTextActive
+            ]}>
+              {item.title}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </SafeAreaView>
   );
 };
@@ -211,106 +239,69 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f3f6fa',
+    backgroundColor: '#f8fafc',
+  },
+  scrollView: {
+    // flex: 1, // Removed to allow bottom navigation to show
   },
   menuButton: {
     position: 'absolute',
-    top: 40,
+    top: 50,
     left: 20,
     zIndex: 10,
-  },
-  menuButtonText: {
-    fontSize: 28,
-    color: '#374151',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalView: {
-    width: '75%',
-    height: '100%',
-    backgroundColor: '#f3f6fa',
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 8,
     shadowColor: '#000',
-    shadowOffset: { width: -2, height: 0 },
-    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 5,
+    elevation: 3,
   },
   hero: {
     width: '100%',
-    height: 520,
+    height: 300,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 0,
   },
   heroOverlay: {
     flex: 1,
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(20,28,38,0.68)',
-    paddingHorizontal: 28,
-    paddingVertical: 36,
+    backgroundColor: 'rgba(30, 41, 59, 0.7)',
   },
-  heroContentRow: {
-    flexDirection: 'column',
-    width: '100%',
-    gap: 32,
+  heroContent: {
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 30,
   },
-  heroLeft: {
-    paddingRight: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 340,
+  welcomeText: {
+    fontSize: 18,
+    color: '#e2e8f0',
+    marginBottom: 8,
+    fontWeight: '500',
   },
-  heroRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-    minWidth: 250,
-    marginTop: 20,
-  },
-  heroTitle: {
-    fontSize: 28,
+  appName: {
+    fontSize: 36,
     fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
+    color: '#ffffff',
     marginBottom: 16,
-    textShadowColor: 'rgba(0,0,0,0.18)',
+    textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8,
   },
-  heroSummary: {
+  tagline: {
     fontSize: 16,
-    color: '#f3f6fa',
+    color: '#cbd5e1',
     textAlign: 'center',
-    marginBottom: 22,
     lineHeight: 24,
-    textShadowColor: 'rgba(0,0,0,0.12)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
-  },
-  promoButton: {
-    backgroundColor: '#bfc8d9',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 28,
-    marginTop: 12,
-  },
-  promoButtonText: {
-    color: '#3b4465',
-    fontWeight: 'bold',
-    fontSize: 16,
+    paddingHorizontal: 20,
   },
   section: {
     marginVertical: 20,
     paddingHorizontal: 20,
-    backgroundColor: '#fff',
-    borderRadius: 18,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
     paddingVertical: 24,
     marginHorizontal: 16,
     shadowColor: '#000',
@@ -320,74 +311,147 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   sectionTitle: {
-    fontSize: 22,
+    fontSize: 24,
     textAlign: 'center',
     fontWeight: 'bold',
-    color: '#3b4465',
+    color: '#1e293b',
     marginBottom: 20,
   },
-  publicationGrid: {
-    flexDirection: 'column',
-    gap: 20,
+  trendingCard:{
+    width:'100%',
+    marginBottom:16,
   },
-  publicationItem: {
-    backgroundColor: '#fff',
+  trendingImage:{
+    width:'100%',
+    height:120,
+    borderRadius:12,
+  },
+  trendingTitle:{
+    fontSize:14,
+    fontWeight:'600',
+    marginTop:8,
+    color:'#1e293b',
+  },
+  menuGrid: {
+    gap: 16,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
     borderRadius: 12,
     padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#3b82f6',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
     shadowRadius: 4,
     elevation: 1,
   },
-  publicationImage: {
-    width: '100%',
-    height: 180,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  publicationTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#3b4465',
-    marginBottom: 8,
-  },
-  publicationSummary: {
-    fontSize: 14,
-    color: '#6b7ca2',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  readButton: {
-    backgroundColor: '#e6eef7',
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignSelf: 'flex-start',
-  },
-  readButtonText: {
-    color: '#3b82f6',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  recruitmentSection: {
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f0f7ff',
-    paddingVertical: 32,
+    marginRight: 16,
   },
-  recruitmentImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: 20,
+  menuItemTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
+    flex: 1,
+  },
+  menuItemDescription: {
+    fontSize: 14,
+    color: '#64748b',
+    lineHeight: 20,
+    flex: 1,
+  },
+  aboutSection: {
+    alignItems: 'center',
   },
   aboutText: {
     fontSize: 16,
-    color: '#4b5563',
+    color: '#475569',
     textAlign: 'center',
-    marginBottom: 20,
     lineHeight: 24,
+    marginBottom: 24,
+    paddingHorizontal: 10,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
     paddingHorizontal: 20,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#3b82f6',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  joinSection: {
+    alignItems: 'center',
+    backgroundColor: '#f0f9ff',
+  },
+  joinText: {
+    fontSize: 16,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  joinButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  joinButtonText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingBottom: Platform.OS === 'android' ? 40 : 8, // Extra padding for Android system nav
+    paddingTop: 12,
+  },
+  bottomNavItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomNavText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  bottomNavTextActive: {
+    color: '#3b82f6',
+    fontWeight: '600',
   },
 });
 

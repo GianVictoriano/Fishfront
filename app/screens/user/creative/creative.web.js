@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     minWidth: '250px',
   },
   footerHeading: {
-    fontSize: '1.25rem',
+    fontSize: 20,
     fontWeight: '600',
     marginBottom: '20px',
     color: 'white',
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     padding: '20px',
     borderTop: '1px solid #334155',
     color: '#94a3b8',
-    fontSize: '0.9rem',
+    fontSize: 14,
   },
 });
 

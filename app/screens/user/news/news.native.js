@@ -1,29 +1,112 @@
 // app/screens/news/index.web.js
-import { Link, useRouter } from 'expo-router';
+import { Link, useRouter, usePathname } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView, ActivityIndicator } from 'react-native';
+import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import Navbar from '../../../../components/Navbar';
 import NewsNavbar from '../../../../components/newsnavbar';
 import apiClient from '../../../../utils/api';
 import useNewsStore from '../../../../store/newsStore';
+import { MaterialIcons } from '@expo/vector-icons';
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f4f6f8',
+    backgroundColor: '#ffffff',
   },
-  menuButton: {
-    position: 'absolute',
-    left: 20,
-    zIndex: 10,
-    padding: 10,
+  scrollView: {
+    // flex: 1, // Removed to allow bottom navigation to show
+    backgroundColor: '#f9fafb',
   },
-  menuButtonText: {
-    fontSize: 28,
-    color: '#0d47a1',
-  },
-  modalOverlayNav: {
+  loadingContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  articlesContainer: {
+    padding: 16,
+  },
+  articleCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  articleImage: {
+    width: '100%',
+    height: 200,
+    backgroundColor: '#e5e7eb',
+  },
+  articleContent: {
+    padding: 16,
+  },
+  articleCategory: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#3b82f6',
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  articleTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+    lineHeight: 24,
+  },
+  articleExcerpt: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  articleFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  articleDate: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  readMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingBottom: 40,
+    marginBottom: 40,
+    paddingTop: 12,
+  },
+  bottomNavItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomNavText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  bottomNavTextActive: {
+    color: '#3b82f6',
+    fontWeight: '600',
   },
   modalViewNav: {
     width: '75%',
@@ -54,7 +137,6 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
     marginBottom: 10,
     marginLeft: 2,
-    letterSpacing: 0.2,
   },
   trendingCardWrapper: {
     width: '100%',
@@ -83,7 +165,7 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     elevation: 6,
     maxWidth: '100%',
-    marginHorizontal: 'auto',
+    alignSelf: 'center',
     marginBottom: 0,
   },
   trendingImage: {
@@ -121,67 +203,23 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     marginBottom: 28,
-    boxShadow: '0 4px 24px 0 rgba(60,72,88,0.09)',
-    border: '1.5px solid #e4e8ee',
-    transition: 'box-shadow 0.25s cubic-bezier(.4,2,.6,1), transform 0.18s cubic-bezier(.4,2,.6,1)',
-    cursor: 'pointer',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     minWidth: 250,
     maxWidth: 280,
     width: '100%',
-  },
-  cardHover: {
-    boxShadow: '0 10px 32px 0 rgba(60,72,88,0.18)',
-    transform: 'translateY(-4px) scale(1.025)',
-    borderColor: '#d0d6e0',
   },
   cardImage: {
     width: '100%',
     minWidth: 350,
     maxWidth: 520,
     height: 150,
-    objectFit: 'cover',
+    resizeMode: 'cover',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
-    transition: 'filter 0.2s',
-  },
-  cardImageHover: {
-    // No additional styles needed here
-  },
-  cardOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    opacity: 0,
-    transition: 'opacity 0.2s ease',
-  },
-  cardOverlayHover: {
-    opacity: 1,
-  },
-  cardReadMore: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
-  },
-  compactCard: {
-    flexDirection: 'row',
-    height: 90,
-    marginBottom: 10,
-    alignItems: 'flex-start',
-  },
-  compactImage: {
-    width: 120,
-    height: '100%',
   },
   cardContent: {
     padding: 20,
@@ -189,11 +227,9 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
     minHeight: 92,
-    display: 'flex',
     flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'flex-start',
-    gap: 8,
   },
   cardCategory: {
     fontSize: 12,
@@ -201,22 +237,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 4,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  compactCategory: {
-    fontSize: 11,
-    marginBottom: 2,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#222',
     marginBottom: 2,
-  },
-  compactTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 0,
   },
   headlineCard: {
     paddingVertical: 8,
@@ -236,31 +262,93 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 0,
   },
-
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-    lineHeight: 28,
+  featuredCard: {
+    width: '100%',
+    marginBottom: 25,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+    position: 'relative',
   },
-  cardExcerpt: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 24,
-    marginBottom: 16,
+  featuredCardImage: {
+    width: '100%',
+    height: 280,
+    borderRadius: 12,
   },
-  readMoreButton: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#007BFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+  featuredContent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 25,
+    paddingTop: 40,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
   },
-  readMoreButtonText: {
+  featuredCategory: {
     color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
+    fontWeight: '700',
+    fontSize: 13,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+  featuredTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    marginBottom: 12,
+    lineHeight: 32,
+    color: '#fff',
+  },
+  featuredExcerpt: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.95)',
+    lineHeight: 24,
+    marginBottom: 15,
+    fontWeight: '500',
+  },
+  featuredMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  featuredDate: {
+    color: 'rgba(255,255,255,0.95)',
+    fontSize: 13,
+    fontWeight: '500',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  readMoreContainer: {
+    position: 'absolute',
+    right: 0,
+    top: '50%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    paddingLeft: 30,
+    borderTopLeftRadius: 4,
+    borderBottomLeftRadius: 4,
+    opacity: 0,
+  },
+  readMore: {
+    color: '#fff',
+    fontSize: 15,
+    marginRight: 10,
+  },
+  readMoreIcon: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 2,
+    marginLeft: 2,
   },
   rightCol: {
     flex: 1,
@@ -286,7 +374,6 @@ const styles = StyleSheet.create({
     color: '#222',
     marginBottom: 8,
     marginTop: 1,
-    letterSpacing: 0.1,
   },
   freshStoryList: {
     marginTop: 2,
@@ -315,7 +402,6 @@ const styles = StyleSheet.create({
     color: '#e53935',
     fontSize: 10,
     marginRight: 4,
-    letterSpacing: 0.2,
     textTransform: 'uppercase',
   },
   freshStoryDate: {
@@ -328,121 +414,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#ececec',
     marginVertical: 4,
   },
-  featuredCard: {
-    width: '100%',
-    marginBottom: 25,
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-    position: 'relative',
-  },
-  featuredCardImage: {
-    width: '100%',
-    height: 280,
-    borderRadius: 12,
-    transition: 'filter 0.3s ease',
-  },
-  featuredCardImageHover: {
-    filter: 'brightness(0.85)',
-  },
-  featuredContent: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 25,
-    paddingTop: 40,
-    background: 'linear-gradient(transparent, rgba(0,0,0,0.2), rgba(0,0,0,0.9))',
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-  },
-  featuredCategory: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 13,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    marginBottom: 10,
-    textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 2px 10px rgba(0,0,0,0.6)',
-  },
-  featuredTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    marginBottom: 12,
-    lineHeight: 32,
-    color: '#fff',
-    textShadow: '0 1px 1px rgba(0,0,0,0.8), 0 2px 8px rgba(0,0,0,0.8)',
-  },
-  featuredExcerpt: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.95)',
-    lineHeight: 24,
-    marginBottom: 15,
-    textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 2px 6px rgba(0,0,0,0.7)',
-    fontWeight: '500',
-  },
-  featuredMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 5,
-  },
-  featuredDate: {
-    color: 'rgba(255,255,255,0.95)',
-    fontSize: 13,
-    textShadow: '0 1px 2px rgba(0,0,0,0.8)',
-    fontWeight: '500',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  readMoreContainer: {
-    position: 'absolute',
-    right: 0,
-    top: '50%',
-    transform: [
-      { translateX: '100%' },
-      { translateY: '-50%' },
-      { perspective: 1000 },
-      { rotateY: '90deg' },
-      { rotateZ: '-2deg' },
-    ],
-    transformOrigin: 'left center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    paddingLeft: 30,
-    borderTopLeftRadius: 4,
-    borderBottomLeftRadius: 4,
-    opacity: 0,
-    transition: 'all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)',
-    boxShadow: '-5px 0 15px rgba(0,0,0,0.1)',
-  },
-  readMore: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 15,
-    marginRight: 10,
-    textShadow: '0 1px 2px rgba(0,0,0,0.8)',
-    letterSpacing: 0.5,
-    transition: 'all 0.3s ease',
-  },
-  readMoreIcon: {
-    color: '#fff',
-    fontSize: 16,
-    marginTop: 2,
-    marginLeft: 2,
-    transition: 'all 0.3s ease',
-  },
 });
-
-// --- COMPONENT CODE ---
 
 // Fallback static data
 const fallbackNewsData = [
@@ -456,155 +428,33 @@ const fallbackNewsData = [
   }
 ];
 
-const NewsCard = ({ item, compact, bigTrending, isFirst }) => {
-  const router = useRouter();
-  const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
-  
-  const getImageUrl = (url) => {
-    if (!url) return defaultImage;
-    if (url.startsWith('http')) return url;
-    return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${url}`;
-  };
-  
-  const [imageUri, setImageUri] = useState(getImageUrl(item?.image));
-  const [isHovered, setIsHovered] = useState(false);
-  
-  useEffect(() => {
-    setImageUri(getImageUrl(item?.image));
-  }, [item?.image]);
-  
-  const handleImageError = () => {
-    setImageUri(defaultImage);
-  };
-
-  if (isFirst) {
-    return (
-      <TouchableOpacity 
-        style={styles.featuredCard} 
-        activeOpacity={0.9}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        onPress={() => router.push(`/news/article/${item.id}`)}
-      >
-        <View style={{ position: 'relative' }}>
-          <Image 
-            source={{ uri: imageUri }} 
-            style={[
-              styles.featuredCardImage,
-              isHovered && styles.featuredCardImageHover
-            ]}
-            onError={handleImageError}
-            defaultSource={{ uri: defaultImage }}
-            resizeMode="cover"
-          />
-        </View>
-        <View style={styles.featuredContent}>
-          <Text style={styles.featuredCategory}>{item?.category || 'Featured'}</Text>
-          <Text style={styles.featuredTitle}>
-            {item?.title || 'Untitled Article'}
-          </Text>
-          <Text style={styles.featuredExcerpt} numberOfLines={2}>
-            {item?.excerpt || ''}
-          </Text>
-          <View style={styles.featuredMeta}>
-            <Text style={styles.featuredDate}>
-              {item?.date || new Date().toLocaleDateString()}
-            </Text>
-            <View style={[styles.readMoreContainer, isHovered && { 
-              opacity: 1, 
-              transform: [
-                { translateX: 0 },
-                { translateY: '-50%' },
-                { perspective: 1000 },
-                { rotateY: '0deg' },
-                { rotateZ: '0deg' },
-              ],
-              boxShadow: '-5px 0 15px rgba(0,0,0,0.3)',
-              shadowColor: '#000',
-              shadowOffset: { width: -5, height: 0 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 5,
-            }]}>
-              <Text style={[styles.readMore, isHovered && { letterSpacing: 1 }]}>
-                Read Full Story
-              </Text>
-              <Text style={[styles.readMoreIcon, isHovered && { transform: [{ translateX: 3 }] }]}>
-                →
-              </Text>
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  }
-
-  return (
-    <TouchableOpacity
-      style={[
-        styles.card,
-        isHovered && styles.cardHover,
-        bigTrending && styles.trendingCard,
-      ]}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onPress={() => router.push(`/news/article/${item.id}`)}
-      activeOpacity={0.9}
-    >
-      <View style={{ position: 'relative' }}>
-        <Image
-          source={{ uri: imageUri }}
-          style={[
-            styles.cardImage,
-            isHovered && styles.cardImageHover,
-            bigTrending && styles.trendingImage,
-          ]}
-          onError={handleImageError}
-          defaultSource={{ uri: defaultImage }}
-          resizeMode="cover"
-        />
-        <View style={[
-          styles.cardOverlay,
-          isHovered && styles.cardOverlayHover
-        ]}>
-          <Text style={styles.cardReadMore}>Read Full Story</Text>
-        </View>
-      </View>
-      <View style={[
-        styles.cardContent,
-        bigTrending && styles.trendingContent,
-      ]}>
-        <Text style={[
-          styles.cardCategory,
-          compact && styles.compactCategory,
-          bigTrending && styles.trendingCategory,
-        ]}>{item?.category || 'General'}</Text>
-        <Text
-          style={[
-            styles.cardTitle,
-            compact && styles.compactTitle,
-            bigTrending && styles.trendingTitle,
-          ]}
-          numberOfLines={bigTrending ? 3 : 2}
-        >
-          {item?.title || 'Untitled Article'}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-};
-
-const HeadlineCard = ({ item }) => (
-  <View style={styles.headlineCard}>
-    <Text style={styles.headlineCategory}>{item?.category || 'News'}</Text>
-    <Text style={styles.headlineText} numberOfLines={2}>{item?.title || 'No title available'}</Text>
-  </View>
-);
-
 export default function NewsScreen() {
   const [newsData, setNewsData] = useState(fallbackNewsData);
   const { activeGenre } = useNewsStore();
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const bottomNavItems = [
+    { 
+      title: 'Home', 
+      icon: 'home', 
+      onPress: () => router.push('/home'),
+      active: pathname === '/home'
+    },
+    { 
+      title: 'News', 
+      icon: 'article', 
+      onPress: () => router.push('/news'),
+      active: pathname === '/news'
+    },
+    { 
+      title: 'Profile', 
+      icon: 'person', 
+      onPress: () => router.push('/profile'),
+      active: pathname === '/profile'
+    },
+  ];
 
   useEffect(() => {
     let isMounted = true;
@@ -643,78 +493,100 @@ export default function NewsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Navbar />
+      {/* Genre Filter */}
       <NewsNavbar />
       
-      <ScrollView contentContainerStyle={styles.newsPageScroll}>
+      <ScrollView style={styles.scrollView}>
         {loading ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#2541b2" />
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Loading articles...</Text>
           </View>
         ) : (
-          <View style={styles.newsMainRow}>
-            <View style={styles.leftColWrapper}>
-            <Text style={styles.latestContentTitle}>Latest Content</Text>
-            <View style={styles.trendingCardWrapper}>
-              {featuredStory && (
-                <TouchableOpacity style={styles.trendingContainer}>
-                  <NewsCard item={featuredStory} isFirst={true} />
-                </TouchableOpacity>
-              )}
-            </View>
-            <FlatList
-              data={gridStories}
-              renderItem={({ item }) => <NewsCard item={item} compact />}
-              keyExtractor={item => item.id}
-              numColumns={3}
-              columnWrapperStyle={styles.gridRow}
-              contentContainerStyle={styles.gridContainer}
-              scrollEnabled={false}
-            />
-            </View>
-            <View style={styles.rightCol}>
-              <ScrollView style={styles.rightColScroll} contentContainerStyle={{paddingBottom: 16}}>
-                {headlineStories.map(item => (
-                  <HeadlineCard item={item} key={item.id} />
-                ))}
-                <View style={styles.freshStoriesSection}>
-                  <Text style={styles.freshStoriesHeader}>Fresh stories</Text>
-                  <Text style={styles.freshStoriesSubheader}>TODAY: BROWSE OUR EDITOR'S HAND PICKED ARTICLES!</Text>
-                  <View style={styles.freshStoryList}>
-                    <View style={styles.freshStoryItem}>
-                      <Text style={styles.freshStoryTitle}><Text style={styles.freshStoryTitleBold}>LITERARY |</Text> gutom na rin ako, kaso pamasaha na lang ang meron ako</Text>
-                      <View style={styles.freshStoryMetaRow}>
-                        <Text style={styles.freshStoryCategory}>LITERARY</Text>
-                        <Text style={styles.freshStoryDate}>  March 21, 2025</Text>
-                      </View>
-                    </View>
-                    <View style={styles.freshStoryDivider} />
-                    <View style={styles.freshStoryItem}>
-                      <Text style={styles.freshStoryTitle}><Text style={styles.freshStoryTitleBold}>NEWS |</Text> BatStateU, SP strengthen global ties; propose community solutions</Text>
-                      <View style={styles.freshStoryMetaRow}>
-                        <Text style={styles.freshStoryCategory}>NEWS</Text>
-                        <Text style={styles.freshStoryDate}>  March 19, 2025</Text>
-                      </View>
-                    </View>
-                    <View style={styles.freshStoryDivider} />
-                    <View style={styles.freshStoryItem}>
-                      <Text style={styles.freshStoryTitle}><Text style={styles.freshStoryTitleBold}>EDITORIAL |</Text> Pulling Out the Thorns</Text>
-                      <View style={styles.freshStoryMetaRow}>
-                        <Text style={styles.freshStoryCategory}>EDITORIAL</Text>
-                        <Text style={styles.freshStoryDate}>  March 11, 2025</Text>
-                      </View>
-                    </View>
-                    <View style={styles.freshStoryDivider} />
-                    <View style={styles.freshStoryItem}>
-                      <Text style={styles.freshStoryTitle}>People Power is not a relic of the past. It is a reminder, a warning, and a call to action.</Text>
+          <View style={styles.articlesContainer}>
+            {newsData.map((article, index) => (
+              <TouchableOpacity 
+                key={article.id}
+                style={styles.articleCard}
+                onPress={() => router.push(`/news/article/${article.id}`)}
+                activeOpacity={0.7}
+              >
+                <Image 
+                  source={{ uri: article.image }}
+                  style={styles.articleImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.articleContent}>
+                  <Text style={styles.articleCategory}>{article.category}</Text>
+                  <Text style={styles.articleTitle} numberOfLines={2}>{article.title}</Text>
+                  <Text style={styles.articleExcerpt} numberOfLines={3}>{article.excerpt}</Text>
+                  <View style={styles.articleFooter}>
+                    <Text style={styles.articleDate}>{article.date}</Text>
+                    <View style={styles.readMoreButton}>
+                      <Text style={styles.readMoreText}>Read More</Text>
+                      <MaterialIcons name="arrow-forward" size={16} color="#3b82f6" />
                     </View>
                   </View>
                 </View>
-              </ScrollView>
-            </View>
+              </TouchableOpacity>
+            ))}
           </View>
         )}
       </ScrollView>
+
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNav}>
+        {bottomNavItems.map((item, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.bottomNavItem}
+            onPress={item.onPress}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons 
+              name={item.icon} 
+              size={24} 
+              color={item.active ? '#3b82f6' : '#9ca3af'} 
+            />
+            <Text style={[
+              styles.bottomNavText,
+              item.active && styles.bottomNavTextActive
+            ]}>
+              {item.title}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </SafeAreaView>
   );
 }
+
+// Add bottom navigation styles
+const bottomNavStyles = StyleSheet.create({
+  bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingBottom: Platform.OS === 'android' ? 24 : 8, // Extra padding for Android system nav
+    paddingTop: 12,
+  },
+  bottomNavItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomNavText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  bottomNavTextActive: {
+    color: '#3b82f6',
+    fontWeight: '600',
+  },
+});
+
+// Merge styles
+Object.assign(styles, bottomNavStyles);

@@ -127,7 +127,7 @@ const HomeScreen = () => {
       {/* Hero Section */}
       <div style={styles.hero}>
         <ImageBackground
-          source={{ uri: backgroundUrl || "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070" }}
+          source={{ uri: backgroundUrl?.uri || backgroundUrl || "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070" }}
           style={styles.heroImage}
         >
           <div style={styles.heroOverlay}>
@@ -349,7 +349,10 @@ const styles = StyleSheet.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '0 10%',
+    paddingLeft: '10%',
+    paddingRight: '10%',
+    paddingTop: 0,
+    paddingBottom: 0,
     position: 'relative',
 
   },
@@ -368,7 +371,7 @@ const styles = StyleSheet.create({
     maxWidth: '600px',
   },
   heroTitle: {
-    fontSize: '2.8rem',
+    fontSize: 45,
     fontWeight: 'bold',
     marginBottom: '1.5rem',
     lineHeight: 1.2,
@@ -377,7 +380,7 @@ const styles = StyleSheet.create({
     marginLeft: '70px',
   },
   heroSummary: {
-    fontSize: '1.25rem',
+    fontSize: 20,
     lineHeight: 1.6,
     marginBottom: '2rem',
     opacity: 0.9,
@@ -391,7 +394,7 @@ const styles = StyleSheet.create({
     border: 'none',
     borderRadius: '8px',
     padding: '10px',
-    fontSize: '1.1rem',
+    fontSize: 18,
     fontWeight: '600',
     cursor: 'pointer',
     transition: 'all 0.3s ease',
@@ -409,7 +412,7 @@ const styles = StyleSheet.create({
     border: 'none',
     borderRadius: '8px',
     padding: '10px',
-    fontSize: '1.1rem',
+    fontSize: 18,
     fontWeight: '600',
     cursor: 'pointer',
     transition: 'all 0.3s ease',
@@ -439,18 +442,25 @@ const styles = StyleSheet.create({
   mainContent: {
     width: '100%',
     flex: '1 0 auto',
-    padding: '20px 5% 40px 40px',
+    padding: '20px',
     paddingLeft: '40px',
     paddingRight: '40px',
+    paddingBottom: '40px',
     boxSizing: 'border-box',
     maxWidth: '1400px',
-    margin: '0 auto',
+    marginTop: 0,
+    marginRight: 'auto',
+    marginBottom: 0,
+    marginLeft: 'auto',
   },
   mainTitle: {
-    fontSize: '2.2rem',
+    fontSize: 35,
     fontWeight: '700',
     color: '#1a237e',
-    margin: '0 auto 30px',
+    marginTop: 0,
+    marginRight: 'auto',
+    marginBottom: 30,
+    marginLeft: 'auto',
     paddingBottom: '15px',
     borderBottom: '2px solid #e5e7eb',
     textAlign: 'center',
@@ -460,23 +470,32 @@ const styles = StyleSheet.create({
   section: {
     width: '100%',
     backgroundColor: 'white',
-    padding: '32px',
-    margin: '32px 24px',
+    padding: 32,
+    marginTop: 32,
+    marginRight: 24,
+    marginBottom: 32,
+    marginLeft: 24,
     borderRadius: '8px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
     boxSizing: 'border-box',
   },
   sectionTitle: {
-    fontSize: '2rem',
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#1e40af',
-    marginBottom: '32px',
-    marginTop: '20px',
+    marginBottom: 32,
+    marginTop: 20,
     textAlign: 'center',
   },
   categorySection: {
-    margin: '30px 0',
-    padding: '20px 0 20px 30px',
+    marginTop: 30,
+    marginRight: 0,
+    marginBottom: 30,
+    marginLeft: 0,
+    paddingTop: 20,
+    paddingRight: 0,
+    paddingBottom: 20,
+    paddingLeft: 30,
     borderBottom: '1px solid #e5e7eb',
     ':last-child': {
       borderBottom: 'none',
@@ -486,11 +505,14 @@ const styles = StyleSheet.create({
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '16px',
-    padding: '0 8px',
+    marginBottom: 16,
+    paddingTop: 0,
+    paddingRight: 8,
+    paddingBottom: 0,
+    paddingLeft: 8,
   },
   categoryTitle: {
-    fontSize: '1.5rem',
+    fontSize: 24,
     fontWeight: '600',
     color: '#1a237e',
     margin: 0,
@@ -500,9 +522,12 @@ const styles = StyleSheet.create({
     border: 'none',
     color: '#3b82f6',
     cursor: 'pointer',
-    fontSize: '0.9rem',
+    fontSize: 14,
     fontWeight: '500',
-    padding: '4px 8px',
+    paddingTop: 4,
+    paddingRight: 8,
+    paddingBottom: 4,
+    paddingLeft: 8,
     borderRadius: '4px',
     ':hover': {
       textDecoration: 'underline',
@@ -576,7 +601,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   publicationTitle: {
-    fontSize: '0.95rem',
+    fontSize: 15,
     fontWeight: '600',
     color: '#1a1a1a',
     margin: '0 0 6px',
@@ -589,7 +614,7 @@ const styles = StyleSheet.create({
     letterSpacing: '0.2px',
   },
   publicationSummary: {
-    fontSize: '0.8rem',
+    fontSize: 13,
     color: '#666',
     margin: '0 0 8px',
     display: '-webkit-box',
@@ -636,7 +661,7 @@ const styles = StyleSheet.create({
     border: '1px solid #3b82f6',
     borderRadius: '6px',
     padding: '10px',
-    fontSize: '1rem',
+    fontSize: 16,
     fontWeight: '500',
     cursor: 'pointer',
     transition: 'all 0.3s ease',
@@ -684,7 +709,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   aboutText: {
-    fontSize: '1.05rem',
+    fontSize: 17,
     color: '#4b5563',
     lineHeight: 1.7,
     marginBottom: '24px',
@@ -709,7 +734,7 @@ const styles = StyleSheet.create({
     minWidth: '250px',
   },
   footerHeading: {
-    fontSize: '1.25rem',
+    fontSize: 20,
     fontWeight: '600',
     marginBottom: '20px',
     color: 'white',
@@ -751,15 +776,15 @@ const styles = StyleSheet.create({
     padding: '20px',
     borderTop: '1px solid #334155',
     color: '#94a3b8',
-    fontSize: '0.9rem',
+    fontSize: 14,
   },
   // Responsive styles
   '@media (max-width: 1024px)': {
     heroTitle: {
-      fontSize: '2.4rem',
+      fontSize: 38,
     },
     heroSummary: {
-      fontSize: '1.1rem',
+      fontSize: 18,
     },
     recruitmentContent: {
       flexDirection: 'column',
@@ -785,17 +810,17 @@ const styles = StyleSheet.create({
       marginBottom: '40px',
     },
     heroTitle: {
-      fontSize: '2rem',
+      fontSize: 32,
     },
     heroSummary: {
       maxWidth: '100%',
-      fontSize: '1rem',
+      fontSize: 16,
     },
     section: {
       padding: '24px 16px',
     },
     sectionTitle: {
-      fontSize: '1.75rem',
+      fontSize: 28,
     },
     publicationGrid: {
       gridTemplateColumns: '1fr',
@@ -803,10 +828,10 @@ const styles = StyleSheet.create({
   },
   '@media (max-width: 480px)': {
     heroTitle: {
-      fontSize: '1.8rem',
+      fontSize: 29,
     },
     heroSummary: {
-      fontSize: '1rem',
+      fontSize: 16,
     },
     ctaButton: {
       width: '100%',

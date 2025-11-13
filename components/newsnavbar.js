@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import useNewsStore from '../store/newsStore';
 
@@ -21,88 +20,58 @@ export default function NewsNavbar() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.tabsWrapper}>
-        {sections.map(section => (
-          <TouchableOpacity
-            key={section}
-            style={[styles.tab, activeGenre === section && styles.activeTab]}
-            onPress={() => handleSectionPress(section)}
-          >
-            <Text style={[styles.tabText, activeGenre === section && styles.activeTabText]}>{section}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <View style={styles.searchWrapper}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search..."
-          placeholderTextColor="#888"
-        />
-        <MaterialIcons name="search" size={20} color="#666" style={styles.searchIcon} />
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={styles.tabsWrapper}>
+          {sections.map(section => (
+            <TouchableOpacity
+              key={section}
+              style={[styles.tab, activeGenre === section && styles.activeTab]}
+              onPress={() => handleSectionPress(section)}
+            >
+              <Text style={[styles.tabText, activeGenre === section && styles.activeTabText]}>{section}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#f7f7f7',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    marginBottom: 10,
+    borderBottomColor: '#e5e7eb',
+    paddingVertical: 8,
+    marginTop: Platform.OS !== 'web' ? 40 : 0,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   tabsWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    paddingHorizontal: 16,
   },
   tab: {
-    marginRight: 14,
+    marginRight: 12,
     paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
     borderRadius: 16,
     backgroundColor: 'transparent',
   },
   activeTab: {
-    backgroundColor: '#e3e8ff',
+    backgroundColor: '#3b82f6',
   },
   tabText: {
-    fontSize: 14,
-    color: '#333',
+    fontSize: 13,
+    color: '#6b7280',
     fontWeight: '500',
-    letterSpacing: 0.1,
   },
   activeTabText: {
-    color: '#2541b2',
-    fontWeight: 'bold',
-  },
-  searchWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 16,
-    minWidth: 500,
-    maxWidth: 500,
-    flexShrink: 0,
-  },
-  searchInput: {
-    height: 28,
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    fontSize: 13,
-    color: '#222',
-    borderWidth: 1,
-    borderColor: '#d1d1d1',
-    flex: 1,
-  },
-  searchIcon: {
-    position: 'absolute',
-    right: 10,
-    top: '50%',
-    transform: [{ translateY: -10 }],
+    color: '#ffffff',
+    fontWeight: '600',
   },
 });

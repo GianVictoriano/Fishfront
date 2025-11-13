@@ -27,6 +27,8 @@ export default function ManageApplicantsScreen() {
   const [contactModal, setContactModal] = useState({ visible: false, applicant: null });
   const [emailContent, setEmailContent] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailSentModal, setEmailSentModal] = useState({ visible: false, applicant: null });
+  const [hoveredButton, setHoveredButton] = useState(null);
 
   const fetchApplicants = async () => {
     try {
@@ -85,10 +87,15 @@ export default function ManageApplicantsScreen() {
       Alert.alert('Success', 'Email sent successfully!');
       setContactModal({ visible: false, applicant: null });
       setEmailContent('');
+      setEmailSentModal({ visible: true, applicant: contactModal.applicant });
     } catch (err) {
       console.error('Failed to send email', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Failed to send email';
-      Alert.alert('Error', errorMessage);
+      console.error('Full error response:', err.response);
+      const errorMessage = err.response?.data?.error || 
+                          err.response?.data?.message || 
+                          err.message || 
+                          'Failed to send email';
+      Alert.alert('Error', `Failed to send email: ${errorMessage}`);
     } finally {
       setSendingEmail(false);
     }
@@ -444,19 +451,24 @@ export default function ManageApplicantsScreen() {
             
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+                style={[styles.modalButton, hoveredButton === 'cancel' ? styles.cancelButtonHover : styles.cancelButton]}
                 onPress={() => {
                   setContactModal({ visible: false, applicant: null });
                   setEmailContent('');
                 }}
+                onMouseEnter={() => setHoveredButton('cancel')}
+                onMouseLeave={() => setHoveredButton(null)}
                 disabled={sendingEmail}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <MaterialIcons name="close" size={18} color={hoveredButton === 'cancel' ? "#fff" : "#666"} />
+                <Text style={hoveredButton === 'cancel' ? styles.cancelButtonTextHover : styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={[styles.modalButton, styles.confirmButton]}
+                style={[styles.modalButton, hoveredButton === 'send' ? styles.confirmButtonHover : styles.confirmButton]}
                 onPress={handleSendEmail}
+                onMouseEnter={() => setHoveredButton('send')}
+                onMouseLeave={() => setHoveredButton(null)}
                 disabled={sendingEmail}
               >
                 {sendingEmail ? (
@@ -469,6 +481,35 @@ export default function ManageApplicantsScreen() {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Email Sent Confirmation Modal */}
+      <Modal
+        visible={emailSentModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEmailSentModal({ visible: false, applicant: null })}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.successModal}>
+            <View style={styles.successIconContainer}>
+              <MaterialIcons name="check-circle" size={64} color="#10b981" />
+            </View>
+            <Text style={styles.successTitle}>Email Sent Successfully!</Text>
+            <Text style={styles.successMessage}>
+              Your message has been sent to {emailSentModal.applicant?.full_name}
+            </Text>
+            <Text style={styles.successEmail}>
+              {emailSentModal.applicant?.email}
+            </Text>
+            <TouchableOpacity
+              style={styles.successButton}
+              onPress={() => setEmailSentModal({ visible: false, applicant: null })}
+            >
+              <Text style={styles.successButtonText}>Continue</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -673,7 +714,9 @@ const styles = StyleSheet.create({
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    alignItems: 'center',
     gap: 12,
+    marginTop: 20,
   },
   modalButton: {
     paddingVertical: 10,
@@ -681,19 +724,80 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     minWidth: 80,
     alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
   },
   cancelButton: {
     backgroundColor: '#f5f5f5',
+  },
+  cancelButtonHover: {
+    backgroundColor: '#dc3545',
   },
   cancelButtonText: {
     color: '#333',
     fontWeight: '600',
   },
+  cancelButtonTextHover: {
+    color: '#fff',
+    fontWeight: '600',
+  },
   confirmButton: {
     backgroundColor: '#28a745',
   },
+  confirmButtonHover: {
+    backgroundColor: '#218838',
+  },
   confirmButtonText: {
     color: '#fff',
+    fontWeight: '600',
+  },
+  successModal: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 32,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  successIconContainer: {
+    marginBottom: 20,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  successMessage: {
+    fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  successEmail: {
+    fontSize: 14,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  successButton: {
+    backgroundColor: '#10b981',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  successButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
     fontWeight: '600',
   },
   headerContainer: {

@@ -5,7 +5,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform, Image } from 'react
 import { Feather } from '@expo/vector-icons';
 
 export default function GuestNavbar({ onLinkPress = () => {}, onClose }) {
-  const { logoUrl } = useBranding();
+  // const { logoUrl } = useBranding(); // Bypassed to avoid casting issues
   const router = useRouter();
   const pathname = usePathname();
 
@@ -26,7 +26,10 @@ export default function GuestNavbar({ onLinkPress = () => {}, onClose }) {
         </TouchableOpacity>
       )}
       <View style={styles.brandContainer}>
-        <Image source={logoUrl} style={styles.avatar} />
+        <Image 
+          source={require('../assets/images/fish.jpg')}
+          style={styles.avatar} 
+        />
         <Text style={styles.brand}>Fisherman</Text>
       </View>
       {!isWeb && <View style={styles.sidebarDivider} />}

@@ -130,7 +130,7 @@ const Sidebar = ({ isMinimized }) => {
         {brandingLoading ? (
           <View style={styles.logoPlaceholder} />
         ) : (
-          <Image source={{ uri: logoUrl }} style={styles.logo} resizeMode="contain" />
+          <Image source={typeof logoUrl === 'number' ? logoUrl : (logoUrl?.uri ? logoUrl : { uri: String(logoUrl || '') })} style={styles.logo} resizeMode="contain" />
         )}
         {!isMinimized && <Text style={[styles.sidebarTitle, { color: colors.text_primary || '#FFFFFF' }]}>Fisherman</Text>}
       </View>

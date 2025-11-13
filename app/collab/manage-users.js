@@ -89,7 +89,7 @@ const ManageUsersScreen = () => {
 
     const renderCollaborator = (collaborator) => (
         <View style={styles.userCard}>
-            <Image source={{ uri: collaborator.profile?.avatar }} style={styles.avatar} />
+            <Image source={{ uri: String(collaborator.profile?.avatar || '') }} style={styles.avatar} />
             <View style={styles.userInfo}>
                 <Text style={styles.userName}>{collaborator.name}</Text>
                 <Text style={styles.userEmail}>{collaborator.email}</Text>
@@ -106,7 +106,7 @@ const ManageUsersScreen = () => {
 
     const renderUser = (regularUser) => (
         <View style={styles.userCard}>
-            <Image source={{ uri: regularUser.profile?.avatar }} style={styles.avatar} />
+            <Image source={{ uri: String(regularUser.profile?.avatar || '') }} style={styles.avatar} />
             <View style={styles.userInfo}>
                 <Text style={styles.userName}>{regularUser.name}</Text>
                 <Text style={styles.userEmail}>{regularUser.email}</Text>

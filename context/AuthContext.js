@@ -139,9 +139,36 @@ export const AuthProvider = ({ children }) => {
   };
 
   const hasModule = (moduleName) => {
-      if (auth && auth.profile && auth.profile.modules) {
-          return auth.profile.modules.some(module => module.name === moduleName);
+      console.log('[AuthContext] hasModule called for:', moduleName);
+      console.log('[AuthContext] auth object:', auth);
+      console.log('[AuthContext] auth.profile:', auth?.profile);
+      console.log('[AuthContext] auth.modules:', auth?.modules);
+      console.log('[AuthContext] auth.profile.modules:', auth?.profile?.modules);
+      
+      // Check multiple possible locations for modules
+      let modules = null;
+      if (auth?.modules) {
+          modules = auth.modules;
+      } else if (auth?.profile?.modules) {
+          modules = auth.profile.modules;
+      } else if (auth?.profile?.permissions) {
+          modules = auth.profile.permissions;
+      } else if (auth?.permissions) {
+          modules = auth.permissions;
       }
+      
+      console.log('[AuthContext] Found modules:', modules);
+      
+      if (modules) {
+          const result = modules.some(module => {
+              const moduleNameToCheck = module.name || module;
+              return moduleNameToCheck === moduleName;
+          });
+          console.log('[AuthContext] hasModule result for', moduleName, ':', result);
+          return result;
+      }
+      
+      console.log('[AuthContext] hasModule returning false for', moduleName, '- no modules found');
       return false;
   };
 

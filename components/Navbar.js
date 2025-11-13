@@ -38,7 +38,7 @@ const Navbar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
-  const { logoUrl } = useBranding();
+  // const { logoUrl } = useBranding(); // Bypassed to avoid casting issues
   const [dropdownVisible, setDropdownVisible] = useState(false);
 
   const handleLogout = () => {
@@ -50,7 +50,10 @@ const Navbar = () => {
     <View style={styles.navContainer}>
       <View style={styles.nav}>
         <View style={styles.brandContainer}>
-          <Image source={logoUrl} style={styles.avatar} />
+          <Image 
+            source={require('../assets/images/fish.jpg')}
+            style={styles.avatar} 
+          />
           <Text style={styles.brand}>The FISHERMAN</Text>
         </View>
         
@@ -61,11 +64,11 @@ const Navbar = () => {
             {user ? (
               <>
             <NavLink href="forum" text="Forum" iconName="comments" pathname={pathname} />
-            <NavLink href="contribute" text="Submit" iconName="plus-circle" pathname={pathname} />
+            <NavLink href="contribute" text="Request" iconName="plus-circle" pathname={pathname} />
             <View style={styles.userMenuContainer}>
           <TouchableOpacity style={styles.userMenuButton} onPress={() => setDropdownVisible(!dropdownVisible)}>
                         {user?.profile?.avatar ? (
-              <Image source={{ uri: user.profile.avatar }} style={styles.userAvatar} />
+              <Image source={{ uri: String(user.profile.avatar) }} style={styles.userAvatar} />
             ) : (
               <FontAwesome name="user-circle" size={18} color="#333" />
             )}
@@ -237,7 +240,6 @@ const styles = StyleSheet.create({
   navLinkTextActive: {
     color: '#007BFF',
     fontWeight: '700',
-    letterSpacing: '0.3px',
   },
   userMenuContainer: {
     position: 'relative',
