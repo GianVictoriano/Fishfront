@@ -508,7 +508,7 @@ export default function NewsScreen() {
               <TouchableOpacity 
                 key={article.id}
                 style={styles.articleCard}
-                onPress={() => router.push(`/news/article/${article.id}`)}
+                onPress={() => router.push(`/news/article/native_article/${article.id}`)}
                 activeOpacity={0.7}
               >
                 <Image 

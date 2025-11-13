@@ -134,7 +134,7 @@ const HomeScreen = () => {
           ) : (
             <View style={{marginTop:12}}>
               {trending.map(item => (
-                <TouchableOpacity key={item.id} onPress={() => router.push(`/news/article/${item.id}`)} style={styles.trendingCard}>
+                <TouchableOpacity key={item.id} onPress={() => router.push(`/news/article/native_article/${item.id}`)} style={styles.trendingCard}>
                   <Image source={{ uri: item.image }} style={styles.trendingImage} />
                   <Text style={styles.trendingTitle} numberOfLines={2}>{item.title}</Text>
                 </TouchableOpacity>

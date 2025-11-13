@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import apiClient from '../utils/api';
 import { useRouter } from 'expo-router';
 
@@ -34,7 +34,16 @@ export default function LatestNewsSidebar({ genre, currentId }) {
   return (
     <View style={{ marginTop: 8 }}>
       {latest.map(article => (
-        <TouchableOpacity key={article.id} onPress={() => router.push(`/news/article/${article.id}`)} style={{ marginBottom: 12 }}>
+        <TouchableOpacity 
+          key={article.id} 
+          onPress={() => {
+            const route = Platform.OS === 'web' 
+              ? `/news/article/${article.id}` 
+              : `/news/article/native_article/${article.id}`;
+            router.push(route);
+          }} 
+          style={{ marginBottom: 12 }}
+        >
           <Text style={{ fontWeight: '600', color: '#232323', fontSize: 14 }} numberOfLines={2}>{article.title}</Text>
           <Text style={{ color: '#888', fontSize: 11 }}>{article.published_at ? new Date(article.published_at).toLocaleDateString() : ''}</Text>
         </TouchableOpacity>

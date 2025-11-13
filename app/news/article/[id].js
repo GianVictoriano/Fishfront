@@ -25,6 +25,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import useArticleTracking from '../../../hooks/useArticleTracking';
 import { MaterialIcons, Feather } from '@expo/vector-icons';
 
+// Redirect mobile traffic to native article view
+if (Platform.OS !== 'web') {
+  const router = useRouter();
+  const { id } = useLocalSearchParams();
+  router.replace(`/news/article/native_article/${id}`);
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -938,22 +945,6 @@ export default function ArticleDetail() {
       return <TDefaultRenderer {...props} source={{ uri: imageSrc }} />;
     },
   };
-
-  // Debug: Log the HTML content to see image URLs
-  useEffect(() => {
-    if (article && article.content) {
-      console.log('📝 Article HTML content:', article.content);
-      
-      // Extract all image sources from the HTML
-      const imgRegex = /<img[^>]+src="([^"]+)"/g;
-      const matches = [];
-      let match;
-      while ((match = imgRegex.exec(article.content)) !== null) {
-        matches.push(match[1]);
-      }
-      console.log('🖼️ Found image URLs in HTML:', matches);
-    }
-  }, [article]);
 
   return (
     <SafeAreaView style={styles.container}>
