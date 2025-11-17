@@ -60,7 +60,9 @@ const Contribute = () => {
   const [showEligibilityModal, setShowEligibilityModal] = useState(false);
   const [eventDate, setEventDate] = useState('');
   const [eventLocation, setEventLocation] = useState('');
-  const [numJournalists, setNumJournalists] = useState('1');
+  const [numWriters, setNumWriters] = useState('1');
+  const [numPhotographers, setNumPhotographers] = useState('1');
+  const [department, setDepartment] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDateErrorModal, setShowDateErrorModal] = useState(false);
@@ -92,9 +94,13 @@ const Contribute = () => {
     if (submissionType === 'coverage') {
       if (!eventDate) newErrors.eventDate = 'Event date is required';
       if (!eventLocation.trim()) newErrors.eventLocation = 'Event location is required';
-      if (!numJournalists || parseInt(numJournalists) < 1) {
-        newErrors.numJournalists = 'Please specify number of journalists (minimum 1)';
+      if (!numWriters || parseInt(numWriters) < 1) {
+        newErrors.numWriters = 'Please specify number of writers (minimum 1)';
       }
+      if (!numPhotographers || parseInt(numPhotographers) < 0) {
+        newErrors.numPhotographers = 'Please specify number of photographers (minimum 0)';
+      }
+      if (!department.trim()) newErrors.department = 'Department is required';
     }
 
     // Validate documentation-specific fields (if any needed in future)
@@ -120,7 +126,9 @@ const Contribute = () => {
     if (type !== 'coverage') {
       setEventDate('');
       setEventLocation('');
-      setNumJournalists('1');
+      setNumWriters('1');
+      setNumPhotographers('1');
+      setDepartment('');
     }
 
     // Reset documentation fields when switching to different type
@@ -155,7 +163,9 @@ const Contribute = () => {
       // Reset coverage fields when going back
       setEventDate('');
       setEventLocation('');
-      setNumJournalists('1');
+      setNumWriters('1');
+      setNumPhotographers('1');
+      setDepartment('');
       setStep('select');
     } else {
       router.back();
@@ -232,7 +242,9 @@ const Contribute = () => {
       if (submissionType === 'coverage') {
         formData.append('event_date', eventDate);
         formData.append('event_location', eventLocation);
-        formData.append('num_journalists', numJournalists);
+        formData.append('num_writers', numWriters);
+        formData.append('num_photographers', numPhotographers);
+        formData.append('department', department);
       }
 
       // Only append files if they exist
@@ -400,14 +412,14 @@ const Contribute = () => {
                 </View>
 
                 <View style={styles.detailField}>
-                  <Text style={styles.fieldLabel}>No. of Journalists</Text>
+                  <Text style={styles.fieldLabel}>No. of Writers</Text>
                   <View style={styles.journalistsContainer}>
                     <TouchableOpacity
                       style={styles.arrowButton}
                       onPress={() => {
-                        const current = parseInt(numJournalists) || 1;
+                        const current = parseInt(numWriters) || 1;
                         if (current > 1) {
-                          setNumJournalists((current - 1).toString());
+                          setNumWriters((current - 1).toString());
                         }
                       }}
                     >
@@ -415,9 +427,9 @@ const Contribute = () => {
                     </TouchableOpacity>
 
                     <TextInput
-                      style={[styles.journalistInput, errors.numJournalists && styles.inputError]}
-                      value={numJournalists}
-                      onChangeText={setNumJournalists}
+                      style={[styles.journalistInput, errors.numWriters && styles.inputError]}
+                      value={numWriters}
+                      onChangeText={setNumWriters}
                       placeholder="1"
                       placeholderTextColor="#94a3b8"
                       keyboardType="numeric"
@@ -427,18 +439,68 @@ const Contribute = () => {
                     <TouchableOpacity
                       style={styles.arrowButton}
                       onPress={() => {
-                        const current = parseInt(numJournalists) || 1;
-                        setNumJournalists((current + 1).toString());
+                        const current = parseInt(numWriters) || 1;
+                        setNumWriters((current + 1).toString());
                       }}
                     >
                       <MaterialIcons name="keyboard-arrow-up" size={20} color="#4f46e5" />
                     </TouchableOpacity>
                   </View>
                 </View>
+
+                <View style={styles.detailField}>
+                  <Text style={styles.fieldLabel}>No. of Photographers</Text>
+                  <View style={styles.journalistsContainer}>
+                    <TouchableOpacity
+                      style={styles.arrowButton}
+                      onPress={() => {
+                        const current = parseInt(numPhotographers) || 0;
+                        if (current > 0) {
+                          setNumPhotographers((current - 1).toString());
+                        }
+                      }}
+                    >
+                      <MaterialIcons name="keyboard-arrow-down" size={20} color="#4f46e5" />
+                    </TouchableOpacity>
+
+                    <TextInput
+                      style={[styles.journalistInput, errors.numPhotographers && styles.inputError]}
+                      value={numPhotographers}
+                      onChangeText={setNumPhotographers}
+                      placeholder="0"
+                      placeholderTextColor="#94a3b8"
+                      keyboardType="numeric"
+                      textAlign="center"
+                    />
+
+                    <TouchableOpacity
+                      style={styles.arrowButton}
+                      onPress={() => {
+                        const current = parseInt(numPhotographers) || 0;
+                        setNumPhotographers((current + 1).toString());
+                      }}
+                    >
+                      <MaterialIcons name="keyboard-arrow-up" size={20} color="#4f46e5" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.detailField}>
+                  <Text style={styles.fieldLabel}>Department</Text>
+                  <TextInput
+                    style={[styles.input, errors.department && styles.inputError]}
+                    value={department}
+                    onChangeText={setDepartment}
+                    placeholder="Enter department name"
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
               </View>
 
               {errors.eventDate && <Text style={[styles.errorText, {marginTop: 4}]}>{errors.eventDate}</Text>}
-              {errors.numJournalists && <Text style={[styles.errorText, {marginTop: 4}]}>{errors.numJournalists}</Text>}
+              {errors.numWriters && <Text style={[styles.errorText, {marginTop: 4}]}>{errors.numWriters}</Text>}
+              {errors.numPhotographers && <Text style={[styles.errorText, {marginTop: 4}]}>{errors.numPhotographers}</Text>}
+              {errors.department && <Text style={[styles.errorText, {marginTop: 4}]}>{errors.department}</Text>}
               {errors.eventLocation && <Text style={[styles.errorText, {marginTop: 4}]}>{errors.eventLocation}</Text>}
             </View>
           </>

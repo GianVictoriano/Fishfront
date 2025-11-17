@@ -715,13 +715,6 @@ export default function CollaborateScreen() {
         console.log('handleWordDocumentUpload: Created mobile file');
       }
       
-      // Send review message
-      console.log('handleWordDocumentUpload: Sending message...');
-      const messageText = `${currentUser.name} has sent a converted document for review: ${textFileName}`;
-      const response = await apiClient.post(`/group-chats/${selectedGroupId}/messages`, { message: messageText });
-      setMessages(prevMessages => [response.data, ...prevMessages]);
-      console.log('handleWordDocumentUpload: Message sent');
-
       // Upload the text file to review_content
       console.log('handleWordDocumentUpload: Creating FormData...');
       const formData = new FormData();
@@ -1023,15 +1016,13 @@ export default function CollaborateScreen() {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     
-    // Send notification message
-    const reviewer = groupMembers.find(m => m.id === reviewerId);
-    const messageText = `${currentUser.name} has sent an image to ${reviewer?.name || 'a reviewer'} for review.`;
-    await apiClient.post(`/group-chats/${selectedGroupId}/messages`, { message: messageText });
+    // Chat message notification removed - only modal confirmation shown
     
     // Refresh messages and pending uploads
     await checkPendingUploads();
     fetchMessages();
     
+    const reviewer = groupMembers.find(m => m.id === reviewerId);
     setFeedbackModalConfig({
       message: `Image sent to ${reviewer?.name || 'reviewer'} for review!`,
       type: 'success'
@@ -1082,12 +1073,6 @@ export default function CollaborateScreen() {
         };
       }
       
-      // Send review message
-      const reviewer = groupMembers.find(m => m.id === reviewerId);
-      const messageText = `${currentUser.name} has sent a document to ${reviewer?.name || 'a reviewer'} for review: ${textFileName}`;
-      const response = await apiClient.post(`/group-chats/${selectedGroupId}/messages`, { message: messageText });
-      setMessages(prevMessages => [response.data, ...prevMessages]);
-
       // Upload the text file to review_content
       const formData = new FormData();
       if (Platform.OS === 'web') {
@@ -1127,6 +1112,7 @@ export default function CollaborateScreen() {
       
       await checkPendingUploads();
       
+      const reviewer = groupMembers.find(m => m.id === reviewerId);
       setFeedbackModalConfig({
         message: `Document sent to ${reviewer?.name || 'reviewer'} for review!`,
         type: 'success'
@@ -1228,13 +1214,6 @@ export default function CollaborateScreen() {
       type: 'other' // You can make this selectable later
     });
     
-    // Send notification message
-    const currentChat = groupChats.find(g => g.id === selectedGroupId);
-    const leadOrganizerName = currentChat?.folio?.lead_organizer?.name || 'the lead organizer';
-    const userName = currentUser?.name || currentUser?.email || 'A user';
-    const messageText = `${userName} has submitted an image to the folio for review by ${leadOrganizerName}.`;
-    await apiClient.post(`/group-chats/${selectedGroupId}/messages`, { message: messageText });
-    
     // Refresh messages
     fetchMessages();
     
@@ -1297,14 +1276,8 @@ export default function CollaborateScreen() {
         };
       }
       
-      // Send notification message
-      const currentChat = groupChats.find(g => g.id === selectedGroupId);
-      const leadOrganizerName = currentChat?.folio?.lead_organizer?.name || 'the lead organizer';
-      const userName = currentUser?.name || currentUser?.email || 'A user';
-      const messageText = `${userName} has submitted a document to the folio for review by ${leadOrganizerName}: ${textFileName}`;
-      const response = await apiClient.post(`/group-chats/${selectedGroupId}/messages`, { message: messageText });
-      setMessages(prevMessages => [response.data, ...prevMessages]);
-
+      // Chat message notification removed - only modal confirmation shown
+      
       // Upload the text file to review_content
       const formData = new FormData();
       if (Platform.OS === 'web') {
@@ -1439,9 +1412,7 @@ export default function CollaborateScreen() {
   const handleSendReviewMessage = async () => {
     setIsPlagModalVisible(false);
     try {
-      const messageText = `${currentUser.name} has sent a draft for review.`;
-      const response = await apiClient.post(`/group-chats/${selectedGroupId}/messages`, { message: messageText });
-      setMessages(prevMessages => [response.data, ...prevMessages]);
+      // Chat message notification removed - only modal confirmation shown
 
       if (uploadedFile) {
         const formData = new FormData();

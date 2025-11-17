@@ -76,6 +76,16 @@ const WebDropdown = ({ isVisible, onClose, onLogout, isAdmin, router }) => {
           <FontAwesome name="user" size={13} style={styles.icon} />
           <span style={styles.text}>Profile</span>
         </div>
+        <div 
+          style={styles.item}
+          onClick={() => {
+            router.push('/my-requests');
+            onClose();
+          }}
+        >
+          <FontAwesome name="list" size={13} style={styles.icon} />
+          <span style={styles.text}>My Requests</span>
+        </div>
         {isAdmin && (
           <div 
             style={styles.item}

@@ -28,8 +28,108 @@ export default function ForumScreen() {
   const [postingComment, setPostingComment] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [reportingItemId, setReportingItemId] = useState(null);
+  
+  // Anti-spam states
+  const [userLastCommentTime, setUserLastCommentTime] = useState({});
+  const [userCommentCount, setUserCommentCount] = useState({});
+  const [suspiciousUsers, setSuspiciousUsers] = useState(new Set());
+  
+  // Modal states for notifications
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState({
+    title: '',
+    message: '',
+    type: 'info' // 'info', 'warning', 'error', 'success'
+  });
 
   const router = useRouter();
+
+  // Modal notification utility
+  const showModal = (title, message, type = 'info') => {
+    setModalConfig({ title, message, type });
+    setModalVisible(true);
+  };
+
+  // Anti-spam utility functions
+  const isSpamming = (userId) => {
+    const now = Date.now();
+    const lastCommentTime = userLastCommentTime[userId] || 0;
+    const commentCount = userCommentCount[userId] || 0;
+    
+    // Rate limiting: no more than 3 comments per minute
+    if (now - lastCommentTime < 20000 && commentCount >= 3) {
+      return true;
+    }
+    
+    // No more than 10 comments per hour
+    if (now - lastCommentTime < 3600000 && commentCount >= 10) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  const updateUserCommentStats = (userId) => {
+    const now = Date.now();
+    const lastCommentTime = userLastCommentTime[userId] || 0;
+    
+    // Reset count if more than an hour has passed
+    if (now - lastCommentTime > 3600000) {
+      setUserCommentCount(prev => ({ ...prev, [userId]: 1 }));
+    } else {
+      setUserCommentCount(prev => ({ ...prev, [userId]: (prev[userId] || 0) + 1 }));
+    }
+    
+    setUserLastCommentTime(prev => ({ ...prev, [userId]: now }));
+  };
+
+  const detectSuspiciousActivity = (topic) => {
+    // Check for unusual patterns that might indicate spam
+    const commentCount = topic.comments?.length || 0;
+    const uniqueUsers = new Set(topic.comments?.map(c => c.user_id || c.user?.id).filter(Boolean));
+    
+    // Only flag for extreme cases: Many comments from very few users
+    if (commentCount > 50 && uniqueUsers.size < 2) {
+      return true;
+    }
+    
+    // Only flag for extreme rapid commenting
+    if (topic.comments && topic.comments.length > 0) {
+      const recentComments = topic.comments.filter(c => {
+        const commentTime = new Date(c.created_at).getTime();
+        const now = Date.now();
+        return now - commentTime < 3600000; // Last hour
+      });
+      
+      if (recentComments.length > 100) {
+        return true;
+      }
+    }
+    
+    return false;
+  };
+
+  const calculateTopicScore = (topic) => {
+    const commentCount = topic.comments?.length || 0;
+    const uniqueUsers = new Set(topic.comments?.map(c => c.user_id || c.user?.id).filter(Boolean));
+    const topicAge = Date.now() - new Date(topic.created_at).getTime();
+    const hoursOld = topicAge / (1000 * 60 * 60);
+    
+    // Simple, visible scoring system
+    let score = commentCount * 1 + (uniqueUsers.size * 3); // Each comment = 1 point, each unique user = 3 points
+    
+    // Mild time decay: only significant after 3 days
+    if (hoursOld > 72) {
+      score = score * Math.exp(-hoursOld / 336); // Much gentler decay over 2 weeks
+    }
+    
+    // Moderate penalty for obvious spam (not as harsh)
+    if (detectSuspiciousActivity(topic)) {
+      score = score * 0.3; // 70% reduction instead of 90%
+    }
+    
+    return Math.round(score * 10) / 10; // Round to 1 decimal place
+  };
 
   useEffect(() => {
     let filtered = topics;
@@ -91,10 +191,10 @@ export default function ForumScreen() {
         }
       }
       
-      alert('Content has been reported. Thank you for your feedback.');
+      showModal('Reported', 'Content has been reported. Thank you for your feedback.', 'success');
     } catch (error) {
       console.error('Error reporting content:', error);
-      alert('Failed to report content. Please try again.');
+      showModal('Error', 'Failed to report content. Please try again.', 'error');
     } finally {
       setReporting(false);
       setReportingItemId(null);
@@ -127,7 +227,7 @@ export default function ForumScreen() {
         response: error.response?.data,
         status: error.response?.status,
       });
-      alert(`Error creating topic: ${error.response?.data?.message || error.message}`);
+      showModal('Error', `Error creating topic: ${error.response?.data?.message || error.message}`, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -381,12 +481,37 @@ export default function ForumScreen() {
                     style={styles.addCommentButton}
                     onPress={async () => {
                       if (!commentText.trim()) return;
+                      
+                      // Get current user ID (you'll need to implement this based on your auth system)
+                      const currentUserId = '1'; // Replace with actual user ID
+                      
+                      // Check if user is spamming
+                      if (isSpamming(currentUserId)) {
+                        showModal('Rate Limit', 'Please wait before posting more comments. This helps prevent spam.', 'warning');
+                        return;
+                      }
+                      
+                      // Check for duplicate/similar content
+                      const recentComments = selectedTopic.comments?.slice(-5) || [];
+                      const isDuplicate = recentComments.some(comment => 
+                        comment.body.toLowerCase().trim() === commentText.toLowerCase().trim()
+                      );
+                      
+                      if (isDuplicate) {
+                        showModal('Duplicate Content', 'This comment appears to be a duplicate. Please write something original.', 'warning');
+                        return;
+                      }
+                      
                       setPostingComment(true);
                       try {
                         await apiClient.post(`/topics/${selectedTopic.id}/comments`, { 
                           body: commentText,
                           secret: isCommentAnonymous ? 1 : 0
                         });
+                        
+                        // Update user comment stats
+                        updateUserCommentStats(currentUserId);
+                        
                         // Optimistically update comment count in topics list
                         setTopics(prevTopics => prevTopics.map(topic =>
                           topic.id === selectedTopic.id
@@ -409,7 +534,7 @@ export default function ForumScreen() {
                         setCommentText("");
                       } catch (error) {
                         console.error('Failed to post comment:', error);
-                        alert('Failed to post comment. Please try again.');
+                        showModal('Error', 'Failed to post comment. Please try again.', 'error');
                       } finally {
                         setPostingComment(false);
                       }
@@ -482,25 +607,98 @@ export default function ForumScreen() {
           <Text style={styles.rightPanelTitle}>Popular Topics</Text>
           {topics
             .slice()
-            .sort((a, b) => (b.comments?.length || 0) - (a.comments?.length || 0))
+            .sort((a, b) => calculateTopicScore(b) - calculateTopicScore(a))
             .slice(0, 5)
-            .map(topic => (
-              <TouchableOpacity
-                key={topic.id}
-                style={[
-                  styles.recentTopicItem,
-                  selectedTopic && selectedTopic.id === topic.id ? styles.activePopularTopic : null
-                ]}
-                onPress={() => setSelectedTopic(topic)}
-              >
-                <View style={styles.recentTopicRow}>
-                  <Text style={styles.recentTopicTitle} numberOfLines={1}>{topic.title}</Text>
-                  <Text style={styles.recentTopicCount}>{topic.comments?.length || 0}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+            .map(topic => {
+              const isSuspicious = detectSuspiciousActivity(topic);
+              const score = calculateTopicScore(topic);
+              const uniqueUsers = new Set(topic.comments?.map(c => c.user_id || c.user?.id).filter(Boolean));
+              return (
+                <TouchableOpacity
+                  key={topic.id}
+                  style={[
+                    styles.recentTopicItem,
+                    selectedTopic && selectedTopic.id === topic.id ? styles.activePopularTopic : null,
+                    isSuspicious ? styles.suspiciousTopic : null
+                  ]}
+                  onPress={() => setSelectedTopic(topic)}
+                >
+                  <View style={styles.recentTopicRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.recentTopicTitle} numberOfLines={1}>
+                        {topic.title}
+                        {isSuspicious && (
+                          <Text style={styles.spamWarning}> ⚠️</Text>
+                        )}
+                      </Text>
+                      <Text style={styles.topicScore}>
+                        Score: {score} ({topic.comments?.length || 0} comments, {uniqueUsers.size} users)
+                        {isSuspicious && (
+                          <Text style={styles.spamPenaltyText}> • 70% penalty</Text>
+                        )}
+                      </Text>
+                    </View>
+                    <Text style={[
+                      styles.recentTopicCount,
+                      isSuspicious ? styles.suspiciousCount : null
+                    ]}>
+                      {topic.comments?.length || 0}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          <View style={styles.spamInfo}>
+            <Text style={styles.spamInfoText}>
+              ⚠️ Topics with unusual activity may be penalized
+            </Text>
+          </View>
         </View>
       </View>
+      
+      {/* Notification Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[
+            styles.modalContainer,
+            modalConfig.type === 'error' && styles.modalError,
+            modalConfig.type === 'warning' && styles.modalWarning,
+            modalConfig.type === 'success' && styles.modalSuccess
+          ]}>
+            <View style={styles.modalHeader}>
+              <Text style={[
+                styles.modalTitle,
+                modalConfig.type === 'error' && styles.modalTitleError,
+                modalConfig.type === 'warning' && styles.modalTitleWarning,
+                modalConfig.type === 'success' && styles.modalTitleSuccess
+              ]}>
+                {modalConfig.title}
+              </Text>
+            </View>
+            <View style={styles.modalBody}>
+              <Text style={styles.modalMessage}>{modalConfig.message}</Text>
+            </View>
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  modalConfig.type === 'error' && styles.modalButtonError,
+                  modalConfig.type === 'warning' && styles.modalButtonWarning,
+                  modalConfig.type === 'success' && styles.modalButtonSuccess
+                ]}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.modalButtonText}>OK</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -754,6 +952,43 @@ const styles = StyleSheet.create({
       textAlign: 'center',
       fontWeight: 'bold',
     },
+    suspiciousTopic: {
+      backgroundColor: '#fff3cd',
+      borderColor: '#ffeaa7',
+      borderWidth: 1,
+    },
+    suspiciousCount: {
+      backgroundColor: '#f8d7da',
+      color: '#721c24',
+    },
+    spamWarning: {
+      color: '#f39c12',
+      fontSize: 12,
+    },
+    topicScore: {
+      fontSize: 11,
+      color: '#888',
+      marginTop: 2,
+    },
+    spamPenaltyText: {
+      color: '#dc3545',
+      fontSize: 10,
+      fontStyle: 'italic',
+    },
+    spamInfo: {
+      marginTop: 16,
+      padding: 12,
+      backgroundColor: '#f8f9fa',
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#e9ecef',
+    },
+    spamInfoText: {
+      fontSize: 12,
+      color: '#6c757d',
+      textAlign: 'center',
+      fontStyle: 'italic',
+    },
     outerContainer: {
       flex: 1,
       flexDirection: 'row',
@@ -940,5 +1175,92 @@ const styles = StyleSheet.create({
     anonymousLabel: {
       fontSize: 14,
       color: '#666',
+    },
+    // Modal styles
+    modalOverlay: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    modalContainer: {
+      backgroundColor: '#fff',
+      borderRadius: 12,
+      padding: 0,
+      width: '80%',
+      maxWidth: 400,
+      minWidth: 300,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    modalError: {
+      borderTopWidth: 4,
+      borderTopColor: '#dc3545',
+    },
+    modalWarning: {
+      borderTopWidth: 4,
+      borderTopColor: '#ffc107',
+    },
+    modalSuccess: {
+      borderTopWidth: 4,
+      borderTopColor: '#28a745',
+    },
+    modalHeader: {
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: '#eee',
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: '#333',
+      textAlign: 'center',
+    },
+    modalTitleError: {
+      color: '#dc3545',
+    },
+    modalTitleWarning: {
+      color: '#856404',
+    },
+    modalTitleSuccess: {
+      color: '#155724',
+    },
+    modalBody: {
+      padding: 20,
+    },
+    modalMessage: {
+      fontSize: 16,
+      color: '#666',
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    modalFooter: {
+      padding: 16,
+      borderTopWidth: 1,
+      borderTopColor: '#eee',
+    },
+    modalButton: {
+      backgroundColor: '#007bff',
+      paddingVertical: 10,
+      paddingHorizontal: 24,
+      borderRadius: 6,
+      alignSelf: 'center',
+    },
+    modalButtonError: {
+      backgroundColor: '#dc3545',
+    },
+    modalButtonWarning: {
+      backgroundColor: '#ffc107',
+    },
+    modalButtonSuccess: {
+      backgroundColor: '#28a745',
+    },
+    modalButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '600',
     },
   });

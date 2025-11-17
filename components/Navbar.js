@@ -109,6 +109,10 @@ const Navbar = () => {
                 <FontAwesome name="user" size={16} style={styles.dropdownIcon} />
                 <Text style={styles.dropdownText}>Profile</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={styles.dropdownItem} onPress={() => { router.push('/my-requests'); setDropdownVisible(false); }}>
+                <FontAwesome name="list" size={16} style={styles.dropdownIcon} />
+                <Text style={styles.dropdownText}>My Requests</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.dropdownItem} onPress={handleLogout}>
                 <FontAwesome name="sign-out" size={16} style={styles.dropdownIcon} />
                 <Text style={styles.dropdownText}>Logout</Text>

@@ -55,7 +55,8 @@ export default function ManageRequestsScreen() {
               activityTitle: request.title,
               activityDate: formattedDate,
               activityLocation: request.event_location || '',
-              activityRequiredMembers: request.num_journalists?.toString() || '1',
+              activityRequiredWriters: (request.num_writers || 1).toString(),
+              activityRequiredPhotographers: (request.num_photographers || 0).toString(),
             }
           });
         } else {
@@ -161,8 +162,13 @@ export default function ManageRequestsScreen() {
               </View>
               
               <View style={styles.detailRow}>
-                <MaterialIcons name="group" size={16} color="#666" />
-                <Text style={styles.detail}>Journalists: {item.num_journalists || 1}</Text>
+                <MaterialIcons name="people" size={16} color="#666" />
+                <Text style={styles.detail}>Writers: {item.num_writers || 1}, Photographers: {item.num_photographers || 0}</Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <MaterialIcons name="business" size={16} color="#666" />
+                <Text style={styles.detail}>Department: {item.department || 'N/A'}</Text>
               </View>
 
               <Text style={styles.submittedDate}>
@@ -245,8 +251,18 @@ export default function ManageRequestsScreen() {
                 </View>
 
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalLabel}>Number of Journalists</Text>
-                  <Text style={styles.modalValue}>{detailsModal.request.num_journalists || 1}</Text>
+                  <Text style={styles.modalLabel}>Number of Writers</Text>
+                  <Text style={styles.modalValue}>{detailsModal.request.num_writers || 1}</Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalLabel}>Number of Photographers</Text>
+                  <Text style={styles.modalValue}>{detailsModal.request.num_photographers || 0}</Text>
+                </View>
+
+                <View style={styles.modalSection}>
+                  <Text style={styles.modalLabel}>Department</Text>
+                  <Text style={styles.modalValue}>{detailsModal.request.department || 'N/A'}</Text>
                 </View>
 
                 {detailsModal.request.content && (

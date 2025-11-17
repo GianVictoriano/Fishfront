@@ -43,7 +43,8 @@ export default function CreateContentScreen() {
   const [activityTitle, setActivityTitle] = useState('');
   const [activityDate, setActivityDate] = useState('');
   const [activityLocation, setActivityLocation] = useState('');
-  const [activityRequiredMembers, setActivityRequiredMembers] = useState('1');
+  const [activityRequiredWriters, setActivityRequiredWriters] = useState('1');
+  const [activityRequiredPhotographers, setActivityRequiredPhotographers] = useState('0');
   const [showActivityDatePicker, setShowActivityDatePicker] = useState(false);
   const [selectedActivityDate, setSelectedActivityDate] = useState(new Date());
   const [selectedActivityMembers, setSelectedActivityMembers] = useState([]);
@@ -81,7 +82,8 @@ export default function CreateContentScreen() {
       if (params.activityTitle) setActivityTitle(params.activityTitle);
       if (params.activityDate) setActivityDate(params.activityDate);
       if (params.activityLocation) setActivityLocation(params.activityLocation);
-      if (params.activityRequiredMembers) setActivityRequiredMembers(params.activityRequiredMembers);
+      if (params.activityRequiredWriters) setActivityRequiredWriters(params.activityRequiredWriters);
+      if (params.activityRequiredPhotographers) setActivityRequiredPhotographers(params.activityRequiredPhotographers);
       
       // Open the activity panel
       setShowActivityPanel(true);
@@ -211,7 +213,8 @@ export default function CreateContentScreen() {
     setActivityTitle('');
     setActivityDate('');
     setActivityLocation('');
-    setActivityRequiredMembers('1');
+    setActivityRequiredWriters('1');
+    setActivityRequiredPhotographers('0');
     setSelectedActivityMembers([]);
     setActivitySearchTerm('');
     setActivitySearchByPosition(false);
@@ -326,8 +329,10 @@ export default function CreateContentScreen() {
     }
 
     // Check if selected members are fewer than required members
-    const requiredCount = parseInt(activityRequiredMembers) || 0;
-    if (!skipConfirmation && requiredCount > 0 && selectedActivityMembers.length < requiredCount) {
+    const requiredWriters = parseInt(activityRequiredWriters) || 0;
+    const requiredPhotographers = parseInt(activityRequiredPhotographers) || 0;
+    const totalRequired = requiredWriters + requiredPhotographers;
+    if (!skipConfirmation && totalRequired > 0 && selectedActivityMembers.length < totalRequired) {
       setActivityConfirmModalVisible(true);
       return;
     }
@@ -336,7 +341,9 @@ export default function CreateContentScreen() {
       title: activityTitle,
       date: activityDate,
       location: activityLocation,
-      required_members: parseInt(activityRequiredMembers) || null,
+      required_writers: parseInt(activityRequiredWriters) || null,
+      required_photographers: parseInt(activityRequiredPhotographers) || null,
+      required_members: (parseInt(activityRequiredWriters) || 0) + (parseInt(activityRequiredPhotographers) || 0),
       members: selectedActivityMembers.map(m => m.id),
     };
 
@@ -833,15 +840,31 @@ export default function CreateContentScreen() {
 
                   <View style={styles.inputGroup}>
                     <View style={styles.labelContainer}>
-                      <Feather name="users" size={16} color="#1a237e" />
-                      <Text style={styles.label}>Required Members</Text>
+                      <Feather name="edit" size={16} color="#1a237e" />
+                      <Text style={styles.label}>Required Writers</Text>
                       <Text style={styles.optionalBadge}>Optional</Text>
                     </View>
                     <TextInput
                       style={styles.input}
-                      placeholder="Number of required members"
-                      value={activityRequiredMembers}
-                      onChangeText={setActivityRequiredMembers}
+                      placeholder="Number of writers needed"
+                      value={activityRequiredWriters}
+                      onChangeText={setActivityRequiredWriters}
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="numeric"
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelContainer}>
+                      <Feather name="camera" size={16} color="#1a237e" />
+                      <Text style={styles.label}>Required Photographers</Text>
+                      <Text style={styles.optionalBadge}>Optional</Text>
+                    </View>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Number of photographers needed"
+                      value={activityRequiredPhotographers}
+                      onChangeText={setActivityRequiredPhotographers}
                       placeholderTextColor="#9CA3AF"
                       keyboardType="numeric"
                     />
@@ -1309,7 +1332,7 @@ export default function CreateContentScreen() {
             </View>
             <Text style={styles.feedbackTitle}>Insufficient Members</Text>
             <Text style={styles.feedbackMessage}>
-              You have selected {selectedActivityMembers.length} member(s), but {activityRequiredMembers} member(s) are required.
+              You have selected {selectedActivityMembers.length} member(s), but need {activityRequiredWriters} writer(s) and {activityRequiredPhotographers} photographer(s) ({(parseInt(activityRequiredWriters) || 0) + (parseInt(activityRequiredPhotographers) || 0)} total).
               {'\n\n'}Do you want to proceed anyway?
             </Text>
             

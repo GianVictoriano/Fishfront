@@ -463,10 +463,23 @@ export default function CreateArticleScreen() {
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
     
-    canvas.width = crop.width;
-    canvas.height = crop.height;
+    // Use higher resolution for better quality
+    const pixelRatio = window.devicePixelRatio || 1;
+    const scaledWidth = Math.floor(crop.width * scaleX);
+    const scaledHeight = Math.floor(crop.height * scaleY);
+    
+    // Set canvas size to actual pixel dimensions for better quality
+    canvas.width = scaledWidth * pixelRatio;
+    canvas.height = scaledHeight * pixelRatio;
     
     const ctx = canvas.getContext('2d');
+    
+    // Scale the context to match device pixel ratio for sharper images
+    ctx.scale(pixelRatio, pixelRatio);
+    
+    // Enable image smoothing for better quality
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     
     ctx.drawImage(
       image,
@@ -476,8 +489,8 @@ export default function CreateArticleScreen() {
       crop.height * scaleY,
       0,
       0,
-      crop.width,
-      crop.height
+      scaledWidth,
+      scaledHeight
     );
     
     return new Promise((resolve) => {
@@ -488,7 +501,7 @@ export default function CreateArticleScreen() {
         }
         blob.name = 'cropped-image.jpg';
         resolve(blob);
-      }, 'image/jpeg');
+      }, 'image/jpeg', 0.95); // Use 95% quality for better results
     });
   };
 
@@ -789,7 +802,8 @@ export default function CreateArticleScreen() {
                 const serverUrl = `${apiUrl?.replace('/api', '')}/storage/${uploadResult.data[0].file_path.replace('public/', '')}`;
                 uploadedImages.push({
                   originalSrc: src,
-                  serverUrl: serverUrl
+                  serverUrl: serverUrl,
+                  filePath: uploadResult.data[0].file_path // Include the file path for media association
                 });
                 console.log('Inline image uploaded successfully:', serverUrl);
               }
@@ -836,13 +850,18 @@ export default function CreateArticleScreen() {
 
       // Process inline images first (only on web platform)
       let processedContent = content;
+      const inlineImagePaths = []; // Store inline image paths for media association
+      
       if (Platform.OS === 'web') {
         console.log('Processing inline images...');
         const uploadedImages = await extractAndUploadInlineImages(content);
         
-        // Replace local image references with server URLs
-        uploadedImages.forEach(({ originalSrc, serverUrl }) => {
+        // Replace local image references with server URLs and collect file paths
+        uploadedImages.forEach(({ originalSrc, serverUrl, filePath }) => {
           processedContent = processedContent.replace(originalSrc, serverUrl);
+          if (filePath) {
+            inlineImagePaths.push(filePath);
+          }
         });
         
         console.log(`Processed ${uploadedImages.length} inline images`);
@@ -853,7 +872,7 @@ export default function CreateArticleScreen() {
       formData.append('title', title.trim());
       formData.append('content', processedContent.trim());
       formData.append('genre', genre || 'articles'); // Default to 'articles' if not selected
-      formData.append('status', 'draft');
+      formData.append('status', 'published');
       formData.append('post_to_facebook', publishToFacebook ? '1' : '0');
 
       console.log('Form data prepared, processing main images...');
@@ -902,6 +921,13 @@ export default function CreateArticleScreen() {
           }
         }
       }
+
+      // Add inline image paths as existing media for Facebook integration
+      inlineImagePaths.forEach(filePath => {
+        formData.append('existing_media[]', filePath);
+      });
+      
+      console.log(`Added ${inlineImagePaths.length} inline image paths to existing media`);
 
       // Get API URL and validate
       const apiUrl = process.env.EXPO_PUBLIC_API_URL;
