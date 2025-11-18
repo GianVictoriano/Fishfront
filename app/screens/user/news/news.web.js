@@ -1062,23 +1062,28 @@ export default function NewsScreen() {
       setDisplayedArticles(9);
 
       try {
-        // For tabs other than News and Creative, fetch featured (trending) content
-        const shouldUseFeatured = activeGenre !== 'News' && activeGenre !== 'Creative';
-        const url = shouldUseFeatured
-          ? `/public/trending-articles?genre=${activeGenre.toLowerCase()}`
-          : (activeGenre === 'News' ? '/public/articles' : `/public/articles?genre=${activeGenre.toLowerCase()}`);
+        const isFeaturedFetch = activeGenre !== 'News' && activeGenre !== 'Creative';
+        let url;
+        if (isFeaturedFetch) {
+          url = `/public/trending-articles?genre=${activeGenre.toLowerCase()}`; // use trending list for featured tabs
+        } else if (activeGenre === 'News') {
+          url = '/public/article-summaries'; // News tab: get all recent summaries without filter
+        } else {
+          // Creative tab
+          url = '/public/article-summaries?genre=creative';
+        }
 
         const res = await apiClient.get(url);
 
         if (isMounted && Array.isArray(res.data?.data)) {
           // Limit initial load to improve performance
-          const limit = shouldUseFeatured ? 20 : 15;
+          const limit = isFeaturedFetch ? 20 : 15;
           const mapped = res.data.data.slice(0, limit).map(article => ({
             id: article.id?.toString() || '',
             title: article.title,
-            excerpt: '', // Removed content display to reduce payload
-            image: article.media && article.media.length > 0
-              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`
+            excerpt: '',
+            image: article.image_path
+              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.image_path.replace('public/', '')}`
               : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
             date: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
             category: article.genre || 'News',

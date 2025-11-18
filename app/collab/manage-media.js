@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, forwardRef } from 'react';
+import { Modal } from 'react-native';
 import {
   View,
   Text,
@@ -11,10 +12,415 @@ import {
   RefreshControl,
   Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import api from '../../utils/api';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import apiClient from '../../utils/api';
+import { useBranding } from '~/context/BrandingContext';
+
+// --- Platform-Aware Rich Text Editor ---
+
+// Conditionally require the rich text editor only on native platforms
+let RichEditor, RichToolbar, actions;
+if (Platform.OS !== 'web') {
+  try {
+    const editorModule = require('react-native-pell-rich-editor');
+    RichEditor = editorModule.RichEditor;
+    RichToolbar = editorModule.RichToolbar;
+    actions = editorModule.actions;
+  } catch (e) {
+    console.error('Failed to load react-native-pell-rich-editor:', e);
+  }
+}
+
+const EditorPlaceholder = () => <View style={styles.editorPlaceholder} />;
+
+const NativeRichEditor = forwardRef((props, ref) => {
+  // This component will only be rendered on native, so direct use is safe.
+  if (!RichEditor) return <EditorPlaceholder />;
+  return <RichEditor ref={ref} {...props} />;
+});
+
+const NativeRichToolbar = ({ editor, onImageInsert }) => {
+  if (!RichToolbar || !actions) return null;
+  return (
+    <RichToolbar
+      editor={editor}
+      actions={[...Object.values(actions), 'insertImage']}
+      style={styles.richToolbar}
+      iconTint="#1a237e"
+      selectedIconTint="#3949ab"
+      onPressAddImage={onImageInsert}
+    />
+  );
+};
+
+// --- Custom Web Rich Text Editor (Dependency-Free) ---
+
+const SimpleWebEditor = ({ value, onChange, onImageInsert, onEditorRef }) => {
+  const editorRef = useRef(null);
+  const [activeStyles, setActiveStyles] = useState(new Set());
+  const {colors} = useBranding();
+  const [isInternalUpdate, setIsInternalUpdate] = useState(false);
+  
+  console.log('🔧 SimpleWebEditor rendered with value:', value);
+  console.log('📊 Value type:', typeof value);
+  console.log('📏 Value length:', value?.length);
+  
+  // Pass editor ref to parent component
+  useEffect(() => {
+    if (onEditorRef) {
+      onEditorRef(editorRef);
+    }
+  }, [editorRef, onEditorRef]);
+  
+  // Handle external value changes without overriding user input
+  const handleContentChange = () => {
+    if (editorRef.current) {
+      setIsInternalUpdate(true);
+      const newContent = editorRef.current.innerHTML;
+      onChange(newContent);
+    }
+  };
+
+  const addImageDeleteHandlers = (editor) => {
+    // Add hover and click handlers for image delete buttons
+    const imageContainers = editor.querySelectorAll('div[style*="text-align: center"]');
+    
+    imageContainers.forEach(container => {
+      const imageWrapper = container.querySelector('div[style*="position: relative"]');
+      const deleteBtn = container.querySelector('.image-delete-btn');
+      
+      if (deleteBtn && imageWrapper) {
+        // Show delete button on hover over the image wrapper
+        imageWrapper.addEventListener('mouseenter', () => {
+          deleteBtn.style.display = 'flex';
+        });
+        
+        imageWrapper.addEventListener('mouseleave', () => {
+          deleteBtn.style.display = 'none';
+        });
+        
+        // Delete image on click
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (confirm('Delete this image?')) {
+            container.remove();
+            handleContentChange();
+          }
+        });
+      }
+    });
+  };
+  
+  useEffect(() => {
+    console.log('🔄 useEffect triggered with value:', value);
+    if (editorRef.current && value !== undefined) {
+      const currentContent = editorRef.current.innerHTML;
+      console.log('📝 Current editor innerHTML:', currentContent);
+      console.log('🔍 Comparing:', { currentContent, value, areEqual: currentContent === value });
+      if (currentContent !== value) {
+        console.log('✏️ Setting editor content to:', value);
+        editorRef.current.innerHTML = value || '';
+        // Add delete handlers after content update
+        setTimeout(() => addImageDeleteHandlers(editorRef.current), 100);
+      } else {
+        console.log('⏭️ Content already matches, skipping update');
+      }
+    } else {
+      console.log('❌ Editor ref not ready or value undefined:', { hasRef: !!editorRef.current, value });
+    }
+  }, [value]);
+  
+  const updateActiveStyles = () => {
+    const styles = new Set();
+    
+    // Check inline styles
+    const commands = ['bold', 'italic', 'underline', 'strikethrough', 'insertOrderedList', 'insertUnorderedList', 'justifyCenter'];
+    commands.forEach(command => {
+      if (document.queryCommandState(command)) {
+        styles.add(command);
+      }
+    });
+
+    // Check block format
+    const block = document.queryCommandValue('formatBlock').toLowerCase();
+    if (block === 'h1') styles.add('h1');
+    else if (block === 'h2') styles.add('h2');
+    
+    // If no block styles or inline styles are active, consider it 'normal' text
+    const hasNoStyles = styles.size === 0 || 
+                       (block === 'p' && !['h1', 'h2', ...commands].some(style => styles.has(style)));
+
+    setActiveStyles(styles);
+  };
+
+  useEffect(() => {
+    const node = editorRef.current;
+    if (!node) return;
+
+    node.contentEditable = 'true';
+    const handleInput = () => {
+      if (onChange) onChange(node.innerHTML);
+      updateActiveStyles();
+    };
+
+    node.addEventListener('input', handleInput);
+    document.addEventListener('selectionchange', updateActiveStyles);
+
+    // Apply H1 format on mount ONLY if there's no existing content
+    const applyH1 = () => {
+      if (!node) return;
+      
+      // Only apply default H1 if the node is empty or has default content
+      const currentContent = node.innerHTML;
+      if (!currentContent || currentContent === '<h1><br></h1>' || currentContent === '<br>' || currentContent === '') {
+        // Set initial content with H1
+        node.innerHTML = '<h1><br></h1>';
+        
+        // Focus and set cursor position
+        node.focus();
+        const range = document.createRange();
+        const selection = window.getSelection();
+        range.selectNodeContents(node.firstChild);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        
+        if (onChange) {
+          onChange(node.innerHTML);
+        }
+      }
+    };
+    
+    // Use requestAnimationFrame to ensure DOM is ready
+    requestAnimationFrame(applyH1);
+
+    return () => {
+      node.removeEventListener('input', handleInput);
+      document.removeEventListener('selectionchange', updateActiveStyles);
+    };
+  }, [onChange]);
+
+  useEffect(() => {
+    const node = editorRef.current;
+    if (node && value !== node.innerHTML) {
+      node.innerHTML = value || '';
+    }
+  }, [value]);
+
+  const applyStyle = (command, value = null) => {
+    // Make sure the editor has focus
+    editorRef.current.focus();
+    
+    // Save the current selection
+    const selection = window.getSelection();
+    if (selection.rangeCount === 0) return;
+    
+    const range = selection.getRangeAt(0);
+    const isCollapsed = range.collapsed;
+    
+    try {
+      // For the Normal button - clear all formatting
+      if (command === 'formatBlock' && value === '<p>') {
+        // First, apply paragraph format
+        document.execCommand('formatBlock', false, '<p>');
+        
+        // Remove all inline styles
+        const inlineStyles = ['bold', 'italic', 'underline', 'strikethrough', 'justifyCenter'];
+        inlineStyles.forEach(style => {
+          if (document.queryCommandState(style)) {
+            document.execCommand(style, false, null);
+          }
+        });
+        
+        // Remove any list formatting
+        if (document.queryCommandState('insertOrderedList') || document.queryCommandState('insertUnorderedList')) {
+          document.execCommand('insertUnorderedList', false, null); // Toggle off list
+        }
+      } 
+      // For block-level formatting (headings)
+      else if (command === 'formatBlock') {
+        // Check if we're clicking the same heading that's already active
+        const currentBlock = document.queryCommandValue('formatBlock').toLowerCase();
+        const targetBlock = value.toLowerCase();
+        
+        if (currentBlock === targetBlock) {
+          // If clicking the same heading that's already active, convert to normal text
+          document.execCommand('formatBlock', false, '<p>');
+        } else {
+          // Otherwise, apply the selected heading
+          document.execCommand('formatBlock', false, value);
+        }
+      } 
+      // For text alignment
+      else if (command === 'justifyCenter') {
+        const isCentered = document.queryCommandState('justifyCenter');
+        document.execCommand(isCentered ? 'justifyLeft' : 'justifyCenter', false, null);
+      } 
+      // For inline styles (bold, italic, etc.)
+      else {
+        // If the selection is collapsed, we need to insert a temporary span
+        if (isCollapsed) {
+          const span = document.createElement('span');
+          span.innerHTML = '\u200B'; // Zero-width space
+          range.deleteContents();
+          range.insertNode(span);
+          
+          // Select the new span
+          const newRange = document.createRange();
+          newRange.selectNodeContents(span);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+        }
+        
+        // Toggle the style
+        document.execCommand(command, false, null);
+        
+        // Clean up any temporary spans if we created one
+        if (isCollapsed) {
+          const container = range.startContainer;
+          if (container.nodeType === Node.TEXT_NODE && container.textContent === '\u200B') {
+            container.parentNode.removeChild(container);
+          }
+        }
+      }
+      
+      // Trigger change event
+      if (onChange) {
+        onChange(editorRef.current.innerHTML);
+      }
+      
+      // Update the active styles
+      updateActiveStyles();
+      
+    } catch (error) {
+      console.error('Error applying style:', error);
+    }
+    
+    // Restore focus to the editor
+    editorRef.current.focus();
+  };
+
+  return (
+    <View style={styles.editorContainer}>
+      <View style={styles.webToolbar}>
+        {/* Normal text button - removes all formatting */}
+        <TouchableOpacity 
+          onPress={() => applyStyle('formatBlock', '<p>')} 
+          style={[
+            styles.toolbarButton, 
+            (!activeStyles.has('h1') && 
+             !activeStyles.has('h2') && 
+             !['bold','italic','underline','strikethrough', 'insertOrderedList', 'insertUnorderedList', 'justifyCenter'].some(s => activeStyles.has(s))) && 
+            styles.toolbarButtonActive
+          ]}
+        >
+          <Text style={{ fontSize: 14 }}>Normal</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.separator} />
+        
+        {/* Inline styles */}
+        <TouchableOpacity 
+          onPress={() => applyStyle('bold')} 
+          style={[styles.toolbarButton, activeStyles.has('bold') && styles.toolbarButtonActive]}
+        >
+          <Text style={{ fontWeight: 'bold' }}>B</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => applyStyle('italic')} 
+          style={[styles.toolbarButton, activeStyles.has('italic') && styles.toolbarButtonActive]}
+        >
+          <Text style={{ fontStyle: 'italic' }}>I</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => applyStyle('underline')} 
+          style={[styles.toolbarButton, activeStyles.has('underline') && styles.toolbarButtonActive]}
+        >
+          <Text style={{ textDecorationLine: 'underline' }}>U</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => applyStyle('strikethrough')} 
+          style={[styles.toolbarButton, activeStyles.has('strikethrough') && styles.toolbarButtonActive]}
+        >
+          <Text style={{ textDecorationLine: 'line-through' }}>S</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.separator} />
+        
+        {/* Headings */}
+        <TouchableOpacity 
+          onPress={() => applyStyle('formatBlock', activeStyles.has('h1') ? '<p>' : '<h1>')} 
+          style={[styles.toolbarButton, activeStyles.has('h1') && styles.toolbarButtonActive]}
+        >
+          <Text style={[styles.headingText, activeStyles.has('h1') && styles.headingTextActive]}>H1</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => applyStyle('formatBlock', activeStyles.has('h2') ? '<p>' : '<h2>')} 
+          style={[styles.toolbarButton, activeStyles.has('h2') && styles.toolbarButtonActive]}
+        >
+          <Text style={[styles.headingText, activeStyles.has('h2') && styles.headingTextActive]}>H2</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.separator} />
+        
+        {/* Lists and alignment */}
+        <TouchableOpacity 
+          onPress={() => applyStyle('insertUnorderedList')} 
+          style={[styles.toolbarButton, activeStyles.has('insertUnorderedList') && styles.toolbarButtonActive]}
+        >
+          <MaterialIcons name="format-list-bulleted" size={18} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => applyStyle('insertOrderedList')} 
+          style={[styles.toolbarButton, activeStyles.has('insertOrderedList') && styles.toolbarButtonActive]}
+        >
+          <MaterialIcons name="format-list-numbered" size={18} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => applyStyle('justifyCenter')} 
+          style={[styles.toolbarButton, activeStyles.has('justifyCenter') && styles.toolbarButtonActive]}
+        >
+          <MaterialIcons name="format-align-center" size={18} />
+        </TouchableOpacity>
+
+        <View style={styles.separator} />
+        
+        {/* Image insertion button */}
+        <TouchableOpacity 
+          onPress={() => {
+            if (onImageInsert) {
+              onImageInsert();
+            }
+          }}
+          style={styles.toolbarButton}
+        >
+          <MaterialIcons name="image" size={18} />
+        </TouchableOpacity>
+      </View>
+      
+      <View
+        ref={editorRef}
+        style={styles.contentInput}
+        accessibilityRole="textbox"
+        aria-multiline="true"
+        onMouseUp={updateActiveStyles}
+        onKeyUp={updateActiveStyles}
+      />
+    </View>
+  );
+};
 
 const ManageMedia = ({ navigation }) => {
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editArticle, setEditArticle] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
   const [articles, setArticles] = useState([]);
   const [filteredArticles, setFilteredArticles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,8 +428,14 @@ const ManageMedia = ({ navigation }) => {
   const [search, setSearch] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('all');
   const [showFeaturedOnly, setShowFeaturedOnly] = useState(false);
+  const [genres, setGenres] = useState(['articles', 'opinions', 'sports', 'editorial', 'creative']);
+  
+  const richText = useRef(null);
+  const editorRef = useRef(null); // Reference to the web editor
 
-  const genres = ['articles', 'opinion', 'sports', 'editorial', 'creative'];
+  const handleEditorRef = (ref) => {
+    editorRef.current = ref;
+  };
 
   useEffect(() => {
     fetchArticles();
@@ -42,7 +454,7 @@ const ManageMedia = ({ navigation }) => {
         search: search.trim() || undefined,
       };
       
-      const response = await api.get('/media/articles', { params });
+      const response = await apiClient.get('/media/articles', { params });
       setArticles(response.data.data || []);
       setFilteredArticles(response.data.data || []);
     } catch (error) {
@@ -76,7 +488,7 @@ const ManageMedia = ({ navigation }) => {
     const action = article.status === 'archived' ? 'unarchive' : 'archive';
     
     try {
-      const response = await api.patch(`/articles/${article.id}/archive`);
+      const response = await apiClient.patch(`/articles/${article.id}/archive`);
       console.log('Archive API response:', response.data);
       
       Alert.alert('Success', `Article ${action}d successfully`);
@@ -93,7 +505,7 @@ const ManageMedia = ({ navigation }) => {
     
     console.log('Making API call to:', `/articles/${article.id}/feature`);
     try {
-      const response = await api.patch(`/articles/${article.id}/feature`);
+      const response = await apiClient.patch(`/articles/${article.id}/feature`);
       console.log('API response:', response.data);
       
       Alert.alert('Success', `Article ${action}d successfully`);
@@ -119,6 +531,40 @@ const ManageMedia = ({ navigation }) => {
       case 'draft': return 'document-text';
       case 'archived': return 'archive';
       default: return 'document-text';
+    }
+  };
+
+  const openEdit = (article) => {
+    console.log('🎯 openEdit called with article:', article);
+    console.log('📝 Article content:', article.content);
+    console.log('📏 Content length:', article.content?.length);
+    console.log('🔢 Article ID:', article.id);
+    setEditArticle(article);
+    setEditTitle(article.title);
+    setEditContent(article.content || '');
+    console.log('✅ setEditContent called with:', article.content || '');
+    setShowEditModal(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editArticle) return;
+    const dataToSend = {
+      title: editTitle,
+      content: editContent,
+      genre: editArticle.genre,
+      status: editArticle.status,
+    };
+    console.log('📤 Sending data to backend:', dataToSend);
+    try {
+      await apiClient.patch(`/articles/${editArticle.id}`, dataToSend);
+      Alert.alert('Success', 'Article updated');
+      setShowEditModal(false);
+      fetchArticles();
+    } catch (err) {
+      console.error('❌ Failed to update article', err);
+      console.error('❌ Response data:', err.response?.data);
+      console.error('❌ Response status:', err.response?.status);
+      Alert.alert('Error', 'Update failed');
     }
   };
 
@@ -163,22 +609,32 @@ const ManageMedia = ({ navigation }) => {
       </Text>
 
       <View style={styles.articleActions}>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.featureButton]}
-          onPress={() => {
-            console.log('Feature button clicked for article:', article.id, 'is_featured:', article.is_featured);
-            toggleFeatured(article);
-          }}
-        >
-          <Ionicons 
-            name={article.is_featured ? "star" : "star-outline"} 
-            size={16} 
-            color={article.is_featured ? "#fbbf24" : "#6b7280"} 
-          />
-          <Text style={[styles.actionText, { color: article.is_featured ? "#fbbf24" : "#6b7280" }]}>
-            {article.is_featured ? 'Featured' : 'Feature'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.leftActions}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.editButton]}
+            onPress={() => openEdit(article)}
+          >
+            <Ionicons name="create-outline" size={16} color="#2563eb" />
+            <Text style={[styles.actionText, { color: '#2563eb' }]}>Edit</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.featureButton]}
+            onPress={() => {
+              console.log('Feature button clicked for article:', article.id, 'is_featured:', article.is_featured);
+              toggleFeatured(article);
+            }}
+          >
+            <Ionicons 
+              name={article.is_featured ? "star" : "star-outline"} 
+              size={16} 
+              color={article.is_featured ? "#fbbf24" : "#6b7280"} 
+            />
+            <Text style={[styles.actionText, { color: article.is_featured ? "#fbbf24" : "#6b7280" }]}>
+              {article.is_featured ? 'Featured' : 'Feature'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={[styles.actionButton, styles.archiveButton]}
@@ -208,6 +664,60 @@ const ManageMedia = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Edit Article</Text>
+            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowEditModal(false)}>
+              <Ionicons name="close" size={24} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Title</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editTitle}
+                onChangeText={setEditTitle}
+              />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Content</Text>
+              {console.log('🎨 Rendering editor with editContent:', editContent)}
+              {Platform.OS === 'web' ? (
+                <SimpleWebEditor 
+                  key={`web-editor-${editArticle?.id || 'new'}`}
+                  value={editContent} 
+                  onChange={setEditContent} 
+                  onImageInsert={() => {}} 
+                  onEditorRef={handleEditorRef}
+                />
+              ) : (
+                <View style={styles.editorContainer}>
+                  <NativeRichEditor
+                    key={`native-editor-${editArticle?.id || 'new'}`}
+                    ref={richText}
+                    style={styles.richEditor}
+                    initialContentHTML={editContent}
+                    placeholder="Write your article here..."
+                    onChange={text => setEditContent(text)}
+                    editorStyle={{ backgroundColor: '#fff', color: '#333', placeholderColor: '#999' }}
+                  />
+                  <NativeRichToolbar editor={richText} onImageInsert={() => {}} />
+                </View>
+              )}
+            </View>
+            <TouchableOpacity style={styles.modalSaveButton} onPress={saveEdit}>
+              <Text style={styles.modalSaveText}>Save</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
       <View style={styles.header}>
         <View style={styles.titleSection}>
           <Text style={styles.title}>Manage Media</Text>
@@ -525,9 +1035,14 @@ const styles = StyleSheet.create({
   articleActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
     paddingTop: 12,
+  },
+  leftActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   actionButton: {
     flexDirection: 'row',
@@ -673,6 +1188,91 @@ const styles = StyleSheet.create({
   },
   statusChipTextActive: {
     color: 'white',
+  },
+  // Editor styles
+  editorContainer: { 
+    borderWidth: 1, 
+    borderColor: '#d1d5db', 
+    borderRadius: 8, 
+    marginBottom: 20, 
+    overflow: 'hidden',
+    position: 'relative',
+
+  },
+  richEditor: { 
+    minHeight: 300, 
+    backgroundColor: '#fff',
+    position: 'relative',
+
+  },
+  richToolbar: { 
+    backgroundColor: '#f8f9fa', 
+    borderTopWidth: 1, 
+    borderTopColor: '#d1d5db',
+    position: 'relative',
+
+  },
+  editorPlaceholder: { 
+    minHeight: 300, 
+    borderWidth: 1, 
+    borderColor: '#d1d5db', 
+    borderRadius: 8, 
+    backgroundColor: '#f9f9f9' 
+  },
+  // Web Editor Toolbar Styles
+  webToolbar: {
+    position: 'relative',
+    zIndex: 2,
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderColor: '#d1d5db',
+    padding: 8,
+    backgroundColor: '#f8f9fa',
+    
+  },
+  toolbarButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginHorizontal: 4,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  toolbarButtonActive: {
+    backgroundColor: '#e0e0e0',
+    borderColor: '#1a237e',
+  },
+  separator: {
+    width: 1,
+    height: '100%',
+    backgroundColor: '#ddd',
+    marginHorizontal: 6,
+  },
+  headingText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  headingTextActive: {
+    color: '#1a237e',
+  },
+  contentInput: { 
+    fontSize: 16, 
+    lineHeight: 24, 
+    color: '#333', 
+    minHeight: 300, 
+    borderWidth: 1, 
+    borderColor: '#d1d5db', 
+    borderRadius: 8, 
+    paddingTop: 0, 
+    padding: 12, 
+    marginTop: -10, // Negative margin to pull content up
+    marginBottom: 20,
+    position: 'relative',
+    backgroundColor: '#fff', // Ensure solid background
+    borderTopLeftRadius: 0, // Match border radius with title
+    borderTopRightRadius: 0
   },
 });
 

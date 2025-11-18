@@ -631,74 +631,84 @@ export default function ArticleDetail() {
     fetchArticle();
   }, [articleId]);
 
-  // Fetch related articles using ML-based content similarity
+  // Fetch related articles and hot topics using lightweight summaries endpoint
   useEffect(() => {
-    const fetchRelatedArticles = async () => {
+    const fetchRelatedAndHot = async () => {
       if (!article) return;
       
       try {
-        const res = await apiClient.get('/public/articles');
+        // Use the lightweight summaries endpoint for better performance
+        const res = await apiClient.get('/public/article-summaries?limit=50');
+        
         if (Array.isArray(res.data?.data)) {
           const allArticles = res.data.data.filter(item => item.id?.toString() !== articleId);
           
-          // Calculate similarity scores based on content analysis
-          const scoredArticles = allArticles.map(otherArticle => {
-            const similarity = calculateContentSimilarity(article, otherArticle);
-            return {
+          // Simple text similarity function for related articles
+          const calculateSimilarity = (text1, text2) => {
+            const words1 = text1.toLowerCase().split(/\s+/);
+            const words2 = text2.toLowerCase().split(/\s+/);
+            const intersection = words1.filter(word => words2.includes(word));
+            const union = [...new Set([...words1, ...words2])];
+            return intersection.length / union.length;
+          };
+          
+          // Calculate related articles based on genre and title similarity
+          const relatedArticles = allArticles
+            .filter(otherArticle => otherArticle.genre === article.genre)
+            .map(otherArticle => ({
               ...otherArticle,
               id: otherArticle.id?.toString() || '',
-              similarity,
-              image: otherArticle.media && otherArticle.media.length > 0
-                ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.media[0].file_path.replace('public/', '')}`
-                : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070'
-            };
-          });
-          
-          // Sort by similarity and take top 10
-          const related = scoredArticles
+              image: otherArticle.image_path
+                ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.image_path.replace('public/', '')}`
+                : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+              similarity: calculateSimilarity(article.title || '', otherArticle.title || '')
+            }))
             .sort((a, b) => b.similarity - a.similarity)
             .slice(0, 10);
           
-          setNewsData(related);
-        }
-      } catch (err) {
-        console.error('Error fetching related articles:', err);
-      }
-    };
-    
-    if (article && articleId) {
-      fetchRelatedArticles();
-    }
-  }, [article, articleId]);
-
-  // Fetch hot topics based on reactions
-  useEffect(() => {
-    const fetchHotTopics = async () => {
-      try {
-        const res = await apiClient.get('/public/articles');
-        if (Array.isArray(res.data?.data)) {
-          const articlesWithReactions = res.data.data
-            .filter(item => item.id?.toString() !== articleId)
-            .map(item => ({
-              ...item,
-              id: item.id?.toString() || '',
-              image: item.media && item.media.length > 0
-                ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${item.media[0].file_path.replace('public/', '')}`
-                : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
-              totalReactions: (item.metrics?.like_count || 0) + (item.metrics?.heart_count || 0) + (item.metrics?.sad_count || 0) + (item.metrics?.wow_count || 0)
-            }))
-            .sort((a, b) => b.totalReactions - a.totalReactions)
-            .slice(0, 10);
+          setNewsData(relatedArticles);
           
-          setHotTopics(articlesWithReactions);
+          // For hot topics, use the trending articles endpoint
+          try {
+            const hotRes = await apiClient.get('/public/trending-articles?limit=10');
+            if (Array.isArray(hotRes.data?.data)) {
+              const hotTopicsData = hotRes.data.data
+                .filter(item => item.id?.toString() !== articleId)
+                .map(otherArticle => ({
+                  ...otherArticle,
+                  id: otherArticle.id?.toString() || '',
+                  image: otherArticle.media && otherArticle.media.length > 0
+                    ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.media[0].file_path.replace('public/', '')}`
+                    : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070'
+                }));
+              
+              setHotTopics(hotTopicsData);
+            }
+          } catch (hotErr) {
+            console.error('Error fetching hot topics:', hotErr);
+            // Fallback to recent articles if trending fails
+            const hotTopics = allArticles
+              .filter(otherArticle => otherArticle.genre !== article.genre)
+              .map(otherArticle => ({
+                ...otherArticle,
+                id: otherArticle.id?.toString() || '',
+                image: otherArticle.image_path
+                  ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.image_path.replace('public/', '')}`
+                  : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070'
+              }))
+              .sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0))
+              .slice(0, 10);
+            
+            setHotTopics(hotTopics);
+          }
         }
       } catch (err) {
-        console.error('Error fetching hot topics:', err);
+        console.error('Error fetching related and hot articles:', err);
       }
     };
     
-    fetchHotTopics();
-  }, [articleId]);
+    fetchRelatedAndHot();
+  }, [articleId, article]);
 
   // Debug: Log the HTML content to see image URLs
   useEffect(() => {

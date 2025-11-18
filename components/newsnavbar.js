@@ -7,15 +7,20 @@ import useNewsStore from '../store/newsStore';
 export default function NewsNavbar() {
   const router = useRouter();
   const { activeGenre, setActiveGenre } = useNewsStore();
-  const sections = ['News', 'Articles', 'Opinion', 'Sports', 'Editorial', 'Creative', 'Literary Works'];
+  const sections = ['Featured', 'News', 'Articles', 'Opinion', 'Sports', 'Editorial', 'Creative', 'Literary Works'];
 
   const handleSectionPress = (section) => {
-    setActiveGenre(section);
     if (section === 'Creative') {
+      setActiveGenre(section);
       router.push('/creative');
     } else if (section === 'Literary Works') {
+      setActiveGenre(section);
       router.push('/news/literary-works');
+    } else if (section === 'Featured') {
+      // For Featured, redirect to dedicated page without setting activeGenre
+      router.push('/news/featured');
     } else {
+      setActiveGenre(section);
       router.push('/news');
     }
   };

@@ -62,7 +62,7 @@ export default function ProfileScreen() {
       try {
         setLoadingBookmarks(true);
         const [bookmarksRes, topicsRes, commentsRes] = await Promise.all([
-          apiClient.get('/bookmarks').catch(() => ({ data: [] })), // Handle 405 error gracefully
+          apiClient.get(`/users/${user.id}/bookmarks`).catch(() => ({ data: [] })),
           apiClient.get('/topics').catch(() => ({ data: [] })),
           apiClient.get('/topics').catch(() => ({ data: [] })) // We'll count comments from topics
         ]);

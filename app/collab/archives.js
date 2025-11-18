@@ -167,11 +167,11 @@ export default function ArchivesScreen() {
       });
 
       // Process drafts and images only
-      const drafts = draftsRes.data
+      const drafts = (draftsRes.data.data || draftsRes.data)
         .filter(d => !d.is_folio_submission)
         .map(d => ({ ...d, _type: 'draft' }));
       
-      const images = imagesRes.data
+      const images = (imagesRes.data.data || imagesRes.data)
         .filter(img => !img.is_folio_submission)
         .map(img => ({
           ...img,

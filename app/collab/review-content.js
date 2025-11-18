@@ -112,9 +112,17 @@ export default function ReviewContentScreen() {
   const isMobile = width < 768;
   const router = useRouter();
 
+  // Cache for user data and groups
+  const [userCache, setUserCache] = useState(null);
+  const [groupsCache, setGroupsCache] = useState(null);
+
+  // Fetch groups once and cache them
   useEffect(() => {
     const fetchGroupChats = async () => {
+      if (groupsCache) return; // Already cached
+      
       try {
+        setLoadingGroups(true);
         const response = await apiClient.get('/group-chats');
         // Sort groups by latest (most recent created_at or updated_at first)
         const sortedGroups = response.data.sort((a, b) => {
@@ -123,6 +131,7 @@ export default function ReviewContentScreen() {
           return dateA - dateB;
         });
         setGroupChats(sortedGroups);
+        setGroupsCache(sortedGroups);
       } catch (error) {
         console.error('Failed to fetch group chats:', error);
       } finally {
@@ -133,14 +142,35 @@ export default function ReviewContentScreen() {
   }, []);
 
   useEffect(() => {
+    // Fetch a single page (used for page 1 and later pages)
+    const fetchPage = async (page) => {
+      const params = new URLSearchParams({
+        limit: 12,
+        status: statusFilter,
+        page,
+      });
+      if (selectedGroupId !== ALL_GROUPS_ID) params.append('group_id', selectedGroupId);
+      if (statusFilter === 'pending' && userCache) params.append('current_reviewer_id', userCache.id);
+      const [draftsRes, imagesRes] = await Promise.all([
+        apiClient.get(`/review-content?${params.toString()}`),
+        apiClient.get(`/review-images?${params.toString()}`),
+      ]);
+      return [draftsRes.data, imagesRes.data];
+    };
+
     const fetchReviewContent = async () => {
       setLoading(true);
       try {
-        // Get current user
-        const userResponse = await apiClient.get('/user');
-        const currentUser = userResponse.data;
+        // Get current user (cache if possible)
+        let currentUser = userCache;
+        if (!currentUser) {
+          const userResponse = await apiClient.get('/user');
+          currentUser = userResponse.data;
+          setUserCache(currentUser);
+        }
         
         const params = new URLSearchParams({
+          limit: 12,
           status: statusFilter,
         });
         
@@ -155,26 +185,25 @@ export default function ReviewContentScreen() {
           params.append('current_reviewer_id', currentUser.id);
         }
         
-        const url = `/review-content?${params.toString()}`;
+        // page 1 already included in fetchPage below
         const imagesUrl = `/review-images?${params.toString()}`;
 
-        const [draftsRes, imagesRes, groupsRes] = await Promise.all([
-          apiClient.get(url),
-          apiClient.get(imagesUrl),
-          apiClient.get('/group-chats'),
-        ]);
+        // Fetch first page
+        const [draftsPage1, imagesPage1] = await fetchPage(1);
 
-        // Create a map of group_id to group object for quick lookup
+        // Map groups for quick lookup
         const groupsMap = {};
-        groupsRes.data.forEach(group => {
-          groupsMap[group.id] = group;
-        });
+        if (groupsCache) {
+          groupsCache.forEach(group => {
+            groupsMap[group.id] = group;
+          });
+        }
 
         // Filter out folio submissions - they should only appear in manage folio
-        const drafts = draftsRes.data
+        const drafts = draftsPage1.data
           .filter(d => !d.is_folio_submission)
           .map(d => ({ ...d, _type: 'draft' }));
-        const images = imagesRes.data
+        const images = imagesPage1.data
           .filter(img => !img.is_folio_submission)
           .map(img => ({
           ...img,
@@ -184,6 +213,22 @@ export default function ReviewContentScreen() {
         }));
         
         setReviewContent([...drafts, ...images]);
+
+        // Background fetch remaining pages
+        const totalPages = Math.max(draftsPage1.last_page, imagesPage1.last_page);
+        if (totalPages > 1) {
+          for (let p = 2; p <= totalPages; p++) {
+            try {
+              const [draftsPg, imagesPg] = await fetchPage(p);
+              const moreDrafts = draftsPg.data.filter(d => !d.is_folio_submission).map(d => ({ ...d, _type: 'draft' }));
+              const moreImages = imagesPg.data.filter(img => !img.is_folio_submission).map(img => ({ ...img, _type: 'image', group: img.group || (img.group_id ? groupsMap[img.group_id] : null) }));
+              setReviewContent(prev => [...prev, ...moreDrafts, ...moreImages]);
+            } catch (err) {
+              console.error('Error fetching page', p, err);
+              break;
+            }
+          }
+        }
       } catch (error) {
         console.error('Failed to fetch review content:', error);
         setReviewContent([]);
@@ -193,7 +238,7 @@ export default function ReviewContentScreen() {
     };
 
     fetchReviewContent();
-  }, [selectedGroupId, statusFilter]);
+  }, [selectedGroupId, statusFilter, userCache, groupsCache]);
 
   const sortedContent = useMemo(() => {
     return [...reviewContent].sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at));
