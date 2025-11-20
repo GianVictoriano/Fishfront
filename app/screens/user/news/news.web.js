@@ -1017,16 +1017,13 @@ export default function NewsScreen() {
             title: a.title,
             category: a.genre || 'News',
             published_at: a.published_at,
-            image: a.media && a.media.length > 0
-              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${a.media[0].file_path.replace('public/', '')}`
-              : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+            image: a.image, // Use full URL from API
           }));
           setTrendingStories(mapped);
           // Cache the result
           await setCachedData('trending-stories', mapped);
         }
       } catch (error) {
-        console.log('Failed to fetch trending stories:', error);
         setTrendingStories([]);
       } finally {
         setActiveRequests(prev => {
@@ -1082,9 +1079,7 @@ export default function NewsScreen() {
             id: article.id?.toString() || '',
             title: article.title,
             excerpt: '',
-            image: article.image_path
-              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.image_path.replace('public/', '')}`
-              : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+            image: article.image || article.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
             date: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
             category: article.genre || 'News',
           }));
@@ -1093,7 +1088,6 @@ export default function NewsScreen() {
           await setCachedData(cacheKey, mapped);
         }
       } catch (error) {
-        console.log(`Failed to fetch ${activeGenre} data:`, error);
         if (isMounted) setNewsData(fallbackNewsData);
       } finally {
         if (isMounted) {

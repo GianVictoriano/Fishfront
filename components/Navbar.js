@@ -38,7 +38,7 @@ const Navbar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
-  // const { logoUrl } = useBranding(); // Bypassed to avoid casting issues
+  const { logoUrl } = useBranding();
   const [dropdownVisible, setDropdownVisible] = useState(false);
 
   const handleLogout = () => {
@@ -51,7 +51,7 @@ const Navbar = () => {
       <View style={styles.nav}>
         <View style={styles.brandContainer}>
           <Image 
-            source={require('../assets/images/fish.jpg')}
+            source={logoUrl?.uri ? { uri: logoUrl.uri } : require('../assets/images/fish.jpg')}
             style={styles.avatar} 
           />
           <Text style={styles.brand}>The FISHERMAN</Text>
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     ...Platform.select({
       web: {
-        paddingHorizontal: 20,
+        paddingHorizontal: 60,
         paddingVertical: 6,
         borderBottomWidth: 1,
         borderBottomColor: '#eee',

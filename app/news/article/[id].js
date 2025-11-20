@@ -604,6 +604,7 @@ export default function ArticleDetail() {
           title: raw.title,
           content: raw.content,
           published_at: raw.published_at,
+          genre: raw.genre || 'news',
           // Build full image URL if media exists
           image: raw.media && raw.media.length > 0
             ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${raw.media[0].file_path.replace('public/', '')}`

@@ -189,7 +189,7 @@ const StandaloneChatInput = ({ onSend, onUpload, styles, brandColor, uploadButto
   return (
     <View style={styles.inputContainer}>
       <TouchableOpacity onPress={onUpload} style={[styles.uploadButton, uploadButtonColor && { backgroundColor: uploadButtonColor }]}>
-        <Feather name="paperclip" size={24} color="#fff" />
+        <Feather name="paperclip" size={24} color={uploadButtonColor ? "#fff" : "#666"} />
       </TouchableOpacity>
       <TextInput 
         ref={inputRef}
@@ -221,13 +221,20 @@ export default function CollaborateScreen() {
   const [groupChats, setGroupChats] = useState([]);
   const [selectedGroupId, setSelectedGroupId] = useState(null);
   const [groupChatFilter, setGroupChatFilter] = useState('active'); // 'active' or 'finished'
-  const [inputText, setInputText] = useState('');
+  const selectedGroupIdRef = useRef(selectedGroupId);
+  const isScanningRef = useRef(false);
+
   const [messages, setMessages] = useState([]);
+  const [messagesPage, setMessagesPage] = useState(1);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [chatStatusFilter, setChatStatusFilter] = useState('pending');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isMessagesLoading, setIsMessagesLoading] = useState(false);
+
+  const [inputText, setInputText] = useState('');
   const [unreadMessages, setUnreadMessages] = useState({});
 
   const [isPlagModalVisible, setIsPlagModalVisible] = useState(false);
@@ -270,16 +277,11 @@ export default function CollaborateScreen() {
   const [isLoadingRejectionComments, setIsLoadingRejectionComments] = useState(false);
   const [selectedFileForComments, setSelectedFileForComments] = useState(null);
 
-  const selectedGroupIdRef = useRef(selectedGroupId);
-  const isScanningRef = useRef(false);
 
   const fetchGroupChats = useCallback(async () => {
     try {
       const response = await apiClient.get('/group-chats');
       setGroupChats(response.data);
-      if (!selectedGroupId && response.data.length > 0) {
-        setSelectedGroupId(response.data[0].id);
-      }
     } catch (error) {
       console.error('Failed to fetch group chats:', error);
     }
@@ -324,53 +326,6 @@ export default function CollaborateScreen() {
     }
   }, [chatStatusFilter]); // Remove 'search' dependency to prevent auto-selection while typing
 
-  // Function to fetch group members for reviewer selection
-  const fetchGroupMembers = useCallback(async () => {
-    if (!selectedGroupId) {
-      setGroupMembers([]);
-      return;
-    }
-    
-    try {
-      console.log('Fetching members for group:', selectedGroupId);
-      const response = await apiClient.get(`/group-chats/${selectedGroupId}/members`);
-      console.log('Members response:', response.data);
-      console.log('Current user:', currentUser);
-      
-      // Get all members including current user for lead reviewer display
-      const allMembers = response.data;
-      console.log('All members:', allMembers);
-      setGroupMembers(allMembers);
-    } catch (error) {
-      console.error('Failed to fetch group members:', error);
-      console.error('Error details:', error.response?.data);
-      setGroupMembers([]);
-    }
-  }, [selectedGroupId, currentUser]);
-
-  const fetchMessages = useCallback(async () => {
-    if (!selectedGroupId) {
-      setMessages([]);
-      return;
-    }
-
-    setIsMessagesLoading(true);
-    try {
-      const response = await getMessages(selectedGroupId);
-      setMessages(response.data);
-      
-      // Check for pending uploads
-      await checkPendingUploads();
-      
-      // Fetch group members for reviewer selection
-      await fetchGroupMembers();
-    } catch (error) {
-      console.error('Failed to fetch messages:', error);
-    } finally {
-      setIsMessagesLoading(false);
-    }
-  }, [selectedGroupId, fetchGroupMembers]);
-
   // Function to check for pending uploads assigned to current user for review
   const checkPendingUploads = async () => {
     if (!selectedGroupId || !currentUser) {
@@ -399,22 +354,94 @@ export default function CollaborateScreen() {
     }
   };
 
-  useEffect(() => {
-    if (selectedGroupId) {
-      fetchMessages();
+  const fetchMessages = useCallback(async (loadMore = false) => {
+    if (!selectedGroupId) {
+      setMessages([]);
+      return;
+    }
+
+    if (loadMore) {
+      setIsLoadingMoreMessages(true);
     } else {
+      console.log('fetchMessages called for group:', selectedGroupId);
+      setIsMessagesLoading(true);
+      setMessagesPage(1);
+      setHasMoreMessages(true);
+    }
+
+    try {
+      const page = loadMore ? messagesPage + 1 : 1;
+      console.log(`Loading messages page ${page} for group:`, selectedGroupId);
+      
+      // Run API calls in parallel to reduce loading time
+      console.log('Starting Promise.all for messages, pending uploads, and group members');
+      const [messagesResponse] = await Promise.all([
+        getMessages(selectedGroupId, { page, limit: 20 }), // Load 20 messages per page
+        loadMore ? Promise.resolve() : checkPendingUploads(), // Only check uploads on first load
+        loadMore ? Promise.resolve() : fetchGroupMembers() // Only fetch members on first load
+      ]);
+      
+      console.log('Messages response:', messagesResponse);
+      
+      if (loadMore) {
+        // Append new messages to existing ones
+        setMessages(prev => [...messagesResponse.data, ...prev]);
+        setMessagesPage(page);
+        setHasMoreMessages(messagesResponse.data.length === 20); // If we got 20 messages, there might be more
+      } else {
+        setMessages(messagesResponse.data);
+        setMessagesPage(1);
+        setHasMoreMessages(messagesResponse.data.length === 20);
+      }
+      
+      console.log('Messages set to:', messagesResponse.data);
+    } catch (error) {
+      console.error('Failed to fetch messages:', error);
+    } finally {
+      if (loadMore) {
+        setIsLoadingMoreMessages(false);
+      } else {
+        setIsMessagesLoading(false);
+      }
+    }
+  }, [selectedGroupId, messagesPage]);
+
+  useEffect(() => {
+    console.log('useEffect triggered: selectedGroupId =', selectedGroupId);
+    if (selectedGroupId) {
+      console.log('Calling fetchMessages for group:', selectedGroupId);
+      fetchMessages();
+      checkPendingUploads(); // Move the pending uploads check here
+    } else {
+      console.log('Clearing messages');
       setMessages([]);
     }
   }, [selectedGroupId]);
 
-  // Check pending uploads when group or user changes
-  useEffect(() => {
-    if (selectedGroupId && currentUser) {
-      checkPendingUploads();
+  // Function to fetch group members for reviewer selection
+  const fetchGroupMembers = useCallback(async () => {
+    if (!selectedGroupId) {
+      setGroupMembers([]);
+      return;
+    }
+    
+    try {
+      console.log('Fetching members for group:', selectedGroupId);
+      const response = await apiClient.get(`/group-chats/${selectedGroupId}/members`);
+      console.log('Members response:', response.data);
+      console.log('Current user:', currentUser);
+      
+      // Get all members including current user for lead reviewer display
+      const allMembers = response.data;
+      console.log('All members:', allMembers);
+      setGroupMembers(allMembers);
+    } catch (error) {
+      console.error('Failed to fetch group members:', error);
+      console.error('Error details:', error.response?.data);
+      setGroupMembers([]);
     }
   }, [selectedGroupId, currentUser]);
 
-  // Fetch important notes when group changes
   const fetchImportantNotes = useCallback(async () => {
     if (!selectedGroupId) {
       setImportantNotes([]);
@@ -1524,7 +1551,7 @@ export default function CollaborateScreen() {
   );
 
   const RightPanel = () => {
-
+    console.log('RightPanel rendering - selectedGroupId:', selectedGroupId, 'messages.length:', messages.length, 'isMessagesLoading:', isMessagesLoading);
 
     return (
       <View style={styles.rightPanel}>
@@ -1609,6 +1636,7 @@ export default function CollaborateScreen() {
                       minHeight: 44, // Ensure adequate touch target
                       justifyContent: 'center',
                       marginTop: -47,
+                      marginBottom: 8,
                     }}
                     activeOpacity={0.8}
                   >
@@ -1631,6 +1659,7 @@ export default function CollaborateScreen() {
                       minHeight: 44, // Ensure adequate touch target
                       justifyContent: 'center',
                       marginTop: -47,
+                      marginBottom: 8,
                     }}
                     activeOpacity={0.8}
                   >
@@ -1640,44 +1669,66 @@ export default function CollaborateScreen() {
                 </View>
               </View>
             </View>
-            <View style={{flex: 1, flexDirection: 'column'}}>
+            <View style={styles.chatContent}>
               {isMessagesLoading ? (
                 <ActivityIndicator size="large" color="#0000ff" style={styles.loadingContainer} />
               ) : messages.length > 0 ? (
-                <FlatList
-                  data={messages}
-                  renderItem={renderMessage}
-                  keyExtractor={(item, index) => item.id?.toString() || `msg-${index}`}
-                  style={styles.messageList}
-                  inverted
-                  keyboardDismissMode="interactive"
-                  keyboardShouldPersistTaps="handled"
-                  removeClippedSubviews={true}
-                  windowSize={10}
-                  maxToRenderPerBatch={5}
-                  updateCellsBatchingPeriod={100}
-                  initialNumToRender={15}
-                  getItemLayout={null}
-                />
+                <>
+                  <FlatList
+                    data={messages}
+                    renderItem={renderMessage}
+                    keyExtractor={(item, index) => item.id?.toString() || `msg-${index}`}
+                    contentContainerStyle={{ flexGrow: 1 }}
+                    scrollEnabled={true}
+                    inverted
+                    keyboardDismissMode="interactive"
+                    keyboardShouldPersistTaps="handled"
+                    removeClippedSubviews={true}
+                    windowSize={10}
+                    maxToRenderPerBatch={5}
+                    updateCellsBatchingPeriod={100}
+                    initialNumToRender={15}
+                    getItemLayout={null}
+                  />
+                  {hasMoreMessages && (
+                    <TouchableOpacity
+                      onPress={() => fetchMessages(true)}
+                      disabled={isLoadingMoreMessages}
+                      style={{
+                        backgroundColor: isLoadingMoreMessages ? '#ccc' : colors.primary || '#4285F4',
+                        paddingVertical: 12,
+                        paddingHorizontal: 20,
+                        borderRadius: 8,
+                        alignItems: 'center',
+                        marginVertical: 10,
+                        marginHorizontal: 20,
+                      }}
+                    >
+                      {isLoadingMoreMessages ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={{ color: '#fff', fontWeight: 'bold' }}>Load More Messages</Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </>
               ) : (
                 <Text style={styles.emptyMessage}>No messages yet. Start the conversation!</Text>
               )}
-              <StandaloneChatInput 
-                onSend={handleSend}
-                onUpload={async () => {
-                  // Check for pending uploads before showing modal
-                  await checkPendingUploads();
-                  setIsUploadModalVisible(true);
-                }}
-                styles={styles}
-                brandColor={colors.primary}
-                uploadButtonColor={colors.tertiary}
-              />
+              <View style={styles.chatInputWrapper}>
+                <StandaloneChatInput 
+                  onSend={handleSend}
+                  onUpload={() => setIsUploadModalVisible(true)}
+                  styles={styles}
+                  brandColor={colors.primary}
+                  uploadButtonColor={colors.primary}
+                />
+              </View>
             </View>
-          </>
+          </> // Added closing JSX fragment
         ) : (
           <View style={styles.loadingContainer}>
-            <Text>Select a chat to start messaging</Text>
+            <Text>Good day Fisherman! Please select a chat</Text>
           </View>
         )}
       </View>
@@ -1717,57 +1768,150 @@ export default function CollaborateScreen() {
       keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       enabled={Platform.OS === "ios"}
     >
-        <View style={{flex: 1}}>
-          {isLoading ? (
-            <ActivityIndicator size="large" color="#0000ff" style={styles.loadingContainer} />
-          ) : (
-            <MainContent />
-          )}
-          
-          {/* Upload Selection Modal */}
-          <Modal 
-            animationType="slide" 
-            transparent={true} 
-            visible={isUploadModalVisible} 
-            onRequestClose={() => setIsUploadModalVisible(false)}
-          >
-            <View style={modalStyles.centeredView}>
-              <View style={[modalStyles.modalView, {minHeight: 200}]}>
-                <Text style={modalStyles.modalTitle}>Choose Upload Type</Text>
-                <Text style={modalStyles.modalText}>
-                  {isProcessingDocument ? 'Processing document...' : 'What would you like to upload?'}
-                </Text>
+      <View style={{flex: 1}}>
+        {isLoading ? (
+          <ActivityIndicator size="large" color="#0000ff" style={styles.loadingContainer} />
+        ) : (
+          <MainContent />
+        )}
+        
+        {/* Upload Selection Modal */}
+        <Modal 
+          animationType="slide" 
+          transparent={true} 
+          visible={isUploadModalVisible} 
+          onRequestClose={() => setIsUploadModalVisible(false)}
+        >
+          <View style={modalStyles.centeredView}>
+            <View style={[modalStyles.modalView, {minHeight: 200}]}>
+              <Text style={modalStyles.modalTitle}>Choose Upload Type</Text>
+              <Text style={modalStyles.modalText}>
+                {isProcessingDocument ? 'Processing document...' : 'What would you like to upload?'}
+              </Text>
+              
+              {isProcessingDocument && (
+                <ActivityIndicator size="large" color="#4285F4" style={{marginVertical: 20}} />
+              )}
+              
+              <View style={{flexDirection: 'row', justifyContent: 'space-between', gap: 16, marginTop: 20}}>
+                <TouchableOpacity 
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#F0F9FF',
+                    borderWidth: 2,
+                    borderColor: '#0EA5E9',
+                    borderRadius: 12,
+                    paddingVertical: 24,
+                    paddingHorizontal: 20,
+                    alignItems: 'center',
+                    shadowColor: '#0EA5E9',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 3,
+                    minWidth: 200,
+                  }}
+                  onPress={handleChooseFile}
+                  activeOpacity={0.8}
+                >
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: '#0EA5E9',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: 8,
+                  }}>
+                    <Feather name="file-text" size={24} color="white" />
+                  </View>
+                  <Text style={{fontSize: 16, fontWeight: '600', color: '#0C4A6E', textAlign: 'center'}}>
+                    Document
+                  </Text>
+                  <Text style={{fontSize: 12, color: '#64748B', textAlign: 'center', marginTop: 2}}>
+                    .doc, .docx, .txt
+                  </Text>
+                </TouchableOpacity>
                 
-                {isProcessingDocument && (
-                  <ActivityIndicator size="large" color="#4285F4" style={{marginVertical: 20}} />
-                )}
+                <TouchableOpacity 
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#F0FDF4',
+                    borderWidth: 2,
+                    borderColor: '#22C55E',
+                    borderRadius: 12,
+                    paddingVertical: 24,
+                    paddingHorizontal: 20,
+                    alignItems: 'center',
+                    shadowColor: '#22C55E',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 3,
+                    minWidth: 200,
+                  }}
+                  onPress={handleChooseImage}
+                  activeOpacity={0.8}
+                >
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: '#22C55E',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: 8,
+                  }}>
+                    <Feather name="image" size={24} color="white" />
+                  </View>
+                  <Text style={{fontSize: 16, fontWeight: '600', color: '#14532D', textAlign: 'center'}}>
+                    Image
+                  </Text>
+                  <Text style={{fontSize: 12, color: '#64748B', textAlign: 'center', marginTop: 2}}>
+                    .jpg, .png, .gif
+                  </Text>
+                </TouchableOpacity>
                 
-                <View style={{flexDirection: 'row', justifyContent: 'space-around', marginTop: 20, gap: 15}}>
-                  <TouchableOpacity 
-                    style={[modalStyles.button, {backgroundColor: '#4285F4', flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15}]}
-                    onPress={handleChooseFile}
-                  >
-                    <Feather name="file-text" size={20} color="white" style={{marginRight: 8}} />
-                    <Text style={[modalStyles.textStyle, {fontSize: 14}]}>Document{'\n'}(Text/Word)</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[modalStyles.button, {backgroundColor: '#34A853', flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15}]}
-                    onPress={handleChooseImage}
-                  >
-                    <Feather name="image" size={20} color="white" style={{marginRight: 8}} />
-                    <Text style={[modalStyles.textStyle, {fontSize: 16}]}>Image</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[modalStyles.button, {backgroundColor: '#8B5CF6', flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15}]}
-                    onPress={handleChooseScan}
-                  >
-                    <Feather name="search" size={20} color="white" style={{marginRight: 8}} />
-                    <Text style={[modalStyles.textStyle, {fontSize: 16}]}>Scan</Text>
-                  </TouchableOpacity>
-                </View>
-                
+                <TouchableOpacity 
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#FAF5FF',
+                    borderWidth: 2,
+                    borderColor: '#A855F7',
+                    borderRadius: 12,
+                    paddingVertical: 20,
+                    paddingHorizontal: 16,
+                    alignItems: 'center',
+                    shadowColor: '#A855F7',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 3,
+                    display: 'none', // Hidden for now
+                  }}
+                  onPress={handleChooseScan}
+                  activeOpacity={0.8}
+                >
+                  <View style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: '#A855F7',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginBottom: 8,
+                  }}>
+                    <Feather name="search" size={24} color="white" />
+                  </View>
+                  <Text style={{fontSize: 16, fontWeight: '600', color: '#581C87', textAlign: 'center'}}>
+                    Plagiarism
+                  </Text>
+                  <Text style={{fontSize: 12, color: '#64748B', textAlign: 'center', marginTop: 2}}>
+                    Scan & Check
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              
                 <TouchableOpacity 
                   style={[modalStyles.button, modalStyles.buttonClose, {marginTop: 20, backgroundColor: '#6c757d'}]} 
                   onPress={() => setIsUploadModalVisible(false)}
@@ -2415,7 +2559,7 @@ export default function CollaborateScreen() {
                     <Text style={{marginTop: 10, color: '#6B7280'}}>Loading versions...</Text>
                   </View>
                 ) : (
-                  <ScrollView style={{maxHeight: 350}}>
+                  <ScrollView style={{maxHeight: 350, width: '90%', alignSelf: 'center'}}>
                     {/* Documents Section */}
                     {versions.documents.length > 0 && (
                       <View style={{marginBottom: 20}}>
@@ -2593,7 +2737,7 @@ export default function CollaborateScreen() {
 
                 {selectedFileForComments && (
                   <View style={{backgroundColor: '#F9FAFB', borderRadius: 8, padding: 12, marginBottom: 20}}>
-                    <Text style={{fontWeight: '600', fontSize: 14, color: '#1F2937', marginBottom: 4}}>
+                    <Text style={{fontWeight: '600', fontSize: 14, color: '#1F2937'}}>
                       {groupChats.find(g => g.id === selectedGroupId)?.name || 'Group Chat'}
                     </Text>
                     <Text style={{fontSize: 12, color: '#6B7280'}}>
@@ -2699,6 +2843,12 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     position: 'relative',
     backgroundColor: '#fff',
+    minHeight: 0,
+  },
+  chatContent: {
+    flex: 1,
+    flexDirection: 'column',
+    minHeight: 0,
   },
   title: { 
     fontSize: 22, 
@@ -2716,6 +2866,7 @@ const styles = StyleSheet.create({
   },
   messageList: { 
     flex: 1,
+    flexGrow: 1,
   },
   emptyMessage: { 
     flex: 1,
@@ -2893,6 +3044,14 @@ const styles = StyleSheet.create({
   },
   theirSenderName: {
     textAlign: 'left',
+  },
+  chatInputWrapper: {
+    position: 'sticky',
+    bottom: 0,
+    backgroundColor: '#f4f6f8',
+    paddingTop: 8,
+    paddingBottom: 12,
+    paddingHorizontal: 0,
   },
   inputContainer: { 
     flexDirection: 'row', 
