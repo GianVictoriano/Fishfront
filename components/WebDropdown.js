@@ -8,9 +8,10 @@ if (Platform.OS === 'web') {
   createPortal = require('react-dom').createPortal;
 }
 
-const WebDropdown = ({ isVisible, onClose, onLogout, isAdmin, router }) => {
+const WebDropdown = ({ isVisible, onClose, onLogout, isAdmin, router, buttonRef, setButtonWidth, buttonWidth }) => {
   const [portalRoot, setPortalRoot] = useState(null);
   const dropdownRef = useRef(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ right: 20, top: 60 });
 
   // Initialize portal root on mount (web only)
   useEffect(() => {
@@ -39,6 +40,18 @@ const WebDropdown = ({ isVisible, onClose, onLogout, isAdmin, router }) => {
     };
   }, []);
 
+  // Update dropdown position when visible
+  useEffect(() => {
+    if (Platform.OS === 'web' && isVisible && buttonRef?.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        left: rect.left,
+        top: rect.bottom + 4,
+      });
+      setButtonWidth(rect.width);
+    }
+  }, [isVisible, buttonRef, setButtonWidth]);
+
   // Handle clicks outside the dropdown
   useEffect(() => {
     if (Platform.OS !== 'web' || !isVisible) return;
@@ -65,7 +78,7 @@ const WebDropdown = ({ isVisible, onClose, onLogout, isAdmin, router }) => {
 
   const dropdownContent = (
     <div style={styles.overlay}>
-      <div style={styles.dropdown} ref={dropdownRef}>
+      <div style={{ position: 'absolute', ...dropdownPosition, width: buttonWidth, ...styles.dropdown }} ref={dropdownRef}>
         <div 
           style={styles.item}
           onClick={() => {
@@ -130,9 +143,6 @@ const styles = Platform.OS === 'web' ? {
     zIndex: 9998,
   },
   dropdown: {
-    position: 'absolute',
-    right: 20,
-    top: 60,
     backgroundColor: '#fff',
     borderRadius: 8,
     boxShadow: '0 2px 8px rgba(0,0,0,0.15)',

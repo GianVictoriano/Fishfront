@@ -14,8 +14,14 @@ import { FontAwesome } from '@expo/vector-icons'; // Using FontAwesome for icons
 const NavLink = ({ href, text, iconName, pathname, closeMenu, isActive: isActiveProp }) => {
   const router = useRouter();
   // Use the provided isActive prop if available, otherwise calculate it
-  const isActive = isActiveProp !== undefined ? isActiveProp : 
+  let isActive = isActiveProp !== undefined ? isActiveProp : 
                   (pathname === `/${href}` || pathname.startsWith(`/${href}/`));
+  
+  // Special case: News tab should be active for news-related routes
+  if (href === 'news' && (pathname.startsWith('/news') || pathname === '/creative')) {
+    isActive = true;
+  }
+  
   const linkStyle = [styles.navLink, isActive && styles.navLinkActive];
   const textStyle = [styles.navLinkText, isActive && styles.navLinkTextActive];
   const iconStyle = [styles.navIcon, isActive && styles.navIconActive];
@@ -38,8 +44,10 @@ const Navbar = () => {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
-  // const { logoUrl } = useBranding(); // Bypassed to avoid casting issues
+  const { logoUrl } = useBranding();
   const [dropdownVisible, setDropdownVisible] = useState(false);
+  const buttonRef = useRef(null);
+  const [buttonWidth, setButtonWidth] = useState(200);
 
   const handleLogout = () => {
     logout();
@@ -51,7 +59,7 @@ const Navbar = () => {
       <View style={styles.nav}>
         <View style={styles.brandContainer}>
           <Image 
-            source={require('../assets/images/fish.jpg')}
+            source={logoUrl?.uri ? { uri: logoUrl.uri } : require('../assets/images/fish.jpg')}
             style={styles.avatar} 
           />
           <Text style={styles.brand}>The FISHERMAN</Text>
@@ -65,8 +73,8 @@ const Navbar = () => {
               <>
             <NavLink href="forum" text="Forum" iconName="comments" pathname={pathname} />
             <NavLink href="contribute" text="Request" iconName="plus-circle" pathname={pathname} />
-            <View style={styles.userMenuContainer}>
-          <TouchableOpacity style={styles.userMenuButton} onPress={() => setDropdownVisible(!dropdownVisible)}>
+        <View style={styles.userMenuContainer}>
+          <TouchableOpacity ref={buttonRef} style={styles.userMenuButton} onPress={() => setDropdownVisible(!dropdownVisible)} onLayout={(e) => setButtonWidth(e.nativeEvent.layout.width)}>
                         {user?.profile?.avatar ? (
               <Image source={{ uri: String(user.profile.avatar) }} style={styles.userAvatar} />
             ) : (
@@ -75,6 +83,23 @@ const Navbar = () => {
             <Text style={styles.userName}>{user?.name || 'Profile'}</Text>
             <FontAwesome name={dropdownVisible ? 'angle-up' : 'angle-down'} size={15} color="#333" />
           </TouchableOpacity>
+          {/* Native (non-web) dropdown */}
+          {dropdownVisible && Platform.OS !== 'web' && (
+            <View style={styles.dropdownAbsolute}>
+              <TouchableOpacity style={styles.dropdownItem} onPress={() => { router.push('/profile'); setDropdownVisible(false); }}>
+                <FontAwesome name="user" size={16} style={styles.dropdownIcon} />
+                <Text style={styles.dropdownText}>Profile</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.dropdownItem} onPress={() => { router.push('/my-requests'); setDropdownVisible(false); }}>
+                <FontAwesome name="list" size={16} style={styles.dropdownIcon} />
+                <Text style={styles.dropdownText}>My Requests</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.dropdownItem} onPress={handleLogout}>
+                <FontAwesome name="sign-out" size={16} style={styles.dropdownIcon} />
+                <Text style={styles.dropdownText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
           
               </>
@@ -99,26 +124,10 @@ const Navbar = () => {
             onLogout={handleLogout}
             isAdmin={user?.profile?.role === 'admin'}
             router={router}
+            buttonRef={buttonRef}
+            setButtonWidth={setButtonWidth}
+            buttonWidth={buttonWidth}
           />
-        )}
-        {/* Native (non-web) dropdown fallback */}
-        {dropdownVisible && Platform.OS !== 'web' && (
-          <View style={{ position: 'absolute', right: 24, top: 60, zIndex: 9999 }}>
-            <View style={styles.dropdownAbsolute}>
-              <TouchableOpacity style={styles.dropdownItem} onPress={() => { router.push('/profile'); setDropdownVisible(false); }}>
-                <FontAwesome name="user" size={16} style={styles.dropdownIcon} />
-                <Text style={styles.dropdownText}>Profile</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.dropdownItem} onPress={() => { router.push('/my-requests'); setDropdownVisible(false); }}>
-                <FontAwesome name="list" size={16} style={styles.dropdownIcon} />
-                <Text style={styles.dropdownText}>My Requests</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.dropdownItem} onPress={handleLogout}>
-                <FontAwesome name="sign-out" size={16} style={styles.dropdownIcon} />
-                <Text style={styles.dropdownText}>Logout</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
         )}
       </View>
 
@@ -147,9 +156,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 5,
-    padding: 8,
+    padding: 24,
     minWidth: 200,
     zIndex: 9999,
+
   },
   brandContainer: {
     flexDirection: 'row',
@@ -173,7 +183,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     ...Platform.select({
       web: {
-        paddingHorizontal: 20,
+        paddingHorizontal: 60,
         paddingVertical: 6,
         borderBottomWidth: 1,
         borderBottomColor: '#eee',

@@ -6,6 +6,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import AppNavbar from '../../../../components/AppNavbar';
 import NewsNavbar from '../../../../components/newsnavbar';
 import apiClient from '../../../../utils/api';
+import newsStore from '../../../../store/newsStore';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -358,6 +359,12 @@ export default function CreativeScreen() {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedArtwork, setSelectedArtwork] = useState(null);
+  const { setActiveGenre } = newsStore();
+
+  // Set active genre to Creative when component mounts
+  useEffect(() => {
+    setActiveGenre('Creative');
+  }, [setActiveGenre]);
 
   const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
 

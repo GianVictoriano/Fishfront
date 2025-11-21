@@ -4,6 +4,245 @@ import { Feather } from '@expo/vector-icons';
 import { useAuth } from '~/context/AuthContext';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiClient from '../../utils/api';
+import Svg, { Rect, Circle, Text as SvgText, Line, Path } from 'react-native-svg';
+
+// Simple Bar Chart Component
+const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
+  if (!data || !data.datasets || !data.labels) return null;
+
+  const values = data.datasets[0].data;
+  const maxValue = Math.max(...values);
+  const barWidth = (width - 40) / values.length;
+  const chartHeight = height - 40;
+
+  return (
+    <Svg width={width} height={height}>
+      {/* Y-axis labels */}
+      {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+        const value = Math.round(maxValue * ratio);
+        const y = 20 + (1 - ratio) * (chartHeight - 40);
+        return (
+          <SvgText
+            key={i}
+            x={10}
+            y={y + 4}
+            fontSize="10"
+            fill="#666"
+            textAnchor="end"
+          >
+            {value}
+          </SvgText>
+        );
+      })}
+
+      {/* Bars */}
+      {values.map((value, index) => {
+        const barHeight = (value / maxValue) * (chartHeight - 40);
+        const x = 30 + index * barWidth;
+        const y = 20 + (chartHeight - 40) - barHeight;
+
+        return (
+          <Rect
+            key={index}
+            x={x}
+            y={y}
+            width={barWidth - 5}
+            height={barHeight}
+            fill="#4CAF50"
+            rx="2"
+          />
+        );
+      })}
+
+      {/* X-axis labels */}
+      {data.labels.map((label, index) => {
+        const x = 30 + index * barWidth + (barWidth - 5) / 2;
+        return (
+          <SvgText
+            key={index}
+            x={x}
+            y={height - 5}
+            fontSize="8"
+            fill="#666"
+            textAnchor="middle"
+          >
+            {label}
+          </SvgText>
+        );
+      })}
+    </Svg>
+  );
+};
+
+// Simple Pie Chart Component
+const SimplePieChart = ({ data, width = 300, height = 200 }) => {
+  if (!data || !Array.isArray(data)) return null;
+
+  const total = data.reduce((sum, item) => sum + item.count, 0);
+  const radius = Math.min(width, height) / 2 - 20;
+  const centerX = width / 2;
+  const centerY = height / 2;
+
+  const colors = ['#FF5722', '#FF9800', '#4CAF50', '#2196F3', '#9C27B0'];
+
+  let currentAngle = -Math.PI / 2; // Start from top
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <Svg width={width} height={height}>
+        {data.map((item, index) => {
+          const percentage = item.count / total;
+          const angle = percentage * 2 * Math.PI;
+          const startAngle = currentAngle;
+          const endAngle = currentAngle + angle;
+
+          const x1 = centerX + radius * Math.cos(startAngle);
+          const y1 = centerY + radius * Math.sin(startAngle);
+          const x2 = centerX + radius * Math.cos(endAngle);
+          const y2 = centerY + radius * Math.sin(endAngle);
+
+          const largeArcFlag = percentage > 0.5 ? 1 : 0;
+          const pathData = [
+            `M ${centerX} ${centerY}`,
+            `L ${x1} ${y1}`,
+            `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+            'Z'
+          ].join(' ');
+
+          currentAngle = endAngle;
+
+          return (
+            <Path
+              key={index}
+              d={pathData}
+              fill={colors[index % colors.length]}
+              stroke="#fff"
+              strokeWidth="1"
+            />
+          );
+        })}
+      </Svg>
+
+      {/* Legend */}
+      <View style={{ marginLeft: 20 }}>
+        {data.map((item, index) => (
+          <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+            <View
+              style={{
+                width: 12,
+                height: 12,
+                backgroundColor: colors[index % colors.length],
+                marginRight: 8,
+                borderRadius: 2
+              }}
+            />
+            <Text style={{ fontSize: 12, color: '#666' }}>
+              {item.name}: {item.count}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+// Simple Line Chart Component
+const SimpleLineChart = ({ data, width = 300, height = 200 }) => {
+  if (!data || !data.datasets || !data.labels) return null;
+
+  const values = data.datasets[0].data;
+  const maxValue = Math.max(...values);
+  const chartWidth = width - 40;
+  const chartHeight = height - 40;
+  const stepX = chartWidth / (values.length - 1);
+
+  const points = values.map((value, index) => {
+    const x = 20 + index * stepX;
+    const y = 20 + (1 - value / maxValue) * (chartHeight - 40);
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <Svg width={width} height={height}>
+      {/* Grid lines */}
+      {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+        const y = 20 + ratio * (chartHeight - 40);
+        return (
+          <Line
+            key={i}
+            x1="20"
+            y1={y}
+            x2={width - 20}
+            y2={y}
+            stroke="#e0e0e0"
+            strokeWidth="1"
+          />
+        );
+      })}
+
+      {/* Line */}
+      <Path
+        d={`M ${points}`}
+        stroke="#2196F3"
+        strokeWidth="3"
+        fill="none"
+      />
+
+      {/* Data points */}
+      {values.map((value, index) => {
+        const x = 20 + index * stepX;
+        const y = 20 + (1 - value / maxValue) * (chartHeight - 40);
+        return (
+          <Circle
+            key={index}
+            cx={x}
+            cy={y}
+            r="4"
+            fill="#2196F3"
+            stroke="#fff"
+            strokeWidth="2"
+          />
+        );
+      })}
+
+      {/* Y-axis labels */}
+      {[0, 0.5, 1].map((ratio, i) => {
+        const value = Math.round(maxValue * ratio);
+        const y = 20 + (1 - ratio) * (chartHeight - 40);
+        return (
+          <SvgText
+            key={i}
+            x="15"
+            y={y + 4}
+            fontSize="10"
+            fill="#666"
+            textAnchor="end"
+          >
+            {value}
+          </SvgText>
+        );
+      })}
+
+      {/* X-axis labels */}
+      {data.labels.map((label, index) => {
+        const x = 20 + index * stepX;
+        return (
+          <SvgText
+            key={index}
+            x={x}
+            y={height - 5}
+            fontSize="10"
+            fill="#666"
+            textAnchor="middle"
+          >
+            {label}
+          </SvgText>
+        );
+      })}
+    </Svg>
+  );
+};
 
 const StatCard = ({ title, value, iconName, color, isMobile, cardStyle }) => (
   <View style={[styles.statCard, isMobile && styles.statCardMobile, cardStyle]}>
@@ -13,43 +252,6 @@ const StatCard = ({ title, value, iconName, color, isMobile, cardStyle }) => (
     <View>
       <Text style={[styles.statCardTitle, isMobile && styles.statCardTitleMobile]}>{title}</Text>
       <Text style={[styles.statCardValue, isMobile && styles.statCardValueMobile]}>{value}</Text>
-    </View>
-  </View>
-);
-
-const ActivityItem = ({ text, time, iconName, isMobile }) => {
-  const getTimeAgo = (timestamp) => {
-    const now = new Date();
-    const past = new Date(timestamp);
-    const diffMs = now - past;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${diffDays}d ago`;
-  };
-
-  return (
-    <View style={styles.activityItem}>
-      <Feather name={iconName} size={isMobile ? 18 : 24} color="#555" />
-      <Text style={styles.activityText}>{text}</Text>
-      <Text style={styles.activityTime}>{getTimeAgo(time)}</Text>
-    </View>
-  );
-};
-
-const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }) => (
-  <View style={styles.activityItem}>
-    <Feather name="calendar" size={isMobile ? 18 : 24} color="#555" />
-    <View style={styles.activityContent}>
-      <Text style={styles.activityTitle}>{title}</Text>
-      <View style={styles.activityDetails}>
-        <Text style={styles.activityDetail}>{date} at {time}</Text>
-        {location && <Text style={styles.activityDetail}>📍 {location}</Text>}
-        <Text style={styles.activityDetail}>by {creator}</Text>
-      </View>
     </View>
   </View>
 );
@@ -65,6 +267,33 @@ const QuickAction = ({ title, iconName, href, isMobile }) => {
 };
 
 export default function DashboardScreen() {
+  const getTimeAgo = (timestamp) => {
+    const now = new Date();
+    const past = new Date(timestamp);
+    const diffMs = now - past;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+  };
+
+const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }) => (
+  <View style={styles.activityItem}>
+    <Feather name="calendar" size={isMobile ? 18 : 24} color="#555" />
+    <View style={styles.activityContent}>
+      <Text style={styles.activityTitle}>{title}</Text>
+      <View style={styles.activityDetails}>
+        <Text style={styles.activityDetail}>📅 {date} at {time}</Text>
+        <Text style={styles.activityDetail}>📍 {location}</Text>
+        <Text style={styles.activityDetail}>👤 Created by {creator}</Text>
+      </View>
+    </View>
+  </View>
+);
+
   const { user, logout, hasModule } = useAuth();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -84,15 +313,56 @@ export default function DashboardScreen() {
   const [contributorsRole, setContributorsRole] = useState('all');
   const [loadingContributors, setLoadingContributors] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [graphData, setGraphData] = useState(null);
+  const [loadingGraphs, setLoadingGraphs] = useState(false);
 
   const handleLogout = () => {
     logout();
     router.push('/');
   };
 
+  const fetchGraphData = async () => {
+    try {
+      setLoadingGraphs(true);
+      
+      const response = await apiClient.get('/graph-data?period=30');
+      const data = response.data;
+      
+      setGraphData(data);
+    } catch (error) {
+      console.error('Error fetching graph data:', error);
+    } finally {
+      setLoadingGraphs(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchGraphData();
+  }, []);
+
   useEffect(() => {
     fetchDashboardStats();
   }, []);
+
+  useEffect(() => {
+    console.log('Stats state changed:', stats);
+  }, [stats]);
+
+  useEffect(() => {
+    console.log('Upcoming activities state changed:', upcomingActivities);
+  }, [upcomingActivities]);
+
+  useEffect(() => {
+    console.log('Top contributors state changed:', topContributors);
+  }, [topContributors]);
+
+  useEffect(() => {
+    console.log('Graph data state changed:', graphData);
+  }, [graphData]);
+
+  useEffect(() => {
+    console.log('Loading states changed:', { loading, loadingGraphs, refreshing });
+  }, [loading, loadingGraphs, refreshing]);
 
   const fetchDashboardStats = async (isRefresh = false) => {
     try {
@@ -102,36 +372,21 @@ export default function DashboardScreen() {
         setLoading(true);
       }
       
-      const token = await AsyncStorage.getItem('auth_token');
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/dashboard-stats`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Dashboard data received:', data);
-        
-        setStats([
-          { title: "In Review", value: data.in_review.toString(), iconName: "file-text", color: "#FFA726" },
-          { title: "Approved", value: data.approved.toString(), iconName: "check-square", color: "#66BB6A" },
-          { title: "Pending Tasks", value: data.pending_tasks.toString(), iconName: "alert-circle", color: "#EF5350" },
-          { title: "Active Projects", value: data.active_projects.toString(), iconName: "briefcase", color: "#5C6BC0" },
-        ]);
-        
-        console.log('Setting upcoming activities:', data.upcoming_activities);
-        setUpcomingActivities(data.upcoming_activities || []);
-        
-        console.log('Setting top contributors:', data.top_contributors);
-        // Ensure we have valid data and it's an array
-        const contributors = Array.isArray(data.top_contributors) ? data.top_contributors : [];
-        console.log('Processed contributors:', contributors);
-        setTopContributors(contributors);
-      } else {
-        console.error('Failed to fetch dashboard stats');
-      }
+      const response = await apiClient.get('/dashboard-stats');
+      const data = response.data;
+      
+      setStats([
+        { title: "In Review", value: data.in_review.toString(), iconName: "file-text", color: "#FFA726" },
+        { title: "Approved", value: data.approved.toString(), iconName: "check-square", color: "#66BB6A" },
+        { title: "Pending Tasks", value: data.pending_tasks.toString(), iconName: "alert-circle", color: "#EF5350" },
+        { title: "Active Projects", value: data.active_projects.toString(), iconName: "briefcase", color: "#5C6BC0" },
+      ]);
+      
+      setUpcomingActivities(data.upcoming_activities || []);
+      
+      // Ensure we have valid data and it's an array
+      const contributors = Array.isArray(data.top_contributors) ? data.top_contributors : [];
+      setTopContributors(contributors);
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
     } finally {
@@ -143,29 +398,18 @@ export default function DashboardScreen() {
   const fetchAllContributors = async () => {
     setLoadingContributors(true);
     try {
-      const token = await AsyncStorage.getItem('auth_token');
       const params = new URLSearchParams({
         search: contributorsSearch,
         timeframe: '30', // Always use 30 days for consistency with main list
         role: contributorsRole,
       });
       
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/contributors?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Handle paginated response - data is in data.data for contributors endpoint
-        const contributors = data.data || data || [];
-        console.log('Contributors data received:', contributors);
-        setAllContributors(contributors);
-      } else {
-        console.error('Failed to fetch all contributors');
-      }
+      const response = await apiClient.get(`/contributors?${params}`);
+      const data = response.data;
+      
+      // Handle paginated response - data is in data.data for contributors endpoint
+      const contributors = data.data || data || [];
+      setAllContributors(contributors);
     } catch (error) {
       console.error('Error fetching all contributors:', error);
     } finally {
@@ -301,6 +545,104 @@ export default function DashboardScreen() {
             )}
           </View>
         </View>
+
+        {/* Charts Section */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Project Status Overview</Text>
+          
+          {/* Content Submissions Over Time */}
+          <View style={styles.chartContainer}>
+            <Text style={styles.chartTitle}>Content Submissions (Last 30 Days)</Text>
+            {loadingGraphs ? (
+              <View style={styles.loadingContainer}>
+                <Text>Loading chart data...</Text>
+              </View>
+            ) : graphData && graphData.content_submissions && graphData.content_submissions.length > 0 ? (
+              <SimpleLineChart
+                data={{
+                  labels: graphData.content_submissions.map(item => {
+                    const date = new Date(item.date);
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  }),
+                  datasets: [{
+                    data: graphData.content_submissions.map(item => item.count),
+                  }]
+                }}
+                width={isMobile ? width - 48 : width - 370} // Use full screen width without 800px limit
+                height={220}
+              />
+            ) : (
+              <View style={styles.noDataContainer}>
+                <Text style={styles.noDataText}>No submission data available</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.sectionContainer}>
+          
+          <View style={[styles.chartsGrid, isMobile && styles.mobileChartsGrid]}>
+            
+            {/* Group Chat Status Distribution */}
+            <View style={styles.chartContainer}>
+              <Text style={styles.chartTitle}>Project Status</Text>
+              {loadingGraphs ? (
+                <View style={styles.loadingContainer}>
+                  <Text>Loading...</Text>
+                </View>
+              ) : graphData && graphData.group_chat_status ? (
+                <SimplePieChart
+                  data={[
+                    {
+                      name: 'Pending',
+                      count: graphData.group_chat_status.pending || 0,
+                    },
+                    {
+                      name: 'In Review',
+                      count: graphData.group_chat_status.in_review || 0,
+                    },
+                    {
+                      name: 'Approved',
+                      count: graphData.group_chat_status.approved || 0,
+                    }
+                  ].filter(item => item.count > 0)}
+                  width={isMobile ? width - 48 : 350}
+                  height={200}
+                />
+              ) : (
+                <View style={styles.noDataContainer}>
+                  <Text style={styles.noDataText}>No status data</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Most Viewed Articles by Genre */}
+            <View style={styles.chartContainer}>
+              <Text style={styles.chartTitle}>Most Viewed by Genre</Text>
+              {loadingGraphs ? (
+                <View style={styles.loadingContainer}>
+                  <Text>Loading...</Text>
+                </View>
+              ) : graphData && graphData.article_publications && graphData.article_publications.length > 0 ? (
+                <SimpleBarChart
+                  data={{
+                    labels: graphData.article_publications.map(item => item.genre),
+                    datasets: [{
+                      data: graphData.article_publications.map(item => item.count)
+                    }]
+                  }}
+                  width={isMobile ? width - 32 : 534} // Bigger width for most viewed by genre
+                  height={200}
+                />
+              ) : (
+                <View style={styles.noDataContainer}>
+                  <Text style={styles.noDataText}>No publication data</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+
       </ScrollView>
 
       {/* Contributors Modal */}
@@ -754,5 +1096,46 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F7F8FA',
+  },
+  // Chart Styles
+  chartContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  chartTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A202C',
+    marginBottom: 12,
+  },
+  chart: {
+    marginVertical: 8,
+    borderRadius: 16,
+  },
+  chartsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -8,
+  },
+  mobileChartsGrid: {
+    flexDirection: 'column',
+  },
+  noDataContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 16,
+  },
+  noDataText: {
+    fontSize: 14,
+    color: '#A0AEC0',
+    textAlign: 'center',
   },
 });

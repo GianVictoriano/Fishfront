@@ -1060,6 +1060,7 @@ const styles = StyleSheet.create({
   },
   editButton: {
     backgroundColor: '#eff6ff',
+    marginRight: 8,
   },
   featureButton: {
     backgroundColor: '#fef3c7',

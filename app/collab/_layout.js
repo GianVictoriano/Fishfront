@@ -6,7 +6,6 @@ import { Feather } from '@expo/vector-icons';
 import { useWindowDimensions } from 'react-native';
 import { useAuth } from '~/context/AuthContext';
 import { useBranding } from '~/context/BrandingContext';
-import { Scrollbars } from 'react-custom-scrollbars-2';
 
 // A single link in the sidebar with hover effects
 const SidebarLink = ({ href, text, iconName, isMinimized, onPress, hoverColor, colors, textColor, iconColor }) => {
@@ -135,14 +134,10 @@ const Sidebar = ({ isMinimized }) => {
         {!isMinimized && <Text style={[styles.sidebarTitle, { color: colors.text_primary || '#FFFFFF' }]}>Fisherman</Text>}
       </View>
       {!isMinimized ? (
-        <Scrollbars
-          style={{ flex: 1 }} // Ensure it takes up available space
-          autoHide
-          autoHideTimeout={0}
-          autoHideDuration={0}
-          // Render invisible thumb and track
-          renderThumbVertical={props => <div {...props} style={{ display: 'none' }}/>}
-          renderTrackVertical={props => <div {...props} style={{ display: 'none' }}/>}
+        <ScrollView
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ flexGrow: 1 }}
         >
           {hasModule('dashboard') && <SidebarLink href="/collab/dashboard" text="Dashboard" iconName="grid" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('create-content') && <SidebarLink href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
@@ -158,7 +153,7 @@ const Sidebar = ({ isMinimized }) => {
           {(user?.profile?.level === 2 || user?.profile?.level === 3) && (
               <SidebarLink href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />
           )}
-        </Scrollbars>
+        </ScrollView>
       ) : (
         <View style={{ flex: 1, alignItems: 'center' }}>
           {(() => {
@@ -206,14 +201,13 @@ export default function CollaboratorLayout() {
             >
               <Feather name={isMinimized ? 'chevron-right' : 'chevron-left'} size={24} color="#FFF" />
             </Pressable>
-            <Scrollbars
+            <ScrollView
               style={styles.contentScrollView} 
-              autoHide
-              renderThumbVertical={props => <div {...props} style={{ ...props.style, backgroundColor: 'transparent' }}/>}
-              renderView={props => <div {...props} style={{ ...props.style, flex: 1, display: 'flex', flexDirection: 'column' }}/>}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ flexGrow: 1 }}
             >
               <Slot />
-            </Scrollbars>
+            </ScrollView>
           </View>
         </View>
       </SafeAreaView>

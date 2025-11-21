@@ -158,9 +158,32 @@ export default function LiteraryWorksScreen() {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary || '#1a237e'} />
-        <Text style={styles.loadingText}>Loading literary works...</Text>
+      <View style={styles.container}>
+        <Navbar />
+        <NewsNavbar />
+        
+        <View style={styles.contentWrapper}>
+          <View style={styles.header}>
+            <View style={styles.headerContent}>
+              <View style={styles.headerLeft}>
+                <MaterialCommunityIcons name="book-open-variant" size={28} color={colors.primary || '#1a237e'} />
+                <View style={styles.headerText}>
+                  <Text style={[styles.headerTitle, { color: colors.primary || '#1a237e' }]}>
+                    Literary Works
+                  </Text>
+                  <Text style={styles.headerSubtitle}>
+                    Discover amazing flipbooks and literary pieces
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary || '#1a237e'} />
+            <Text style={styles.loadingText}>Loading literary works...</Text>
+          </View>
+        </View>
       </View>
     );
   }
@@ -418,7 +441,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
   },
   loadingText: {
     marginTop: 12,
