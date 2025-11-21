@@ -22,6 +22,11 @@ const NavLink = ({ href, text, iconName, pathname, closeMenu, isActive: isActive
     isActive = true;
   }
   
+  // Special case: Home tab should be active for home-related routes including submit
+  if (href === 'home' && (pathname === '/home' || pathname === '/submit')) {
+    isActive = true;
+  }
+  
   const linkStyle = [styles.navLink, isActive && styles.navLinkActive];
   const textStyle = [styles.navLinkText, isActive && styles.navLinkTextActive];
   const iconStyle = [styles.navIcon, isActive && styles.navIconActive];

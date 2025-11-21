@@ -81,6 +81,7 @@ const HomeScreen = () => {
   };
 
   const handleFeaturedCardMouseEnter = (articleId, event) => {
+    console.log(' Featured card hover enter:', articleId);
     const card = event.currentTarget;
     const overlay = card.querySelector('[data-overlay]');
     const titleOverlay = card.querySelector('[data-title-overlay]');
@@ -91,6 +92,7 @@ const HomeScreen = () => {
   };
 
   const handleFeaturedCardMouseLeave = (articleId, event) => {
+    console.log(' Featured card hover leave:', articleId);
     const card = event.currentTarget;
     const overlay = card.querySelector('[data-overlay]');
     const titleOverlay = card.querySelector('[data-title-overlay]');
@@ -101,6 +103,7 @@ const HomeScreen = () => {
   };
 
   const handleGenreCardMouseEnter = (genre, event) => {
+    console.log(' Genre card hover enter:', genre);
     const card = event.currentTarget;
     const image = card.querySelector('img');
     const overlay = card.querySelector('.genreImageOverlay');
@@ -346,26 +349,39 @@ const HomeScreen = () => {
                   <div 
                     key={article.id}
                     style={styles.featurecard}
-                    onMouseEnter={(e) => handleFeaturedCardMouseEnter(article.id, e)}
-                    onMouseLeave={(e) => handleFeaturedCardMouseLeave(article.id, e)}
                     onClick={() => router.push(`news/article/${article.id}`)}
                   >
                     {index === 1 ? (
                       <React.Fragment>
                         <div style={styles.publicationContent}>
-                          <h3 style={{...styles.publicationTitle, textAlign: 'right'}} data-title>{article.title}</h3>
-                          <p style={{...styles.publicationSummary, textAlign: 'right'}}>{article.excerpt}</p>
-                          <div style={{...styles.articleMeta, justifyContent: 'flex-end'}}>
-                            <div style={{...styles.metaItem, justifyContent: 'flex-end', textAlign: 'right', width: '100%'}}>
-                              <MaterialIcons name="schedule" size={14} color="#64748b" style={styles.metaIcon} />
-                              <span style={{...styles.metaText, fontSize: '11px', marginBottom: '2px', paddingLeft: '2px', textAlign: 'right'}}>
-                                {article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric'
-                                }) : 'Recent'}
-                              </span>
-                            </div>
+                          <h3 
+                            style={{...styles.publicationTitle, textAlign: 'right'}} 
+                            data-title 
+                            onMouseEnter={(e) => {
+                              const card = e.currentTarget.parentNode.parentNode;
+                              const image = card.querySelector('img');
+                              const overlay = card.querySelector('[data-overlay]');
+                              if (image) image.style.transform = 'scale(1.08)';
+                              if (overlay) overlay.style.opacity = '1';
+                            }}
+                            onMouseLeave={(e) => {
+                              const card = e.currentTarget.parentNode.parentNode;
+                              const image = card.querySelector('img');
+                              const overlay = card.querySelector('[data-overlay]');
+                              if (image) image.style.transform = 'scale(1)';
+                              if (overlay) overlay.style.opacity = '0';
+                            }}
+                          >
+                            {article.title}
+                          </h3>
+                          <p 
+                            style={{...styles.publicationSummary, textAlign: 'right'}} 
+                            onMouseEnter={(e) => {
+                              const card = e.currentTarget.parentNode.parentNode;
+                              const image = card.querySelector('img');
+                              const overlay = card.querySelector('[data-overlay]');
+                              if (image) image.style.transform = 'scale(1.08)';
+                              if (overlay) overlay.style.opacity = '1';
                           </div>
                         </div>
                         <div style={styles.imageContainer2}>
@@ -401,13 +417,6 @@ const HomeScreen = () => {
                           
                           <div style={styles.categoryBadge}>
                             <MaterialIcons name="star" size={14} color="#fff" />
-                          </div>
-                        </div>
-                      </React.Fragment>
-                    ) : (
-                      <React.Fragment>
-                        <div style={styles.imageContainer2}>
-                          <img 
                             src={article.image} 
                             alt={article.title}
                             style={styles.publicationImage}
@@ -526,24 +535,6 @@ const HomeScreen = () => {
                           <div 
                             key={article.id}
                             style={styles.publicationCard}
-                            onMouseEnter={(e) => {
-                              const card = e.currentTarget;
-                              const overlay = card.querySelector('[data-overlay]');
-                              const image = card.querySelector('img');
-                              const title = card.querySelector('[data-title]');
-                              if (overlay) overlay.style.opacity = '1';
-                              if (image) image.style.transform = 'scale(1.08)';
-                              if (title) title.style.color = '#3b82f6';
-                            }}
-                            onMouseLeave={(e) => {
-                              const card = e.currentTarget;
-                              const overlay = card.querySelector('[data-overlay]');
-                              const image = card.querySelector('img');
-                              const title = card.querySelector('[data-title]');
-                              if (overlay) overlay.style.opacity = '0';
-                              if (image) image.style.transform = 'scale(1)';
-                              if (title) title.style.color = '#1a237e';
-                            }}
                             onClick={() => router.push(article.link)}
                             className="publication-card"
                           >
@@ -567,7 +558,26 @@ const HomeScreen = () => {
                               </div>
                             </div>
                             <div style={styles.publicationContent}>
-                              <h3 style={styles.publicationTitle} data-title>{article.title}</h3>
+                              <h3 
+                                style={styles.publicationTitle} 
+                                data-title
+                                onMouseEnter={(e) => {
+                                  const card = e.currentTarget.parentNode.parentNode;
+                                  const overlay = card.querySelector('[data-overlay]');
+                                  const image = card.querySelector('img');
+                                  if (overlay) overlay.style.opacity = '1';
+                                  if (image) image.style.transform = 'scale(1.08)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  const card = e.currentTarget.parentNode.parentNode;
+                                  const overlay = card.querySelector('[data-overlay]');
+                                  const image = card.querySelector('img');
+                                  if (overlay) overlay.style.opacity = '0';
+                                  if (image) image.style.transform = 'scale(1)';
+                                }}
+                              >
+                                {article.title}
+                              </h3>
                               <div style={styles.articleMeta}>
                                 <div style={styles.metaItem}>
                                   <MaterialIcons name="schedule" size={14} color="#64748b" />
@@ -591,42 +601,6 @@ const HomeScreen = () => {
           </React.Fragment>
         )}
         
-        {/* Submit Section */}
-        <section style={{...styles.section, ...styles.submitSection}}>
-          <div style={styles.submitContent}>
-            <img
-              src="https://images.unsplash.com/photo-1455390582262-044cdead277a?q=80&w=2070&auto=format&fit=crop"
-              alt="Submit your work"
-              style={styles.submitImage}
-            />
-            <div style={styles.submitText}>
-              <h2 style={{...styles.sectionTitle, color: '#059669', textAlign: 'left' }}>Submit Your Work</h2>
-              <p style={styles.aboutText}>
-                Share your creative writing, poetry, essays, or visual art with our community. Get your work published and inspire others with your talent.
-              </p>
-              <button
-                style={{
-                  ...styles.ctaButton2,
-                  ...(false ? styles.ctaButtonHover : {}),
-                  alignSelf: 'flex-start'
-                }}
-                onMouseEnter={() => {}}
-                onMouseLeave={() => {}}
-                onClick={() => {
-                  console.log('Submit Work clicked');
-                  router.push('/submit');
-                }}
-                onPress={() => {
-                  console.log('Submit Work pressed');
-                  router.push('/submit');
-                }}
-              >
-                Submit Work
-              </button>
-            </div>
-          </div>
-        </section>
-
         {/* Recruitment Section - Only show if application period is set */}
         {applicationPeriod && (
           <React.Fragment>
@@ -1232,33 +1206,6 @@ const styles = StyleSheet.create({
     transform: 'translateY(-2px)',
     boxShadow: '0 4px 8px rgba(59, 130, 246, 0.15)',
     borderColor: '#2563eb',
-  },
-  submitSection: {
-    backgroundColor: '#f0fdf4',
-    width: '96%',
-    padding: '48px 24px',
-    marginTop: 32,
-    marginBottom: 32,
-    borderRadius: '8px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-    boxSizing: 'border-box',
-  },
-  submitContent: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '40px',
-    maxWidth: '1200px',
-    margin: '0 auto',
-    width: '100%',
-  },
-  submitImage: {
-    width: '200px',
-    height: '200px',
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
-  submitText: {
-    flex: 1,
   },
   recruitmentSection: {
     backgroundColor: '#f8f9fa',
