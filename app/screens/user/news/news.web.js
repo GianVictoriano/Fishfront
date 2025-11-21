@@ -1011,6 +1011,7 @@ export default function NewsScreen() {
           url = '/public/trending-articles';
         }
 
+        //asdasdasdasd
         const res = await apiClient.get(url);
         if (Array.isArray(res.data?.data)) {
           const mapped = res.data.data.slice(0, 15).map(article => ({
