@@ -20,7 +20,7 @@ const InfoCard = ({ icon, label, value }) => (
 
 export default function ProfileScreen() {
   const [navVisible, setNavVisible] = useState(false);
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, setAuth } = useAuth();
   const router = useRouter();
   const [bookmarks, setBookmarks] = useState([]);
   const [loadingBookmarks, setLoadingBookmarks] = useState(true);
@@ -112,11 +112,10 @@ export default function ProfileScreen() {
       // Update user data in AsyncStorage and context
       const updatedUser = response.data.user;
       await AsyncStorage.setItem('user_data', JSON.stringify(updatedUser));
+      setAuth(updatedUser);
       
       // Force re-render by updating the user in auth context if available
-      if (window.location) {
-        window.location.reload();
-      }
+      // Removed window.location.reload() to store change locally
     } catch (error) {
       console.error('Error updating anonymous mode:', error);
       // Revert on error
