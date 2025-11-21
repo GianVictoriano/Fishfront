@@ -589,6 +589,30 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 14,
   },
+  cacheClearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    marginBottom: 8,
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+  cacheClearButtonText: {
+    color: '#374151',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  cacheClearDescription: {
+    fontSize: 12,
+    color: '#6b7280',
+    lineHeight: 16,
+    maxWidth: 250,
+  },
   threeColumnGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(4, 1fr)',
@@ -740,17 +764,18 @@ const fallbackNewsData = [
   }
 ];
 
+const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+
+const getImageUrl = (url) => {
+  if (!url) return defaultImage;
+  // Convert to string if it's a number or other type
+  const urlStr = String(url);
+  if (urlStr.startsWith('http')) return urlStr;
+  return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
+};
+
 const NewsCard = ({ item, compact, bigTrending, isFirst, onInteraction }) => {
   const router = useRouter();
-  const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
-  
-  const getImageUrl = (url) => {
-    if (!url) return defaultImage;
-    // Convert to string if it's a number or other type
-    const urlStr = String(url);
-    if (urlStr.startsWith('http')) return urlStr;
-    return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
-  };
   
   const [imageUri, setImageUri] = useState(getImageUrl(item?.image));
   const [isHovered, setIsHovered] = useState(false);
@@ -881,6 +906,23 @@ const HeadlineCard = ({ item }) => (
   </View>
 );
 
+const TrendingImage = ({ uri, style, resizeMode }) => {
+  const [imageUri, setImageUri] = useState(uri);
+
+  const handleImageError = () => {
+    setImageUri(defaultImage);
+  };
+
+  return (
+    <Image
+      source={{ uri: imageUri }}
+      style={style}
+      onError={handleImageError}
+      resizeMode={resizeMode}
+    />
+  );
+};
+
 const SkeletonLoader = () => (
   <View style={styles.newsMainRow}>
     <View style={styles.leftColWrapper}>
@@ -935,55 +977,105 @@ export default function NewsScreen() {
   const [currentUser, setCurrentUser] = useState(null);
   const [displayedArticles, setDisplayedArticles] = useState(9); // For pagination on featured tabs
   const [loading, setLoading] = useState(false);
+  const [activeRequests, setActiveRequests] = useState(new Set()); // Track active requests to prevent duplicates
   const router = useRouter();
   const { recordView, recordReaction, recordTimeSpent } = useInteractionTracking(currentUser?.id);
 
-  // State for request management
-  const [activeRequests, setActiveRequests] = useState(new Set());
+  // State for featured image with error handling
+  const [featuredImageUri, setFeaturedImageUri] = useState(defaultImage);
 
-  // Get current user for personalization
+  // Fetch News data on component mount to ensure content loads
   useEffect(() => {
-    const getCurrentUser = async () => {
+    const fetchInitialNewsData = async () => {
+      const requestId = 'initial-news';
+      if (activeRequests.has(requestId)) return;
+
+      // Check cache first
+      const cacheKey = `news-${activeGenre}`;
+      const cachedData = await getCachedData(cacheKey);
+      if (cachedData) {
+        setNewsData(cachedData);
+        // Don't set loading to false immediately - let the component handle it naturally
+        return;
+      }
+
+      setActiveRequests(prev => new Set(prev).add(requestId));
+      setLoading(true);
+
       try {
-        const token = await AsyncStorage.getItem('auth_token'); 
-        if (token) {
-          const userData = await AsyncStorage.getItem('user_data');
-          if (userData) {
-            setCurrentUser(JSON.parse(userData));
-          } else {
-            // Fallback: fetch from API
-            const response = await apiClient.get('/user');
-            setCurrentUser(response.data);
-          }
+        const isFeaturedFetch = activeGenre !== 'News' && activeGenre !== 'Creative';
+        let url;
+        if (isFeaturedFetch) {
+          url = `/public/trending-articles?genre=${activeGenre.toLowerCase()}`;
+        } else {
+          url = '/public/trending-articles';
+        }
+
+        const res = await apiClient.get(url);
+        if (Array.isArray(res.data?.data)) {
+          const mapped = res.data.data.slice(0, 15).map(article => ({
+            id: article.id?.toString() || '',
+            title: article.title,
+            excerpt: '',
+            image: article.image || article.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+            date: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
+            category: article.genre || 'News',
+          }));
+          setNewsData(mapped);
+          await setCachedData(cacheKey, mapped);
         }
       } catch (error) {
-        console.log('User not authenticated');
+        setNewsData(fallbackNewsData);
+      } finally {
+        setLoading(false);
+        setActiveRequests(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(requestId);
+          return newSet;
+        });
       }
     };
-    getCurrentUser();
-  }, []);
 
-  // Cache management functions
+    fetchInitialNewsData();
+  }, [activeGenre]);
+
+  // Cache management functions with cleanup
   const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+  const MAX_CACHE_ENTRIES = 20; // Limit cache entries to prevent bloat
 
   const getCachedData = async (key) => {
     try {
+      // First, cleanup expired entries
+      await cleanupExpiredCache();
+      
       const cached = await AsyncStorage.getItem(`news_cache_${key}`);
       if (cached) {
         const parsed = JSON.parse(cached);
         const { data, timestamp } = parsed || {};
         if (data && typeof timestamp === 'number' && Date.now() - timestamp < CACHE_DURATION) {
           return data;
+        } else {
+          // Remove expired entry
+          await AsyncStorage.removeItem(`news_cache_${key}`);
         }
       }
     } catch (error) {
       console.log('Cache read error:', error);
+      // If there's an error, try to clear potentially corrupted cache
+      try {
+        await AsyncStorage.removeItem(`news_cache_${key}`);
+      } catch (cleanupError) {
+        console.log('Cache cleanup error:', cleanupError);
+      }
     }
     return null;
   };
 
   const setCachedData = async (key, data) => {
     try {
+      // Ensure we don't exceed cache limits
+      await enforceCacheLimits();
+      
       const cacheData = {
         data,
         timestamp: Date.now()
@@ -991,6 +1083,59 @@ export default function NewsScreen() {
       await AsyncStorage.setItem(`news_cache_${key}`, JSON.stringify(cacheData));
     } catch (error) {
       console.log('Cache write error:', error);
+    }
+  };
+
+  const cleanupExpiredCache = async () => {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const cacheKeys = keys.filter(key => key.startsWith('news_cache_'));
+      
+      for (const key of cacheKeys) {
+        try {
+          const cached = await AsyncStorage.getItem(key);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            const { timestamp } = parsed || {};
+            if (!timestamp || Date.now() - timestamp > CACHE_DURATION) {
+              await AsyncStorage.removeItem(key);
+            }
+          }
+        } catch (error) {
+          // Remove corrupted entries
+          await AsyncStorage.removeItem(key);
+        }
+      }
+    } catch (error) {
+      console.log('Cache cleanup error:', error);
+    }
+  };
+
+  const enforceCacheLimits = async () => {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const cacheKeys = keys.filter(key => key.startsWith('news_cache_'));
+      
+      if (cacheKeys.length >= MAX_CACHE_ENTRIES) {
+        // Remove oldest entries (simple FIFO - could be improved to LRU)
+        const entriesToRemove = cacheKeys.slice(0, cacheKeys.length - MAX_CACHE_ENTRIES + 1);
+        await AsyncStorage.multiRemove(entriesToRemove);
+      }
+    } catch (error) {
+      console.log('Cache limit enforcement error:', error);
+    }
+  };
+
+  const clearAllCache = async () => {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const cacheKeys = keys.filter(key => key.startsWith('news_cache_'));
+      if (cacheKeys.length > 0) {
+        await AsyncStorage.multiRemove(cacheKeys);
+        console.log(`Cleared ${cacheKeys.length} cache entries`);
+      }
+    } catch (error) {
+      console.log('Cache clearing error:', error);
     }
   };
 
@@ -1017,13 +1162,14 @@ export default function NewsScreen() {
             title: a.title,
             category: a.genre || 'News',
             published_at: a.published_at,
-            image: a.image, // Use full URL from API
+            image: getImageUrl(a.image), // Process image URL
           }));
           setTrendingStories(mapped);
           // Cache the result
           await setCachedData('trending-stories', mapped);
         }
       } catch (error) {
+        console.log('Error fetching trending stories:', error);
         setTrendingStories([]);
       } finally {
         setActiveRequests(prev => {
@@ -1035,76 +1181,7 @@ export default function NewsScreen() {
     };
 
     fetchTrendingStories();
-  }, []);
-
-  useEffect(() => {
-    const fetchNewsData = async () => {
-      const requestId = `news-${activeGenre}`;
-      if (activeRequests.has(requestId)) return;
-
-      // Check cache first
-      const cacheKey = `news-${activeGenre}`;
-      const cachedData = await getCachedData(cacheKey);
-      if (cachedData) {
-        setNewsData(cachedData);
-        setLoading(false);
-        return;
-      }
-
-      setActiveRequests(prev => new Set(prev).add(requestId));
-      let isMounted = true;
-
-      setLoading(true);
-      // Reset displayed articles count when changing tabs
-      setDisplayedArticles(9);
-
-      try {
-        const isFeaturedFetch = activeGenre !== 'News' && activeGenre !== 'Creative';
-        let url;
-        if (isFeaturedFetch) {
-          url = `/public/trending-articles?genre=${activeGenre.toLowerCase()}`; // use trending list for featured tabs
-        } else if (activeGenre === 'News') {
-          url = '/public/article-summaries'; // News tab: get all recent summaries without filter
-        } else {
-          // Creative tab
-          url = '/public/article-summaries?genre=creative';
-        }
-
-        const res = await apiClient.get(url);
-
-        if (isMounted && Array.isArray(res.data?.data)) {
-          // Limit initial load to improve performance
-          const limit = isFeaturedFetch ? 20 : 15;
-          const mapped = res.data.data.slice(0, limit).map(article => ({
-            id: article.id?.toString() || '',
-            title: article.title,
-            excerpt: '',
-            image: article.image || article.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
-            date: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
-            category: article.genre || 'News',
-          }));
-          setNewsData(mapped);
-          // Cache the result
-          await setCachedData(cacheKey, mapped);
-        }
-      } catch (error) {
-        if (isMounted) setNewsData(fallbackNewsData);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-          setActiveRequests(prev => {
-            const newSet = new Set(prev);
-            newSet.delete(requestId);
-            return newSet;
-          });
-        }
-      }
-
-      return () => { isMounted = false; };
-    };
-
-    fetchNewsData();
-  }, [activeGenre]);
+  }, []); // Empty dependency array - only run once on mount
 
   // Determine if we're on a featured tab (Articles, Opinion, Sports, Editorial)
   const isFeaturedTab = activeGenre !== 'News' && activeGenre !== 'Creative';
@@ -1120,6 +1197,27 @@ export default function NewsScreen() {
   const handleLoadMore = () => {
     setDisplayedArticles(prev => prev + 8);
   };
+
+  // Update featured image URI when featured story changes
+  useEffect(() => {
+    if (featuredStory) {
+      setFeaturedImageUri(getImageUrl(featuredStory.image));
+    }
+  }, [newsData]);
+
+  // Handle navigation for genres that have dedicated pages
+  useEffect(() => {
+    // Small delay to ensure router is ready
+    const timer = setTimeout(() => {
+      if (router && activeGenre === 'Featured') {
+        router.push('/news/featured');
+      } else if (router && activeGenre === 'Literary Works') {
+        router.push('/news/literary-works');
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [activeGenre, router]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1147,8 +1245,9 @@ export default function NewsScreen() {
                       >
                         <View style={styles.featuredImageContainer}>
                           <Image
-                            source={{ uri: featuredStory.image || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070' }}
+                            source={{ uri: featuredImageUri }}
                             style={styles.featuredImageStyle}
+                            onError={() => setFeaturedImageUri(defaultImage)}
                             resizeMode="cover"
                           />
                         </View>
@@ -1235,8 +1334,8 @@ export default function NewsScreen() {
                               <TouchableOpacity key={item.id} onPress={() => router.push(`/news/article/${item.id}`)}>
                                 {index < 3 ? (
                                   <View style={styles.topTrendingItem}>
-                                    <Image
-                                      source={{ uri: item.image }}
+                                    <TrendingImage
+                                      uri={item.image}
                                       style={styles.topTrendingImage}
                                       resizeMode="cover"
                                     />
@@ -1306,6 +1405,29 @@ export default function NewsScreen() {
                     <MaterialIcons name="smartphone" size={20} color="#93c5fd" style={styles.contactIcon} />
                     <Text style={styles.contactText}>+63 912 345 6789</Text>
                   </View>
+                </View>
+                <View style={styles.footerSection}>
+                  <Text style={styles.footerHeading}>Performance</Text>
+                  <TouchableOpacity
+                    style={styles.cacheClearButton}
+                    onPress={async () => {
+                      try {
+                        await clearAllCache();
+                        alert('Cache cleared successfully! The page will reload to apply changes.');
+                        window.location.reload();
+                      } catch (error) {
+                        console.error('Error clearing cache:', error);
+                        alert('Failed to clear cache. Please try refreshing the page manually.');
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons name="cleaning-services" size={16} color="#374151" style={{ marginRight: 8 }} />
+                    <Text style={styles.cacheClearButtonText}>Clear Cache & Refresh</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.cacheClearDescription}>
+                    Use this if the website feels slow. This will clear cached data and refresh the page.
+                  </Text>
                 </View>
               </View>
               <View style={styles.copyright}>

@@ -242,15 +242,6 @@ export default function ForumScreen() {
     fetchTopics();
   }, []);
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.centered}>
-        <ActivityIndicator size="large" color="#007BFF" />
-        <Text>Loading Topics...</Text>
-      </SafeAreaView>
-    );
-  }
-
   const renderSidebar = () => (
     <View style={styles.sidebar}>
       <View style={styles.sidebarSection}>
@@ -362,7 +353,12 @@ export default function ForumScreen() {
         
         <View style={{ flex: 3, flexDirection: 'column', height: '100%' }}>
           {/* Main content area: topic list or topic details */}
-          {selectedTopic ? (
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#007BFF" />
+              <Text>Loading Topics...</Text>
+            </View>
+          ) : selectedTopic ? (
             <View style={styles.topicDetailsContainer}>
               <View style={styles.topicContent}>
                 <TouchableOpacity style={styles.backButton} onPress={() => setSelectedTopic(null)}>
@@ -1045,6 +1041,13 @@ const styles = StyleSheet.create({
       justifyContent: 'center',
       alignItems: 'center',
       padding: 20,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: 60,
+      paddingHorizontal: 40,
     },
     newTopicForm: {
       backgroundColor: '#fff',

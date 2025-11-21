@@ -34,6 +34,15 @@ const fallbackPublications = {
 };
 
 const CATEGORIES = ['News'];
+const GENRES = ['articles', 'sports', 'opinion', 'editorial', 'creative', 'literary'];
+const GENRE_DISPLAY_NAMES = {
+  'articles': 'ARTICLES',
+  'sports': 'SPORTS',
+  'opinion': 'OPINION',
+  'editorial': 'EDITORIAL',
+  'creative': 'CREATIVE',
+  'literary': 'LITERARY WORKS'
+};
 
 const HomeScreen = () => {
   const { width } = useWindowDimensions();
@@ -49,6 +58,7 @@ const HomeScreen = () => {
   const [applicationPeriod, setApplicationPeriod] = useState(null);
   const [isCheckingPeriod, setIsCheckingPeriod] = useState(true);
   const [featuredData, setFeaturedData] = useState([]);
+  const [genreData, setGenreData] = useState({});
 
   useEffect(() => {
     fetchArticlesByCategory();
@@ -90,16 +100,34 @@ const HomeScreen = () => {
     if (image) image.style.transform = 'scale(1)';
   };
 
+  const handleGenreCardMouseEnter = (genre, event) => {
+    const card = event.currentTarget;
+    const image = card.querySelector('img');
+    const overlay = card.querySelector('.genreImageOverlay');
+    if (image) image.style.transform = 'scale(1.1)';
+    if (overlay) overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+  };
+
+  const handleGenreCardMouseLeave = (genre, event) => {
+    const card = event.currentTarget;
+    const image = card.querySelector('img');
+    const overlay = card.querySelector('.genreImageOverlay');
+    if (image) image.style.transform = 'scale(1)';
+    if (overlay) overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+  };
+
   const fetchFeaturedArticles = async () => {
     try {
       const response = await apiClient.get('/public/featured-articles');
       if (response.data?.data) {
-        const mapped = response.data.data.slice(0, 6).map(article => ({
+        const mapped = response.data.data.slice(0, 3).map(article => ({
           id: article.id?.toString() || '',
           title: article.title,
-          excerpt: article.content ? article.content.substring(0, 150) + '...' : '',
+          excerpt: article.content 
+            ? article.content.replace(/<[^>]*>/g, '') 
+            : '',
           image: article.media && article.media.length > 0
-            ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`
+            ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}` 
             : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
           published_at: article.published_at,
           genre: article.genre || 'Featured',
@@ -125,13 +153,71 @@ const HomeScreen = () => {
       
       const allArticles = response.data.data;
       const categoryData = {};
+      const genreData = {};
       
       // Initialize each category with an empty array
       CATEGORIES.forEach(category => {
         categoryData[category] = [];
       });
       
-      // Categorize articles by their genre
+      // Initialize each genre with an empty array
+      GENRES.forEach(genre => {
+        genreData[genre] = [];
+      });
+      
+      // Categorize articles by their genre for the genre section
+      allArticles.forEach(article => {
+        const genre = article.genre?.toLowerCase();
+        if (GENRES.includes(genre) && genreData[genre].length < 1) { // Only take the latest (first) article per genre
+          let dummyImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070'; // Default dummy image
+          
+          // Use specific dummy images for each genre
+          if (genre === 'articles') {
+            dummyImage = 'https://images.unsplash.com/photo-1586339949216-35c2747cc36d?q=80&w=2070&auto=format&fit=crop';
+          } else if (genre === 'sports') {
+            dummyImage = 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=2070&auto=format&fit=crop';
+          } else if (genre === 'opinion') {
+            dummyImage = 'https://images.unsplash.com/photo-1504711331083-9c895941bf81?q=80&w=2070&auto=format&fit=crop';
+          } else if (genre === 'editorial') {
+            dummyImage = 'https://images.unsplash.com/photo-1455390582262-044cdead277a?q=80&w=2070&auto=format&fit=crop';
+          }
+          
+          genreData[genre].push({
+            id: article.id?.toString() || '',
+            title: article.title || 'Untitled Article',
+            image: dummyImage,
+            link: `news/article/${article.slug || article.id}`,
+            genre: article.genre,
+            published_at: article.published_at
+          });
+        }
+      });
+      
+      // Add dummy entry for creative genre if no articles exist
+      if (!genreData['creative'] || genreData['creative'].length === 0) {
+        genreData['creative'] = [{
+          id: 'creative-dummy',
+          title: 'Creative Works',
+          image: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?q=80&w=2070&auto=format&fit=crop',
+          link: '/news?genre=creative',
+          genre: 'creative',
+          published_at: new Date().toISOString()
+        }];
+      }
+      
+      // Add dummy entry for literary genre if no articles exist
+      if (!genreData['literary'] || genreData['literary'].length === 0) {
+        genreData['literary'] = [{
+          id: 'literary-dummy',
+          title: 'Literary Works',
+          image: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?q=80&w=2070&auto=format&fit=crop',
+          link: '/news?genre=literary',
+          genre: 'literary',
+          published_at: new Date().toISOString()
+        }];
+      }
+      
+      // Categorize articles by their genre (legacy for News category)
       allArticles.forEach(article => {
         const category = 'News'; // Always put in News category
         
@@ -151,6 +237,7 @@ const HomeScreen = () => {
       });
       
       setPublications(categoryData);
+      setGenreData(genreData);
     } catch (err) {
       console.error('Error fetching articles:', err);
       setError('Failed to load articles. Please try again later.');
@@ -207,6 +294,45 @@ const HomeScreen = () => {
           <div style={styles.bgShape3}></div>
         </div>
         
+        {/* Genre Section */}
+        <div style={styles.genreSection}>
+          <div style={styles.genreTitleContainer}>
+            <h2 style={styles.genreTitle}>Start your journey</h2>
+            <p style={styles.genreSubtitle}>Explore different genres and discover stories that inspire you</p>
+          </div>
+          <div style={styles.genreGrid}>
+            {GENRES.map((genre) => (
+              genreData[genre]?.length > 0 && (
+                <div 
+                  key={genre} 
+                  style={styles.genreCard}
+                  onMouseEnter={(e) => handleGenreCardMouseEnter(genre, e)}
+                  onMouseLeave={(e) => handleGenreCardMouseLeave(genre, e)}
+                >
+
+                  <div 
+                    style={styles.genreContent}
+                    onClick={() => router.push(genreData[genre][0].link)}
+                  >
+                    <img 
+                      src={genreData[genre][0].image} 
+                      alt={genreData[genre][0].title}
+                      style={styles.genreImage}
+                      onError={(e) => {
+                        e.target.src = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+                      }}
+                    />
+                    <div style={styles.genreImageOverlay} className="genreImageOverlay"></div>
+                    <div style={styles.genreOverlay} className="genreOverlay">
+                      <h3 style={styles.genreArticleTitle}>{GENRE_DISPLAY_NAMES[genre].split('').join('\n')}</h3>
+                    </div>
+                  </div>
+                </div>
+              )
+            ))}
+          </div>
+        </div>
+        
         {featuredData.length > 0 && (
           <React.Fragment>
             <div style={styles.featuredSection}>
@@ -216,7 +342,7 @@ const HomeScreen = () => {
                 <p style={styles.featuredSubtitle}>Highlighted stories and creative works</p>
               </div>
               <div style={styles.featuredGrid}>
-                {featuredData.map((article) => (
+                {featuredData.map((article, index) => (
                   <div 
                     key={article.id}
                     style={styles.featurecard}
@@ -224,48 +350,122 @@ const HomeScreen = () => {
                     onMouseLeave={(e) => handleFeaturedCardMouseLeave(article.id, e)}
                     onClick={() => router.push(`news/article/${article.id}`)}
                   >
-                    <div style={styles.imageContainer2}>
-                      <img 
-                        src={article.image} 
-                        alt={article.title}
-                        style={styles.publicationImage}
-                        onError={(e) => {
-                          e.target.src = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
-                        }}
-                      />
-                      {/* Always visible title overlay */}
-                      <div style={styles.titleOverlay} data-title-overlay>
-                        <h3 style={styles.overlayTitle}>{article.title}</h3>
-                      </div>
-                      
-                      {/* Hover-only additional details overlay */}
-                      <div style={styles.cardOverlay} data-overlay>
-                        <div style={styles.overlayContent}>
-                          <span style={styles.overlayGenre}>
-                            {article.genre || 'FEATURED'}
-                          </span>
-                          <span style={styles.overlayDate}>
-                            {article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
-                            }) : 'Recent'}
-                          </span>
-                          <span style={styles.readMoreText}>Click to Read Full Article</span>
+                    {index === 1 ? (
+                      <React.Fragment>
+                        <div style={styles.publicationContent}>
+                          <h3 style={{...styles.publicationTitle, textAlign: 'right'}} data-title>{article.title}</h3>
+                          <p style={{...styles.publicationSummary, textAlign: 'right'}}>{article.excerpt}</p>
+                          <div style={{...styles.articleMeta, justifyContent: 'flex-end'}}>
+                            <div style={{...styles.metaItem, justifyContent: 'flex-end', textAlign: 'right', width: '100%'}}>
+                              <MaterialIcons name="schedule" size={14} color="#64748b" style={styles.metaIcon} />
+                              <span style={{...styles.metaText, fontSize: '11px', marginBottom: '2px', paddingLeft: '2px', textAlign: 'right'}}>
+                                {article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                }) : 'Recent'}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      
-                      <div style={styles.categoryBadge}>
-                        <MaterialIcons name="star" size={14} color="#fff" />
-                      </div>
-                    </div>
+                        <div style={styles.imageContainer2}>
+                          <img 
+                            src={article.image} 
+                            alt={article.title}
+                            style={styles.publicationImage}
+                            onError={(e) => {
+                              e.target.src = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+                            }}
+                          />
+                          {/* Always visible title overlay */}
+                          <div style={styles.titleOverlay} data-title-overlay>
+                            <h3 style={styles.overlayTitle}>{article.title}</h3>
+                          </div>
+                          
+                          {/* Hover-only additional details overlay */}
+                          <div style={styles.cardOverlay} data-overlay>
+                            <div style={styles.overlayContent}>
+                              <span style={styles.overlayGenre}>
+                                {article.genre || 'FEATURED'}
+                              </span>
+                              <span style={styles.overlayDate}>
+                                {article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                }) : 'Recent'}
+                              </span>
+                              <span style={styles.readMoreText}>Click to Read Full Article</span>
+                            </div>
+                          </div>
+                          
+                          <div style={styles.categoryBadge}>
+                            <MaterialIcons name="star" size={14} color="#fff" />
+                          </div>
+                        </div>
+                      </React.Fragment>
+                    ) : (
+                      <React.Fragment>
+                        <div style={styles.imageContainer2}>
+                          <img 
+                            src={article.image} 
+                            alt={article.title}
+                            style={styles.publicationImage}
+                            onError={(e) => {
+                              e.target.src = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+                            }}
+                          />
+                          {/* Always visible title overlay */}
+                          <div style={styles.titleOverlay} data-title-overlay>
+                            <h3 style={styles.overlayTitle}>{article.title}</h3>
+                          </div>
+                          
+                          {/* Hover-only additional details overlay */}
+                          <div style={styles.cardOverlay} data-overlay>
+                            <div style={styles.overlayContent}>
+                              <span style={styles.overlayGenre}>
+                                {article.genre || 'FEATURED'}
+                              </span>
+                              <span style={styles.overlayDate}>
+                                {article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                }) : 'Recent'}
+                              </span>
+                              <span style={styles.readMoreText}>Click to Read Full Article</span>
+                            </div>
+                          </div>
+                          
+                          <div style={styles.categoryBadge}>
+                            <MaterialIcons name="star" size={14} color="#fff" />
+                          </div>
+                        </div>
+                        <div style={styles.publicationContent}>
+                          <h3 style={styles.publicationTitle} data-title>{article.title}</h3>
+                          <p style={styles.publicationSummary}>{article.excerpt}</p>
+                          <div style={styles.articleMeta}>
+                            <div style={styles.metaItem}>
+                              <MaterialIcons name="schedule" size={14} color="#64748b" style={styles.metaIcon} />
+                              <span style={{...styles.metaText, fontSize: '11px', marginBottom: '2px', paddingLeft: '2px'}}>
+                                {article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                }) : 'Recent'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </React.Fragment>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
           </React.Fragment>
         )}
-
+        
         <div style={styles.mainTitleContainer}>
           <h1 style={styles.mainTitle}>Recently Published</h1>
           <div style={styles.titleUnderline}></div>
@@ -666,13 +866,15 @@ const styles = StyleSheet.create({
     marginRight: 'auto',
     marginBottom: 0,
     marginLeft: 'auto',
-    paddingBottom: '15px',
+    paddingTop: 30,
+
     borderBottom: '2px solid #e5e7eb',
     textAlign: 'center',
     maxWidth: '1200px',
     paddingLeft: '0px',
     position: 'relative',
     zIndex: 1,
+    color: '#1a237e',
   },
   section: {
     width: '100%',
@@ -702,7 +904,6 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingRight: 0,
     paddingBottom: 20,
-
     borderBottom: '1px solid #e5e7eb',
   },
   categoryHeader: {
@@ -751,7 +952,7 @@ const styles = StyleSheet.create({
     gridTemplateRows: 'repeat(2, auto)',
     gap: '20px',
     width: '100%',
-    maxWidth: '1200px',
+
     margin: '0 auto',
   },
   horizontalScroll: {
@@ -762,6 +963,8 @@ const styles = StyleSheet.create({
     minWidth: '100%',
   },
   featurecard: {
+    display: 'flex',
+    flexDirection: 'row',
     backgroundColor: '#fff',
     overflow: 'hidden',
     marginBottom: '12px',
@@ -801,13 +1004,13 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     width: '100%',
-    height: '120px',
+    height: '180px',
   },
     imageContainer2: {
     position: 'relative',
     overflow: 'hidden',
-    width: '100%',
-    height: '230px',
+    width: '40%',
+    height: '280px',
   },
   publicationImage: {
     width: '100%',
@@ -819,7 +1022,7 @@ const styles = StyleSheet.create({
     },
   },
   publicationContent: {
-    padding: '12px',
+    padding: '20px',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
@@ -854,6 +1057,9 @@ const styles = StyleSheet.create({
     display: 'flex',
     alignItems: 'center',
     gap: '4px',
+  },
+  metaIcon: {
+    color: '#64748b',
   },
   metaText: {
     fontSize: '12px',
@@ -904,7 +1110,7 @@ const styles = StyleSheet.create({
     padding: '25px 15px 20px',
     zIndex: 1,
     transition: 'opacity 0.2s ease',
-
+    pointerEvents: 'none',
   },
   overlayGenre: {
     color: 'rgba(255,255,255,0.9)',
@@ -941,6 +1147,7 @@ const styles = StyleSheet.create({
     transition: 'opacity 0.2s ease',
     display: 'flex',
     zIndex: 2,
+    pointerEvents: 'none',
   },
   readMoreText: {
     color: '#fff',
@@ -952,6 +1159,20 @@ const styles = StyleSheet.create({
     padding: '6px 12px',
     borderRadius: '4px',
     letterSpacing: '1px',
+  },
+  categoryBadge: {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    backgroundColor: '#3b82f6',
+    borderRadius: '50%',
+    width: '32px',
+    height: '32px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 3,
+    pointerEvents: 'none',
   },
   viewAllContainer: {
     display: 'flex',
@@ -1104,7 +1325,7 @@ const styles = StyleSheet.create({
   },
   featuredGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
+    gridTemplateColumns: '1fr',
     gap: 20,
     width: '100%',
     margin: '0 auto',
@@ -1174,6 +1395,131 @@ const styles = StyleSheet.create({
     color: '#999',
     fontWeight: '400',
   },
+  // Genre Section Styles
+  genreSection: {
+    marginTop: 30,
+    marginBottom: 100,
+  },
+  genreTitleContainer: {
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+  genreTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1a237e',
+    marginBottom: 10,
+  },
+  genreSubtitle: {
+    fontSize: 16,
+    color: '#64748b',
+    marginTop: 0,
+    marginBottom: 20,
+    fontWeight: '400',
+    maxWidth: '600px',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+  },
+  genreUnderline: {
+    width: '60px',
+    height: '3px',
+    backgroundColor: '#3b82f6',
+    margin: '0 auto',
+  },
+  genreGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(6, 1fr)',
+    gap: '24px',
+    width: '100%',
+    margin: '0 auto',
+  },
+  genreCard: {
+    backgroundColor: '#fff',
+    
+    overflow: 'hidden',
+    boxShadow: '0 4px 20px 0 rgba(60,72,88,0.08)',
+    border: '1px solid #e4e8ee',
+    transition: 'all 0.3s cubic-bezier(.4,2,.6,1)',
+    cursor: 'pointer',
+    marginBottom: '8px',
+    ':hover': {
+      boxShadow: '0 15px 35px 0 rgba(60,72,88,0.2)',
+      transform: 'translateY(-5px) scale(1.02)',
+      borderColor: '#3b82f6',
+    },
+  },
+  genreLabel: {
+    backgroundColor: '#3b82f6',
+    padding: '8px 12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+  },
+  genreText: {
+    color: '#fff',
+    fontSize: '12px',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+  },
+  genreContent: {
+    position: 'relative',
+    height: '500px',
+    overflow: 'hidden',
+    cursor: 'pointer',
+  },
+  genreImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    transition: 'transform 0.3s ease',
+  },
+  genreImageOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    pointerEvents: 'none',
+  },
+  genreOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.6), rgba(0,0,0,0.3), transparent)',
+    padding: '20px 15px 15px',
+    color: '#fff',
+        textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+    border: '2px solid rgba(82, 0, 0, 0.1)',
+    borderTop: 'none',
+    transition: 'transform 0.3s ease',
+  },
+  genreArticleTitle: {
+    fontSize: '20px',
+    fontWeight: '700',
+    margin: '0 0 8px 0',
+    lineHeight: '1.3',
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    textOverflow: 'ellipsis',
+        textShadow: '0 2px 4px rgba(0,0,0,0.8)',
+    position: 'absolute',
+    bottom: '20px',
+    left: '20px',
+    whiteSpace: 'pre-line',
+  },
+  genreDate: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '500',
+  },
   // Responsive styles
   '@media (max-width: 1024px)': {
     heroTitle: {
@@ -1189,6 +1535,10 @@ const styles = StyleSheet.create({
     },
     recruitmentImage: {
       marginBottom: '24px',
+    },
+    genreGrid: {
+      gridTemplateColumns: 'repeat(2, 1fr)',
+      gap: '20px',
     },
   },
   '@media (max-width: 768px)': {
@@ -1218,12 +1568,29 @@ const styles = StyleSheet.create({
     sectionTitle: {
       fontSize: 28,
     },
+    genreGrid: {
+      gridTemplateColumns: 'repeat(2, 1fr)',
+      gap: '20px',
+    },
+    genreTitle: {
+      fontSize: 24,
+    },
+    genreCard: {
+      marginBottom: '16px',
+    },
+    genreContent: {
+      height: '180px',
+    },
+    genreArticleTitle: {
+      fontSize: '14px',
+    },
     publicationGrid: {
       gridTemplateColumns: '1fr',
     },
     // Enhanced Recently Published responsive styles
     mainTitle: {
       fontSize: 32,
+      color: '#1a237e',
     },
     mainSubtitle: {
       fontSize: '16px',

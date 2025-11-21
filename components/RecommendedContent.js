@@ -23,6 +23,12 @@ const RecommendedContent = ({ userId, onInteraction }) => {
       
       let recommendations = response.data?.data || [];
       
+      // Normalize image field for personalized recommendations
+      recommendations = recommendations.map(rec => ({
+        ...rec,
+        image: rec.image || rec.image_path
+      }));
+      
       // If we have less than 6 recommendations, fill with most reacted/popular articles
       if (recommendations.length < 6) {
         try {
@@ -34,7 +40,12 @@ const RecommendedContent = ({ userId, onInteraction }) => {
           
           // Filter out articles that are already in recommendations to avoid duplicates
           const recommendationIds = new Set(recommendations.map(r => r.id));
-          const additionalArticles = popularArticles.filter(article => !recommendationIds.has(article.id));
+          const additionalArticles = popularArticles
+            .filter(article => !recommendationIds.has(article.id))
+            .map(article => ({
+              ...article,
+              image: article.image || article.image_path // Normalize image field
+            }));
           
           recommendations = [...recommendations, ...additionalArticles];
         } catch (popularError) {
@@ -86,7 +97,12 @@ const RecommendedContent = ({ userId, onInteraction }) => {
   };
 
   const RecommendationCard = ({ item }) => {
+    const [imageUri, setImageUri] = useState(getImageUrl(item.image));
     const [isHovered, setIsHovered] = useState(false);
+
+    const handleImageError = () => {
+      setImageUri('https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070');
+    };
     
     return (
       <TouchableOpacity
@@ -101,8 +117,9 @@ const RecommendedContent = ({ userId, onInteraction }) => {
       >
         <View style={{ position: 'relative' }}>
           <Image
-            source={{ uri: getImageUrl(item.image) }}
+            source={{ uri: imageUri }}
             style={styles.recommendationImage}
+            onError={handleImageError}
             resizeMode="cover"
           />
           <View style={[
