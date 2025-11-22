@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../context/AuthContext';
 import AppNavbar from '../../components/AppNavbar';
 import apiClient from '../../utils/api';
+import { Picker } from '@react-native-picker/picker';
 
 const SUBMISSION_TYPES = [
   // {
@@ -40,6 +41,14 @@ const LITERATURE_CATEGORIES = [
   { id: 'artwork', name: 'Visual Art', icon: 'palette' },
 ];
 
+const REQUEST_TYPES = [
+  { id: 'photo', name: 'Photo' },
+  { id: 'video', name: 'Video' },
+  { id: 'interview', name: 'Interview' },
+  { id: 'news report', name: 'News Report' },
+  { id: 'Video Image', name: 'Video Image' },
+];
+
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 const Contribute = () => {
@@ -63,6 +72,7 @@ const Contribute = () => {
   const [numWriters, setNumWriters] = useState('1');
   const [numPhotographers, setNumPhotographers] = useState('1');
   const [department, setDepartment] = useState('');
+  const [requestType, setRequestType] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDateErrorModal, setShowDateErrorModal] = useState(false);
@@ -409,6 +419,22 @@ const Contribute = () => {
                     placeholder="Enter location"
                     placeholderTextColor="#94a3b8"
                   />
+                </View>
+
+                <View style={styles.detailField}>
+                  <Text style={styles.fieldLabel}>Request Type</Text>
+                  <View style={styles.pickerContainer}>
+                    <Picker
+                      selectedValue={requestType}
+                      onValueChange={(itemValue) => setRequestType(itemValue)}
+                      style={styles.picker}
+                    >
+                      <Picker.Item label="Select request type..." value="" />
+                      {REQUEST_TYPES.map(type => (
+                        <Picker.Item key={type.id} label={type.name} value={type.id} />
+                      ))}
+                    </Picker>
+                  </View>
                 </View>
 
                 <View style={styles.detailField}>
@@ -1153,6 +1179,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 8,
     minWidth: 40,
+  },
+  pickerContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 48,
+    color: '#1e293b',
   },
 });
 

@@ -339,6 +339,11 @@ const styles = StyleSheet.create({
   },
   freshStoryItem: {
     marginBottom: 6,
+    transition: 'background-color 0.3s ease',
+  },
+  freshStoryItemHover: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 4,
   },
   freshStoryTitle: {
     fontSize: 13,
@@ -379,6 +384,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#fff',
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    transition: 'box-shadow 0.3s ease, transform 0.3s ease',
+  },
+  topTrendingItemHover: {
+    boxShadow: '0 10px 32px 0 rgba(60,72,88,0.18)',
+    transform: 'translateY(-2px)',
   },
   topTrendingImage: {
     width: '100%',
@@ -906,23 +916,6 @@ const HeadlineCard = ({ item }) => (
   </View>
 );
 
-const TrendingImage = ({ uri, style, resizeMode }) => {
-  const [imageUri, setImageUri] = useState(uri);
-
-  const handleImageError = () => {
-    setImageUri(defaultImage);
-  };
-
-  return (
-    <Image
-      source={{ uri: imageUri }}
-      style={style}
-      onError={handleImageError}
-      resizeMode={resizeMode}
-    />
-  );
-};
-
 const SkeletonLoader = () => (
   <View style={styles.newsMainRow}>
     <View style={styles.leftColWrapper}>
@@ -970,12 +963,86 @@ const SkeletonLoader = () => (
   </View>
 );
 
+const TrendingStoryItem = ({ item, index }) => {
+  const router = useRouter();
+
+  const [imageUri, setImageUri] = useState(getImageUrl(item?.image));
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handlePress = () => {
+    router.push(`/news/article/${item.id}`);
+  };
+
+  useEffect(() => {
+    setImageUri(getImageUrl(item?.image));
+  }, [item?.image]);
+
+  const handleImageError = () => {
+    setImageUri(defaultImage);
+  };
+
+  return (
+    <TouchableOpacity
+      key={item.id}
+      onPress={handlePress}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      activeOpacity={0.9}
+      style={[
+        styles.topTrendingItem,
+        isHovered && styles.topTrendingItemHover
+      ]}
+    >
+      {index < 3 ? (
+        <View>
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.topTrendingImage}
+            onError={handleImageError}
+            defaultSource={{ uri: defaultImage }}
+            resizeMode="cover"
+          />
+          <View style={styles.topTrendingContent}>
+            <Text style={styles.topTrendingTitle} numberOfLines={2}>
+              {item.title}
+            </Text>
+            <View style={styles.topTrendingMeta}>
+              <Text style={styles.topTrendingCategory}>{item.category?.toUpperCase()}</Text>
+              <Text style={styles.topTrendingDate}>{item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</Text>
+            </View>
+          </View>
+        </View>
+      ) : (
+        <React.Fragment>
+          <View
+            style={[
+              styles.freshStoryItem,
+              isHovered && styles.freshStoryItemHover
+            ]}
+          >
+            <Text style={styles.freshStoryTitle}>
+              <Text style={styles.freshStoryTitleBold}>{item.category?.toUpperCase()} |</Text> {item.title}
+            </Text>
+            <View style={styles.freshStoryMetaRow}>
+              <Text style={styles.freshStoryCategory}>{item.category?.toUpperCase()}</Text>
+              <Text style={styles.freshStoryDate}>  {item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''}</Text>
+            </View>
+          </View>
+          <View style={styles.freshStoryDivider} />
+        </React.Fragment>
+      )}
+    </TouchableOpacity>
+  );
+};
+
 export default function NewsScreen() {
   const [newsData, setNewsData] = useState(fallbackNewsData);
   const [trendingStories, setTrendingStories] = useState([]);
   const { activeGenre, setActiveGenre } = useNewsStore();
   const [currentUser, setCurrentUser] = useState(null);
   const [displayedArticles, setDisplayedArticles] = useState(9); // For pagination on featured tabs
+  const [displayedTrendingStories, setDisplayedTrendingStories] = useState(10); // For pagination of trending stories
+  const [displayedNewsItems, setDisplayedNewsItems] = useState(6); // For pagination of news items on News tab
   const [loading, setLoading] = useState(false);
   const [activeRequests, setActiveRequests] = useState(new Set()); // Track active requests to prevent duplicates
   const router = useRouter();
@@ -1014,7 +1081,7 @@ export default function NewsScreen() {
         //asdasdasdasd
         const res = await apiClient.get(url);
         if (Array.isArray(res.data?.data)) {
-          const mapped = res.data.data.slice(0, 15).map(article => ({
+          const mapped = res.data.data.slice(0, 25).map(article => ({ // Increased to 25 items for more pagination
             id: article.id?.toString() || '',
             title: article.title,
             excerpt: '',
@@ -1158,7 +1225,7 @@ export default function NewsScreen() {
       try {
         const res = await apiClient.get('/public/trending-articles');
         if (Array.isArray(res.data?.data)) {
-          const mapped = res.data.data.slice(0, 10).map(a => ({ // Limit to 10 items
+          const mapped = res.data.data.slice(0, 25).map(a => ({ // Increased to 25 items for more trending stories
             id: a.id?.toString() || '',
             title: a.title,
             category: a.genre || 'News',
@@ -1190,13 +1257,24 @@ export default function NewsScreen() {
   const featuredStory = newsData[0];
   const gridStories = isFeaturedTab 
     ? newsData.slice(1, displayedArticles) // For featured tabs: show limited articles
-    : newsData.slice(1, 7); // For News tab: show up to 8 articles
+    : newsData.slice(1, displayedNewsItems + 1); // For News tab: show up to displayedNewsItems + 1 (including the featured story)
   const headlineStories = newsData.slice(9);
   
   const hasMoreArticles = isFeaturedTab && newsData.length > displayedArticles;
-  
+  const hasMoreNewsItems = !isFeaturedTab && newsData.length > displayedNewsItems + 1; // +1 because we exclude the featured story
+  const hasMoreTrendingStories = activeGenre === 'News' && trendingStories.length > displayedTrendingStories;
+  const hasMoreContent = hasMoreArticles || hasMoreNewsItems || hasMoreTrendingStories;
+
   const handleLoadMore = () => {
-    setDisplayedArticles(prev => prev + 8);
+    if (isFeaturedTab) {
+      setDisplayedArticles(prev => prev + 6); // Load 6 more news for featured tabs
+    } else {
+      setDisplayedNewsItems(prev => prev + 6); // Load 6 more news for News tab
+    }
+    // Only load trending stories when on News tab
+    if (activeGenre === 'News') {
+      setDisplayedTrendingStories(prev => prev + 8); // Load 8 more trending stories only on News tab
+    }
   };
 
   // Update featured image URI when featured story changes
@@ -1275,15 +1353,6 @@ export default function NewsScreen() {
                       </View>
                     ))}
                   </View>
-                  {hasMoreArticles && (
-                    <TouchableOpacity
-                      style={styles.loadMoreButton}
-                      onPress={handleLoadMore}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.loadMoreButtonText}>Load More Articles</Text>
-                    </TouchableOpacity>
-                  )}
                 </View>
               ) : (
                 // Original two-column layout for News tab
@@ -1331,40 +1400,8 @@ export default function NewsScreen() {
                           <Text style={styles.freshStoriesHeader}>Trending Stories</Text>
                           <Text style={styles.freshStoriesSubheader}>Most visited in last 3 days</Text>
                           <View style={styles.freshStoryList}>
-                            {trendingStories.map((item, index) => (
-                              <TouchableOpacity key={item.id} onPress={() => router.push(`/news/article/${item.id}`)}>
-                                {index < 3 ? (
-                                  <View style={styles.topTrendingItem}>
-                                    <TrendingImage
-                                      uri={item.image}
-                                      style={styles.topTrendingImage}
-                                      resizeMode="cover"
-                                    />
-                                    <View style={styles.topTrendingContent}>
-                                      <Text style={styles.topTrendingTitle} numberOfLines={2}>
-                                        {item.title}
-                                      </Text>
-                                      <View style={styles.topTrendingMeta}>
-                                        <Text style={styles.topTrendingCategory}>{item.category?.toUpperCase()}</Text>
-                                        <Text style={styles.topTrendingDate}>{item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</Text>
-                                      </View>
-                                    </View>
-                                  </View>
-                                ) : (
-                                  <>
-                                    <View style={styles.freshStoryItem}>
-                                      <Text style={styles.freshStoryTitle}>
-                                        <Text style={styles.freshStoryTitleBold}>{item.category?.toUpperCase()} |</Text> {item.title}
-                                      </Text>
-                                      <View style={styles.freshStoryMetaRow}>
-                                        <Text style={styles.freshStoryCategory}>{item.category?.toUpperCase()}</Text>
-                                        <Text style={styles.freshStoryDate}>  {item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''}</Text>
-                                      </View>
-                                    </View>
-                                    <View style={styles.freshStoryDivider} />
-                                  </>
-                                )}
-                              </TouchableOpacity>
+                            {trendingStories.slice(0, displayedTrendingStories).map((item, index) => (
+                              <TrendingStoryItem key={item.id} item={item} index={index} />
                             ))}
                           </View>
                         </View>
@@ -1374,6 +1411,17 @@ export default function NewsScreen() {
                 </>
               )}
             </View>
+
+            {/* Load More Button */}
+            {hasMoreContent && (
+              <TouchableOpacity
+                style={styles.loadMoreButton}
+                onPress={handleLoadMore}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.loadMoreButtonText}>Load More Content</Text>
+              </TouchableOpacity>
+            )}
 
             {/* Footer Section */}
             <View style={styles.footer}>

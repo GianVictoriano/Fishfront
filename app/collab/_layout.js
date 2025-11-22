@@ -143,6 +143,7 @@ const Sidebar = ({ isMinimized }) => {
           {hasModule('create-content') && <SidebarLink href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('review-content') && <SidebarLink href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('collaborate') && <SidebarLink href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('activity-monitor') && <SidebarLink href="/collab/activity-monitor" text="Activity Monitor" iconName="activity" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('branding') && <SidebarLink href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('forum') && <SidebarLink href="/collab/manage-forum" text="Manage Forum" iconName="message-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('folio') && <SidebarLink href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
@@ -163,6 +164,7 @@ const Sidebar = ({ isMinimized }) => {
             if (hasModule('create-content')) links.push(<SidebarLink key="create-content" href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('review-content')) links.push(<SidebarLink key="review-content" href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('collaborate')) links.push(<SidebarLink key="collaborate" href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('activity-monitor')) links.push(<SidebarLink key="activity-monitor" href="/collab/activity-monitor" text="Activity Monitor" iconName="activity" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('branding')) links.push(<SidebarLink key="branding" href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('forum')) links.push(<SidebarLink key="manage-forum" href="/collab/manage-forum" text="Manage Forum" iconName="message-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('folio')) links.push(<SidebarLink key="manage-folio" href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
@@ -254,6 +256,15 @@ export default function CollaboratorLayout() {
             }}
           />
         )}
+        {hasModule('activity-monitor') && (
+          <Tabs.Screen
+            name="activity-monitor"
+            options={{
+              title: 'Activity',
+              tabBarIcon: ({ color, size }) => <Feather name="activity" size={size} color={colors.text_primary} />,
+            }}
+          />
+        )}
         {hasModule('archives') && (
           <Tabs.Screen
             name="archives"
@@ -341,6 +352,15 @@ export default function CollaboratorLayout() {
           options={{
             title: 'Collaborate',
             tabBarIcon: ({ color, size }) => <Feather name="users" size={size} color={colors.text_primary} />,
+          }}
+        />
+      )}
+      {hasModule('activity-monitor') && (
+        <Tabs.Screen
+          name="activity-monitor"
+          options={{
+            title: 'Activity',
+            tabBarIcon: ({ color, size }) => <Feather name="activity" size={size} color={colors.text_primary} />,
           }}
         />
       )}
