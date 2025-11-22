@@ -270,22 +270,25 @@ export default function CollaborateScreen() {
   const [isVersionsModalVisible, setIsVersionsModalVisible] = useState(false);
   const [versions, setVersions] = useState({ documents: [], images: [] });
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
-  
   // Rejection comments modal state
   const [isRejectionCommentsModalVisible, setIsRejectionCommentsModalVisible] = useState(false);
   const [rejectionComments, setRejectionComments] = useState([]);
   const [isLoadingRejectionComments, setIsLoadingRejectionComments] = useState(false);
   const [selectedFileForComments, setSelectedFileForComments] = useState(null);
 
-
   const fetchGroupChats = useCallback(async () => {
     try {
       const response = await apiClient.get('/group-chats');
+      console.log('Group chats response:', response.data);
       setGroupChats(response.data);
     } catch (error) {
       console.error('Failed to fetch group chats:', error);
     }
-  }, []); // Remove selectedGroupId dependency
+  }, []);
+
+  useEffect(() => {
+    fetchGroupChats();
+  }, [fetchGroupChats]);
 
   useFocusEffect(
     useCallback(() => {
@@ -417,6 +420,78 @@ export default function CollaborateScreen() {
       setMessages([]);
     }
   }, [selectedGroupId]);
+
+  // Real-time polling state
+  const [lastMessageTimestamp, setLastMessageTimestamp] = useState(null);
+  const pollingIntervalRef = useRef(null);
+
+  // Function to poll for new messages (optimized - only fetch new messages)
+  const pollForNewMessages = useCallback(async () => {
+    if (!selectedGroupId) return;
+
+    try {
+      // Only check the latest message timestamp
+      const response = await getMessages(selectedGroupId, { page: 1, limit: 1 });
+      if (response.data && response.data.length > 0) {
+        const latestMessage = response.data[0];
+        const latestTimestamp = new Date(latestMessage.created_at).getTime();
+
+        // If we have a previous timestamp and the latest is newer, fetch only the new messages
+        if (lastMessageTimestamp && latestTimestamp > lastMessageTimestamp) {
+          console.log('New messages detected, fetching only new messages...');
+
+          // Fetch messages that are newer than our last cached timestamp
+          // We'll get a reasonable batch of recent messages to ensure we don't miss any
+          const newMessagesResponse = await getMessages(selectedGroupId, { page: 1, limit: 50 });
+
+          if (newMessagesResponse.data && newMessagesResponse.data.length > 0) {
+            // Filter out messages we already have
+            const existingMessageIds = new Set(messages.map(msg => msg.id));
+            const trulyNewMessages = newMessagesResponse.data.filter(msg => !existingMessageIds.has(msg.id));
+
+            if (trulyNewMessages.length > 0) {
+              console.log(`Adding ${trulyNewMessages.length} new messages`);
+              setMessages(prev => [...trulyNewMessages, ...prev]);
+            }
+          }
+        }
+
+        // Update our tracking timestamp
+        setLastMessageTimestamp(latestTimestamp);
+      }
+    } catch (error) {
+      console.error('Error polling for new messages:', error);
+    }
+  }, [selectedGroupId, lastMessageTimestamp, messages]);
+
+  // Set up polling when group is selected
+  useEffect(() => {
+    if (selectedGroupId) {
+      // Start polling every 5 seconds for better real-time feel
+      pollingIntervalRef.current = setInterval(pollForNewMessages, 5000);
+
+      // Initial timestamp setup
+      if (messages.length > 0) {
+        const latestTimestamp = new Date(messages[0].created_at).getTime();
+        setLastMessageTimestamp(latestTimestamp);
+      }
+    } else {
+      // Clear polling when no group selected
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      setLastMessageTimestamp(null);
+    }
+
+    // Cleanup on unmount or group change
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, [selectedGroupId, messages, pollForNewMessages]);
 
   // Function to fetch group members for reviewer selection
   const fetchGroupMembers = useCallback(async () => {

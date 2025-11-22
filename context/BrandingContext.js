@@ -51,10 +51,10 @@ export const BrandingProvider = ({ children }) => {
 
       // If the fetched URL is valid, use it; otherwise, stick with the fallback.
       const finalLogoUrl = logo_url
-        ? { uri: logo_url }
+        ? { uri: logo_url + '?t=' + Date.now() }
         : FALLBACK_LOGO_URL;
       const finalBackgroundUrl = background_url
-        ? { uri: background_url }
+        ? { uri: background_url + '?t=' + Date.now() }
         : { uri: FALLBACK_BACKGROUND_URL };
 
       console.log('[BrandingContext] Setting final image URLs:', { finalLogoUrl, finalBackgroundUrl });
