@@ -261,10 +261,10 @@ const HomeScreen = () => {
           style={styles.heroImage}
         >
           <div style={styles.heroOverlay}>
-            <div style={styles.heroContent}>
-              <div style={styles.heroText}>
-                <h1 style={styles.heroTitle}>Welcome to the Fisherman Publication</h1>
-                <p style={styles.heroSummary}>
+            <div style={{...styles.heroContent, padding: isMobile ? '120px 20px 20px 20px' : '0 20px', justifyContent: 'center', alignItems: 'center'}}>
+              <div style={{...styles.heroText, margin: isMobile ? '0 auto' : '0 auto', textAlign: 'center'}}>
+                <h1 style={{...styles.heroTitle, marginTop: isMobile ? '0px' : '8rem'}}>Welcome to the Fisherman Publication</h1>
+                <p style={{...styles.heroSummary, fontSize: isMobile ? '14px' : '16px'}}>
                   The Student Publication Body of Batangas State University-ARASOF dedicated on providing the latest news and inspiring works of the students of Batangas State University-ARASOF.
                 </p>
                 <button 
@@ -301,7 +301,7 @@ const HomeScreen = () => {
             <h2 style={styles.genreTitle}>Start your journey</h2>
             <p style={styles.genreSubtitle}>Explore different genres and discover stories that inspire you</p>
           </div>
-          <div style={styles.genreGrid}>
+          <div style={{...styles.genreGrid, gridTemplateColumns: isMobile ? 'repeat(1, 1fr)' : 'repeat(6, 1fr)'}}>
             {GENRES.map((genre) => (
               genreData[genre]?.length > 0 && (
                 <div 
@@ -312,7 +312,7 @@ const HomeScreen = () => {
                 >
 
                   <div 
-                    style={styles.genreContent}
+                    style={{...styles.genreContent, height: isMobile ? '150px' : '500px'}}
                     onClick={() => router.push(genreData[genre][0].link)}
                   >
                     <img 
@@ -325,7 +325,7 @@ const HomeScreen = () => {
                     />
                     <div style={styles.genreImageOverlay} className="genreImageOverlay"></div>
                     <div style={styles.genreOverlay} className="genreOverlay">
-                      <h3 style={styles.genreArticleTitle}>{GENRE_DISPLAY_NAMES[genre].split('').join('\n')}</h3>
+                      <h3 style={{...styles.genreArticleTitle, fontSize: isMobile ? '16px' : '20px', bottom: isMobile ? '10px' : '20px', left: isMobile ? '10px' : '20px'}}>{isMobile ? GENRE_DISPLAY_NAMES[genre] : GENRE_DISPLAY_NAMES[genre].split('').join('\n')}</h3>
                     </div>
                   </div>
                 </div>
@@ -342,34 +342,18 @@ const HomeScreen = () => {
                 <div style={styles.titleUnderline}></div>
                 <p style={styles.featuredSubtitle}>Highlighted stories and creative works</p>
               </div>
-              <div style={styles.featuredGrid}>
+              <div style={{...styles.featuredGrid, flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? '20px' : '0'}}>
                 {featuredData.map((article, index) => (
                   <div 
                     key={article.id}
-                    style={styles.featurecard}
+                    style={isMobile ? styles.publicationCard : styles.featurecard}
                     onMouseEnter={(e) => handleFeaturedCardMouseEnter(article.id, e)}
                     onMouseLeave={(e) => handleFeaturedCardMouseLeave(article.id, e)}
                     onClick={() => router.push(`news/article/${article.id}`)}
                   >
-                    {index === 1 ? (
+                    {isMobile ? (
                       <React.Fragment>
-                        <div style={styles.publicationContent}>
-                          <h3 style={{...styles.publicationTitle, textAlign: 'right'}} data-title>{article.title}</h3>
-                          <p style={{...styles.publicationSummary, textAlign: 'right'}}>{article.excerpt}</p>
-                          <div style={{...styles.articleMeta, justifyContent: 'flex-end'}}>
-                            <div style={{...styles.metaItem, justifyContent: 'flex-end', textAlign: 'right', width: '100%'}}>
-                              <MaterialIcons name="schedule" size={14} color="#64748b" style={styles.metaIcon} />
-                              <span style={{...styles.metaText, fontSize: '11px', marginBottom: '2px', paddingLeft: '2px', textAlign: 'right'}}>
-                                {article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric'
-                                }) : 'Recent'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div style={styles.imageContainer2}>
+                        <div style={styles.imageContainer}>
                           <img 
                             src={article.image} 
                             alt={article.title}
@@ -378,66 +362,12 @@ const HomeScreen = () => {
                               e.target.src = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
                             }}
                           />
-                          {/* Always visible title overlay */}
-                          <div style={styles.titleOverlay} data-title-overlay>
-                            <h3 style={styles.overlayTitle}>{article.title}</h3>
-                          </div>
-                          
-                          {/* Hover-only additional details overlay */}
                           <div style={styles.cardOverlay} data-overlay>
                             <div style={styles.overlayContent}>
-                              <span style={styles.overlayGenre}>
-                                {article.genre || 'FEATURED'}
-                              </span>
-                              <span style={styles.overlayDate}>
-                                {article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric'
-                                }) : 'Recent'}
-                              </span>
-                              <span style={styles.readMoreText}>Click to Read Full Article</span>
+                              <MaterialIcons name="visibility" size={24} color="#fff" />
+                              <span style={styles.readMoreText}>Read Article</span>
                             </div>
                           </div>
-                          
-                          <div style={styles.categoryBadge}>
-                            <MaterialIcons name="star" size={14} color="#fff" />
-                          </div>
-                        </div>
-                      </React.Fragment>
-                    ) : (
-                      <React.Fragment>
-                        <div style={styles.imageContainer2}>
-                          <img 
-                            src={article.image} 
-                            alt={article.title}
-                            style={styles.publicationImage}
-                            onError={(e) => {
-                              e.target.src = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
-                            }}
-                          />
-                          {/* Always visible title overlay */}
-                          <div style={styles.titleOverlay} data-title-overlay>
-                            <h3 style={styles.overlayTitle}>{article.title}</h3>
-                          </div>
-                          
-                          {/* Hover-only additional details overlay */}
-                          <div style={styles.cardOverlay} data-overlay>
-                            <div style={styles.overlayContent}>
-                              <span style={styles.overlayGenre}>
-                                {article.genre || 'FEATURED'}
-                              </span>
-                              <span style={styles.overlayDate}>
-                                {article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric'
-                                }) : 'Recent'}
-                              </span>
-                              <span style={styles.readMoreText}>Click to Read Full Article</span>
-                            </div>
-                          </div>
-                          
                           <div style={styles.categoryBadge}>
                             <MaterialIcons name="star" size={14} color="#fff" />
                           </div>
@@ -458,6 +388,117 @@ const HomeScreen = () => {
                             </div>
                           </div>
                         </div>
+                      </React.Fragment>
+                    ) : (
+                      <React.Fragment>
+                        {index === 1 ? (
+                          <React.Fragment>
+                            <div style={styles.publicationContent}>
+                              <h3 style={{...styles.publicationTitle, textAlign: 'right'}} data-title>{article.title}</h3>
+                              <div style={{...styles.articleMeta, justifyContent: 'flex-end'}}>
+                                <div style={{...styles.metaItem, justifyContent: 'flex-end', textAlign: 'right', width: '100%'}}>
+                                  <MaterialIcons name="schedule" size={14} color="#64748b" style={styles.metaIcon} />
+                                  <span style={{...styles.metaText, fontSize: '11px', marginBottom: '2px', paddingLeft: '2px', textAlign: 'right'}}>
+                                    {article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric'
+                                    }) : 'Recent'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div style={styles.imageContainer2}>
+                              <img 
+                                src={article.image} 
+                                alt={article.title}
+                                style={styles.publicationImage}
+                                onError={(e) => {
+                                  e.target.src = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+                                }}
+                              />
+                              {/* Always visible title overlay */}
+                              <div style={styles.titleOverlay} data-title-overlay>
+                                <h3 style={styles.overlayTitle}>{article.title}</h3>
+                              </div>
+                              
+                              {/* Hover-only additional details overlay */}
+                              <div style={styles.cardOverlay} data-overlay>
+                                <div style={styles.overlayContent}>
+                                  <span style={styles.overlayGenre}>
+                                    {article.genre || 'FEATURED'}
+                                  </span>
+                                  <span style={styles.overlayDate}>
+                                    {article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric'
+                                    }) : 'Recent'}
+                                  </span>
+                                  <span style={styles.readMoreText}>Click to Read Full Article</span>
+                                </div>
+                              </div>
+                              
+                              <div style={styles.categoryBadge}>
+                                <MaterialIcons name="star" size={14} color="#fff" />
+                              </div>
+                            </div>
+                          </React.Fragment>
+                        ) : (
+                          <React.Fragment>
+                            <div style={styles.imageContainer2}>
+                              <img 
+                                src={article.image} 
+                                alt={article.title}
+                                style={styles.publicationImage}
+                                onError={(e) => {
+                                  e.target.src = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+                                }}
+                              />
+                              {/* Always visible title overlay */}
+                              <div style={styles.titleOverlay} data-title-overlay>
+                                <h3 style={styles.overlayTitle}>{article.title}</h3>
+                              </div>
+                              
+                              {/* Hover-only additional details overlay */}
+                              <div style={styles.cardOverlay} data-overlay>
+                                <div style={styles.overlayContent}>
+                                  <span style={styles.overlayGenre}>
+                                    {article.genre || 'FEATURED'}
+                                  </span>
+                                  <span style={styles.overlayDate}>
+                                    {article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric'
+                                    }) : 'Recent'}
+                                  </span>
+                                  <span style={styles.readMoreText}>Click to Read Full Article</span>
+                                </div>
+                              </div>
+                              
+                              <div style={styles.categoryBadge}>
+                                <MaterialIcons name="star" size={14} color="#fff" />
+                              </div>
+                            </div>
+                            <div style={styles.publicationContent}>
+                              <h3 style={styles.publicationTitle} data-title>{article.title}</h3>
+                              <p style={styles.publicationSummary}>{article.excerpt}</p>
+                              <div style={styles.articleMeta}>
+                                <div style={styles.metaItem}>
+                                  <MaterialIcons name="schedule" size={14} color="#64748b" style={styles.metaIcon} />
+                                  <span style={{...styles.metaText, fontSize: '11px', marginBottom: '2px', paddingLeft: '2px'}}>
+                                    {article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', {
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric'
+                                    }) : 'Recent'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </React.Fragment>
+                        )}
                       </React.Fragment>
                     )}
                   </div>
@@ -522,7 +563,7 @@ const HomeScreen = () => {
                         View All <MaterialIcons name="arrow-forward" size={16} />
                       </button>
                     </div>
-                    <div style={styles.newsGrid}>
+                    <div style={{...styles.newsGrid, gridTemplateColumns: isMobile ? 'repeat(1, 1fr)' : 'repeat(4, 1fr)', gap: isMobile ? '16px' : '20px'}}>
                         {publications[category].map((article, index) => (
                           <div 
                             key={article.id}
@@ -594,7 +635,7 @@ const HomeScreen = () => {
         
         {/* Submit Section */}
         <section style={{...styles.section, ...styles.submitSection}}>
-          <div style={styles.submitContent}>
+          <div style={{...styles.submitContent, flexDirection: isMobile ? 'column' : 'row'}}>
             <img
               src="https://images.unsplash.com/photo-1455390582262-044cdead277a?q=80&w=2070&auto=format&fit=crop"
               alt="Submit your work"
@@ -632,7 +673,7 @@ const HomeScreen = () => {
         {applicationPeriod && (
           <React.Fragment>
             <section style={{...styles.section, ...styles.recruitmentSection}}>
-              <div style={styles.recruitmentContent}>
+              <div style={{...styles.recruitmentContent, flexDirection: isMobile ? 'column' : 'row'}}>
                 <img
                   src="https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?auto=compress&w=400"
                   alt="Join our team"

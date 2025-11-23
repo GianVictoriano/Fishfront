@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, SafeAreaView, Platform, TouchableOpacity, Modal, ImageBackground, Image } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, SafeAreaView, Platform, TouchableOpacity, Modal, ImageBackground, Image, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import AppNavbar from '../../../../components/AppNavbar';
 import { useBranding } from '../../../../context/BrandingContext';
@@ -25,6 +25,8 @@ const CoreValue = ({ text }) => (
 export default function AboutScreen() {
   const [navVisible, setNavVisible] = useState(false);
   const { logoUrl } = useBranding();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
 
   const coreValues1 = [
     { id: '1', text: 'Patriotism' },
@@ -64,46 +66,46 @@ export default function AboutScreen() {
         <ScrollView contentContainerStyle={styles.content}>
           {/* Top Section: About Us */}
           <View style={styles.heroSection}>
-            <Text style={styles.heroTitle}>About Us</Text>
-            <Text style={styles.heroDesc}>
+            <Text style={isMobile ? styles.heroTitleMobile : styles.heroTitle}>About Us</Text>
+            <Text style={isMobile ? styles.heroDescMobile : styles.heroDesc}>
               The Fisherman company and community are a lot like our product. We're crafted, not cobbled, for a delightful experience.
             </Text>
           </View>
 
           {/* Section 1 */}
-          <View style={styles.rowSection}>
+          <View style={isMobile ? styles.rowSectionMobile : {...styles.rowSection, flexDirection: 'row'}}>
             <View style={styles.imageCol}>
-              <Image source={{ uri: 'https://images.pexels.com/photos/3225517/pexels-photo-3225517.jpeg?auto=compress&cs=tinysrgb&w=600' }} style={styles.sectionImage} />
+              <Image source={{ uri: 'https://images.pexels.com/photos/3225517/pexels-photo-3225517.jpeg?auto=compress&cs=tinysrgb&w=600' }} style={isMobile ? styles.sectionImageMobile : styles.sectionImage} />
             </View>
-            <View style={styles.textCol}>
-              <Text style={styles.missionTitle}>Our Mission: Helping Millions of Organizations Grow Better</Text>
-              <Text style={styles.missionText}>
+            <View style={{...styles.textCol, paddingLeft: isMobile ? 0 : 32, paddingTop: isMobile ? 24 : 0, alignItems: isMobile ? 'center' : 'flex-start'}}>
+              <Text style={isMobile ? styles.missionTitleMobile : styles.missionTitle}>Our Mission: Helping Millions of Organizations Grow Better</Text>
+              <Text style={isMobile ? styles.missionTextMobile : styles.missionText}>
                 We believe not just in growing bigger, but in growing better. And growing better means aligning the success of your own business with the success of your customers. Win-win!
               </Text>
             </View>
           </View>
 
           {/* Section 2 */}
-          <View style={styles.rowSection}>
-            <View style={styles.textCol}>
-              <Text style={styles.missionTitle}>Our Vision: Empowering Communities</Text>
-              <Text style={styles.missionText}>
+          <View style={isMobile ? styles.rowSectionMobile : {...styles.rowSection, flexDirection: 'row'}}>
+            <View style={styles.imageCol}>
+              <Image source={{ uri: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?q=80&w=2070' }} style={isMobile ? styles.sectionImageMobile : styles.sectionImage} />
+            </View>
+            <View style={{...styles.textCol, paddingLeft: isMobile ? 0 : 32, paddingTop: isMobile ? 24 : 0, alignItems: isMobile ? 'center' : 'flex-start'}}>
+              <Text style={isMobile ? styles.missionTitleMobile : styles.missionTitle}>Our Vision: Empowering Communities</Text>
+              <Text style={isMobile ? styles.missionTextMobile : styles.missionText}>
                 Our vision is to empower communities through innovation, collaboration, and sustainable growth. We strive for a future where everyone can thrive.
               </Text>
-            </View>
-            <View style={styles.imageCol}>
-              <Image source={{ uri: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?q=80&w=2070' }} style={styles.sectionImage} />
             </View>
           </View>
 
           {/* Section 3 */}
-          <View style={styles.rowSection}>
+          <View style={isMobile ? styles.rowSectionMobile : {...styles.rowSection, flexDirection: 'row'}}>
             <View style={styles.imageCol}>
-              <Image source={{ uri: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070' }} style={styles.sectionImage} />
+              <Image source={{ uri: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070' }} style={isMobile ? styles.sectionImageMobile : styles.sectionImage} />
             </View>
-            <View style={styles.textCol}>
-              <Text style={styles.missionTitle}>Our Values: Integrity & Excellence</Text>
-              <Text style={styles.missionText}>
+            <View style={{...styles.textCol, paddingLeft: isMobile ? 0 : 32, paddingTop: isMobile ? 24 : 0, alignItems: isMobile ? 'center' : 'flex-start'}}>
+              <Text style={isMobile ? styles.missionTitleMobile : styles.missionTitle}>Our Values: Integrity & Excellence</Text>
+              <Text style={isMobile ? styles.missionTextMobile : styles.missionText}>
                 We are committed to integrity, service, and excellence in all that we do, building a culture of trust and achievement for everyone involved.
               </Text>
             </View>
@@ -121,13 +123,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 26,
     borderRadius: 16,
     marginBottom: 32,
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   heroTitle: {
     fontSize: 38,
     fontWeight: 'bold',
     color: '#22344c',
     marginBottom: 8,
+  },
+  heroTitleMobile: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#22344c',
+    marginBottom: 8,
+    textAlign: 'center',
   },
   heroDesc: {
     fontSize: 17,
@@ -136,8 +145,15 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     opacity: 0.9,
   },
+  heroDescMobile: {
+    fontSize: 15,
+    color: '#22344c',
+    maxWidth: '100%',
+    lineHeight: 22,
+    opacity: 0.9,
+    textAlign: 'center',
+  },
   rowSection: {
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
     backgroundColor: '#fff',
     borderRadius: 16,
     marginBottom: 28,
@@ -145,6 +161,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
     gap: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  rowSectionMobile: {
+    flexDirection: 'column',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    gap: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.07,
@@ -163,7 +194,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#e0e7ef',
     marginBottom: 0,
-    marginTop: 0,
+    marginTop: 10,
+  },
+  sectionImageMobile: {
+    width: '100%',
+    maxWidth: 300,
+    height: 180,
+    borderRadius: 12,
+    backgroundColor: '#e0e7ef',
+    marginBottom: 0,
+    marginTop: 80,
   },
   imagePlaceholder: {
     width: 260,
@@ -187,12 +227,28 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     lineHeight: 34,
   },
+  missionTitleMobile: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#22344c',
+    marginBottom: 12,
+    lineHeight: 28,
+    textAlign: 'center',
+  },
   missionText: {
     fontSize: 16,
     color: '#22344c',
     opacity: 0.9,
     maxWidth: 480,
     lineHeight: 25,
+  },
+  missionTextMobile: {
+    fontSize: 14,
+    color: '#22344c',
+    opacity: 0.9,
+    maxWidth: '100%',
+    lineHeight: 22,
+    textAlign: 'center',
   },
   card: {
     backgroundColor: '#f8faff',

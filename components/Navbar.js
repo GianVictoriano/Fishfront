@@ -6,13 +6,16 @@ if (typeof window !== 'undefined' && Platform.OS === 'web') {
   WebDropdown = require('./WebDropdown').default;
 }
 import { usePathname, useRouter } from 'expo-router';
-import { View, Platform, StyleSheet, Text, TouchableOpacity, Modal, Image } from 'react-native';
+import { View, Platform, StyleSheet, Text, TouchableOpacity, Modal, Image, useWindowDimensions } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useBranding } from '../context/BrandingContext';
 import { FontAwesome } from '@expo/vector-icons'; // Using FontAwesome for icons
 
 const NavLink = ({ href, text, iconName, pathname, closeMenu, isActive: isActiveProp }) => {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  
   // Use the provided isActive prop if available, otherwise calculate it
   let isActive = isActiveProp !== undefined ? isActiveProp : 
                   (pathname === `/${href}` || pathname.startsWith(`/${href}/`));
@@ -27,9 +30,9 @@ const NavLink = ({ href, text, iconName, pathname, closeMenu, isActive: isActive
     isActive = true;
   }
   
-  const linkStyle = [styles.navLink, isActive && styles.navLinkActive];
-  const textStyle = [styles.navLinkText, isActive && styles.navLinkTextActive];
-  const iconStyle = [styles.navIcon, isActive && styles.navIconActive];
+  const linkStyle = isMobile ? [styles.mobileMenuItem, isActive && styles.mobileMenuItemActive] : [styles.navLink, isActive && styles.navLinkActive];
+  const textStyle = isMobile ? [styles.mobileMenuText, isActive && styles.mobileMenuTextActive] : [styles.navLinkText, isActive && styles.navLinkTextActive];
+  const iconStyle = isMobile ? [styles.mobileMenuIcon, isActive && styles.mobileMenuIconActive] : [styles.navIcon, isActive && styles.navIconActive];
 
   const handlePress = () => {
     router.push(href);
@@ -53,6 +56,9 @@ const Navbar = () => {
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const buttonRef = useRef(null);
   const [buttonWidth, setButtonWidth] = useState(200);
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const [mobileMenuVisible, setMobileMenuVisible] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -70,6 +76,7 @@ const Navbar = () => {
           <Text style={styles.brand}>The FISHERMAN</Text>
         </View>
         
+        {!isMobile && (
           <View style={styles.navLinksContainer}>
             <NavLink href="home" text="Home" iconName="home" pathname={pathname} />
             <NavLink href="news" text="News" iconName="newspaper-o" pathname={pathname} />
@@ -118,9 +125,13 @@ const Navbar = () => {
   isActive={pathname === '/signin'} 
 />
         )}
-
-
-        </View>
+          </View>
+        )}
+        {isMobile && (
+          <TouchableOpacity style={styles.hamburger} onPress={() => setMobileMenuVisible(!mobileMenuVisible)}>
+            <FontAwesome name="bars" size={24} color="#333" />
+          </TouchableOpacity>
+        )}
         {/* Web Dropdown */}
         {Platform.OS === 'web' && WebDropdown && (
           <WebDropdown
@@ -135,6 +146,40 @@ const Navbar = () => {
           />
         )}
       </View>
+
+      {/* Mobile Menu Overlay */}
+      {isMobile && mobileMenuVisible && (
+        <View style={styles.mobileMenuOverlay}>
+          <View style={styles.mobileMenu}>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setMobileMenuVisible(false)}>
+              <FontAwesome name="times" size={24} color="#333" />
+            </TouchableOpacity>
+            <NavLink href="home" text="Home" iconName="home" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
+            <NavLink href="news" text="News" iconName="newspaper-o" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
+            <NavLink href="about" text="About" iconName="info-circle" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
+            {user ? (
+              <>
+                <NavLink href="forum" text="Forum" iconName="comments" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
+                <NavLink href="contribute" text="Request" iconName="plus-circle" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
+                <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { router.push('/profile'); setMobileMenuVisible(false); }}>
+                  <FontAwesome name="user" size={16} style={styles.mobileMenuIcon} />
+                  <Text style={styles.mobileMenuText}>Profile</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { router.push('/my-requests'); setMobileMenuVisible(false); }}>
+                  <FontAwesome name="list" size={16} style={styles.mobileMenuIcon} />
+                  <Text style={styles.mobileMenuText}>My Requests</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.mobileMenuItem} onPress={handleLogout}>
+                  <FontAwesome name="sign-out" size={16} style={styles.mobileMenuIcon} />
+                  <Text style={styles.mobileMenuText}>Logout</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <NavLink href="/signin" text="Sign In" iconName="sign-in" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
+            )}
+          </View>
+        </View>
+      )}
 
       {/* Links for mobile drawer */}
       {Platform.OS !== 'web' && (
@@ -186,12 +231,15 @@ const styles = StyleSheet.create({
   },
   navContainer: {
     backgroundColor: '#fff',
+    position: 'relative',
+    zIndex: 1000,
     ...Platform.select({
       web: {
-        paddingHorizontal: 60,
-        paddingVertical: 6,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
         borderBottomWidth: 1,
         borderBottomColor: '#eee',
+        boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
       },
       default: {
         paddingTop: 24,
@@ -276,6 +324,68 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  hamburger: {
+    padding: 10,
+  },
+  mobileMenuOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 9999,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+  },
+  mobileMenu: {
+    backgroundColor: '#fff',
+    width: '85%',
+    height: '100%',
+    padding: 25,
+    paddingTop: 60,
+    shadowColor: '#000',
+    shadowOffset: { width: -2, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 10,
+    overflowY: 'auto',
+  },
+  closeButton: {
+    alignSelf: 'flex-end',
+    marginBottom: 20,
+  },
+  mobileMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    borderRadius: 8,
+    marginVertical: 2,
+    backgroundColor: '#fff',
+    transition: 'all 0.2s ease-in-out',
+  },
+  mobileMenuItemActive: {
+    backgroundColor: 'rgba(0, 123, 255, 0.1)',
+    borderBottomColor: '#007BFF',
+  },
+  mobileMenuIcon: {
+    marginRight: 15,
+    color: '#555',
+  },
+  mobileMenuIconActive: {
+    color: '#007BFF',
+  },
+  mobileMenuText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  mobileMenuTextActive: {
+    color: '#007BFF',
+    fontWeight: '700',
   },
   dropdown: {
     position: 'absolute',
