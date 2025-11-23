@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../utils/api';
 import Svg, { Rect, Circle, Text as SvgText, Line, Path } from 'react-native-svg';
+import { Picker } from '@react-native-picker/picker';
 
 // Simple Bar Chart Component
 const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
@@ -328,6 +329,17 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
   const [graphData, setGraphData] = useState(null);
   const [loadingGraphs, setLoadingGraphs] = useState(false);
   const [groupChatTimeline, setGroupChatTimeline] = useState([]);
+  const [userWorkingHours, setUserWorkingHours] = useState({});
+  const [collaboratorsWorkingHours, setCollaboratorsWorkingHours] = useState([]);
+  const [loadingSchedule, setLoadingSchedule] = useState(false);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [showTimePickerModal, setShowTimePickerModal] = useState(false);
+  const [currentTimeField, setCurrentTimeField] = useState(null); // { entryKey, fieldType: 'start_time' | 'end_time' }
+  const [selectedHour, setSelectedHour] = useState('09');
+  const [selectedMinute, setSelectedMinute] = useState('00');
+  const [showMyWorkingHours, setShowMyWorkingHours] = useState(false);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [showEditHoursModal, setShowEditHoursModal] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -439,6 +451,150 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
     }
   }, [showContributorsModal, contributorsSearch, contributorsRole]);
 
+  const fetchUserWorkingHours = async () => {
+    try {
+      const response = await apiClient.get('/working-hours/me');
+      const data = response.data.working_hours || [];
+      
+      // Convert from API array format to new UI format
+      const uiFormat = {};
+      let counter = 0;
+      
+      data.forEach((entry) => {
+        if (entry.preferred_start_time && entry.preferred_end_time) {
+          uiFormat[`preferred_${counter++}`] = {
+            type: 'preferred',
+            day: entry.day_of_week,
+            start_time: entry.preferred_start_time,
+            end_time: entry.preferred_end_time
+          };
+        }
+        if (entry.possible_start_time && entry.possible_end_time) {
+          uiFormat[`possible_${counter++}`] = {
+            type: 'possible',
+            day: entry.day_of_week,
+            start_time: entry.possible_start_time,
+            end_time: entry.possible_end_time
+          };
+        }
+      });
+      
+      setUserWorkingHours(uiFormat);
+    } catch (error) {
+      console.error('Error fetching user working hours:', error);
+    }
+  };
+
+  const fetchCollaboratorsWorkingHours = async () => {
+    try {
+      setLoadingSchedule(true);
+      const response = await apiClient.get('/working-hours');
+      setCollaboratorsWorkingHours(response.data.collaborators || []);
+    } catch (error) {
+      console.error('Error fetching collaborators working hours:', error);
+    } finally {
+      setLoadingSchedule(false);
+    }
+  };
+
+  const saveUserWorkingHours = async (workingHours) => {
+    try {
+      setSavingSchedule(true);
+      
+      // Convert the new format to the API format
+      const formattedData = Object.entries(workingHours)
+        .filter(([key, entry]) => key.startsWith('preferred_') || key.startsWith('possible_'))
+        .map(([key, entry]) => ({
+          day_of_week: entry.day,
+          preferred_start_time: entry.type === 'preferred' ? entry.start_time : null,
+          preferred_end_time: entry.type === 'preferred' ? entry.end_time : null,
+          possible_start_time: entry.type === 'possible' ? entry.start_time : null,
+          possible_end_time: entry.type === 'possible' ? entry.end_time : null,
+        }))
+        .filter(entry => {
+          // Only save entries that have a day and both start and end times for their type
+          if (!entry.day_of_week) return false;
+          
+          if (entry.preferred_start_time || entry.possible_start_time) {
+            return (entry.preferred_start_time && entry.preferred_end_time) || 
+                   (entry.possible_start_time && entry.possible_end_time);
+          }
+          
+          return false;
+        });
+
+      await apiClient.post('/working-hours', { working_hours: formattedData });
+      setUserWorkingHours(workingHours);
+      
+      // Refresh team working hours to show updated data
+      await fetchCollaboratorsWorkingHours();
+      
+      setShowConfirmationModal(true);
+      setShowEditHoursModal(false); // Close edit modal after saving
+    } catch (error) {
+      console.error('Error saving working hours:', error);
+      alert('Failed to save working hours. Please try again.');
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
+  const openTimePicker = (entryKey, fieldType) => {
+    const entry = userWorkingHours[entryKey];
+    if (!entry) return;
+
+    const currentTime = entry[fieldType];
+    if (currentTime) {
+      // Parse the time string (HH:MM) into hour and minute
+      const [hours, minutes] = currentTime.split(':');
+      setSelectedHour(hours);
+      setSelectedMinute(minutes);
+    } else {
+      setSelectedHour('09');
+      setSelectedMinute('00');
+    }
+
+    setCurrentTimeField({ entryKey, fieldType });
+    setShowTimePickerModal(true);
+  };
+
+  const handleTimeConfirm = () => {
+    if (currentTimeField) {
+      const { entryKey, fieldType } = currentTimeField;
+      const timeString = `${selectedHour}:${selectedMinute}`;
+      
+      setUserWorkingHours(prev => ({
+        ...prev,
+        [entryKey]: {
+          ...prev[entryKey],
+          [fieldType]: timeString
+        }
+      }));
+    }
+    
+    setShowTimePickerModal(false);
+    setCurrentTimeField(null);
+  };
+
+  const handleTimeCancel = () => {
+    setShowTimePickerModal(false);
+    setCurrentTimeField(null);
+  };
+
+  useEffect(() => {
+    if (showScheduleModal) {
+      fetchUserWorkingHours();
+      fetchCollaboratorsWorkingHours();
+    }
+  }, [showScheduleModal]);
+
+  useEffect(() => {
+    if (!showEditHoursModal) {
+      // Clear working hours when edit modal closes
+      setUserWorkingHours({});
+    }
+  }, [showEditHoursModal]);
+
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.container}>
@@ -448,7 +604,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
             <Text style={styles.subtitle}>Here's a summary of your workspace.</Text>
           </View>
           <TouchableOpacity 
-            style={styles.refreshButton}
+            style={[styles.refreshButton, { flexDirection: 'row', alignItems: 'center' }]}
             onPress={() => setShowScheduleModal(true)}
           >
             <Feather 
@@ -456,6 +612,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
               size={20} 
               color="#303F9F" 
             />
+            <Text style={styles.scheduleText}>Schedule</Text>
           </TouchableOpacity>
         </View>
 
@@ -765,6 +922,482 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
           )}
         </View>
       </Modal>
+
+      {/* Schedule Modal */}
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={showScheduleModal}
+        onRequestClose={() => setShowScheduleModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowScheduleModal(false)}>
+              <Feather name="arrow-left" size={24} color="#303F9F" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Team Schedule</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Collaborators' Schedules - Shown First */}
+            <View style={styles.scheduleSection}>
+              <Text style={styles.sectionTitle}>Team Working Hours</Text>
+              {loadingSchedule ? (
+                <View style={styles.loadingContainer}>
+                  <Text>Loading team schedules...</Text>
+                </View>
+              ) : collaboratorsWorkingHours.length > 0 ? (
+                <View style={styles.teamCalendarContainer}>
+                  {/* Calendar Header */}
+                  <View style={styles.calendarHeader}>
+                    <View style={styles.calendarCorner}>
+                      <Text style={styles.cornerText}>Team</Text>
+                    </View>
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+                      <View key={day} style={styles.dayHeader}>
+                        <Text style={styles.dayHeaderText}>{day}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  
+                  {/* Calendar Grid */}
+                  {collaboratorsWorkingHours.map((collaborator) => (
+                    <View key={collaborator.id} style={styles.calendarRow}>
+                      {/* User Info */}
+                      <View style={styles.userCell}>
+                        <Text style={styles.userName}>{collaborator.name.split(' ')[0]}</Text>
+                        <Text style={styles.userEmail}>{collaborator.email.split('@')[0]}</Text>
+                      </View>
+                      
+                      {/* Day Cells */}
+                      {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => {
+                        const dayEntries = [];
+                        
+                        // Collect all entries for this day from the user's working hours
+                        collaborator.working_hours.forEach((hours) => {
+                          if (hours.day_of_week === day) {
+                            if (hours.preferred_start_time && hours.preferred_end_time) {
+                              dayEntries.push({
+                                type: 'preferred',
+                                start: hours.preferred_start_time,
+                                end: hours.preferred_end_time
+                              });
+                            }
+                            if (hours.possible_start_time && hours.possible_end_time) {
+                              dayEntries.push({
+                                type: 'possible',
+                                start: hours.possible_start_time,
+                                end: hours.possible_end_time
+                              });
+                            }
+                          }
+                        });
+                        
+                        return (
+                          <View key={day} style={styles.dayCell}>
+                            {dayEntries.length > 0 ? (
+                              <View style={styles.timeBlock}>
+                                {dayEntries.map((entry, index) => (
+                                  <View 
+                                    key={index}
+                                    style={[
+                                      entry.type === 'preferred' ? styles.preferredTimeBlock : styles.possibleTimeBlock
+                                    ]}
+                                  >
+                                    <Text style={styles.timeText}>
+                                      {entry.start}-{entry.end}
+                                    </Text>
+                                  </View>
+                                ))}
+                              </View>
+                            ) : (
+                              <View style={styles.emptyCell}>
+                                <Text style={styles.emptyText}>—</Text>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.noDataContainer}>
+                  <Text style={styles.noDataText}>No team schedules available</Text>
+                </View>
+              )}
+            </View>
+
+            {/* User's Schedule Input - Collapsible */}
+            <View style={styles.scheduleSection}>
+              <TouchableOpacity 
+                style={styles.collapsibleHeader}
+                onPress={() => setShowMyWorkingHours(!showMyWorkingHours)}
+              >
+                <Text style={styles.sectionTitle}>My Working Hours</Text>
+                <Feather 
+                  name={showMyWorkingHours ? "chevron-up" : "chevron-down"} 
+                  size={20} 
+                  color="#303F9F" 
+                />
+              </TouchableOpacity>
+              
+              {showMyWorkingHours && (
+                <View style={styles.collapsibleContent}>
+                  {/* Edit Hours Button */}
+                  <TouchableOpacity 
+                    style={styles.editHoursButton}
+                    onPress={() => setShowEditHoursModal(true)}
+                  >
+                    <Feather name="edit" size={16} color="#303F9F" />
+                    <Text style={styles.editHoursButtonText}>Edit Hours</Text>
+                  </TouchableOpacity>
+
+                  {/* Add Buttons */}
+                  <View style={styles.addButtonsContainer}>
+                    <TouchableOpacity 
+                      style={styles.addButton}
+                      onPress={() => setUserWorkingHours(prev => ({
+                        ...prev,
+                        [`preferred_${Date.now()}`]: { type: 'preferred', day: '', start_time: '', end_time: '' }
+                      }))}
+                    >
+                      <Feather name="plus" size={16} color="#fff" />
+                      <Text style={styles.addButtonText}>Add Preferred Time</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={[styles.addButton, styles.addButtonSecondary]}
+                      onPress={() => setUserWorkingHours(prev => ({
+                        ...prev,
+                        [`possible_${Date.now()}`]: { type: 'possible', day: '', start_time: '', end_time: '' }
+                      }))}
+                    >
+                      <Feather name="plus" size={16} color="#303F9F" />
+                      <Text style={styles.addButtonTextSecondary}>Add Possible Time</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Schedule Entries */}
+                  <View style={styles.scheduleEntries}>
+                    {Object.entries(userWorkingHours)
+                      .filter(([key, entry]) => key.startsWith('preferred_') || key.startsWith('possible_'))
+                      .map(([key, entry]) => (
+                        <View key={key} style={styles.scheduleEntry}>
+                          <View style={styles.entryHeader}>
+                            <Text style={[
+                              styles.entryType, 
+                              entry.type === 'preferred' ? styles.preferredType : styles.possibleType
+                            ]}>
+                              {entry.type === 'preferred' ? 'Preferred' : 'Possible'}
+                            </Text>
+                            <TouchableOpacity 
+                              style={styles.removeButton}
+                              onPress={() => setUserWorkingHours(prev => {
+                                const updated = { ...prev };
+                                delete updated[key];
+                                return updated;
+                              })}
+                            >
+                              <Feather name="x" size={16} color="#EF5350" />
+                            </TouchableOpacity>
+                          </View>
+                          
+                          <View style={styles.entryForm}>
+                            <View style={styles.formRow}>
+                              <Text style={styles.fieldLabel}>Day:</Text>
+                              <View style={styles.daySelector}>
+                                {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
+                                  <TouchableOpacity
+                                    key={day}
+                                    style={[
+                                      styles.dayOption,
+                                      entry.day === day && styles.dayOptionSelected
+                                    ]}
+                                    onPress={() => setUserWorkingHours(prev => ({
+                                      ...prev,
+                                      [key]: { ...entry, day }
+                                    }))}
+                                  >
+                                    <Text style={[
+                                      styles.dayOptionText,
+                                      entry.day === day && styles.dayOptionTextSelected
+                                    ]}>
+                                      {day.charAt(0).toUpperCase() + day.slice(1, 3)}
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
+                            </View>
+                            
+                            <View style={styles.formRow}>
+                              <Text style={styles.fieldLabel}>Time:</Text>
+                              <View style={styles.timeFields}>
+                                <TouchableOpacity
+                                  style={styles.timeInput}
+                                  onPress={() => openTimePicker(key, 'start_time')}
+                                >
+                                  <Text style={[styles.timeInputText, !entry.start_time && styles.timeInputPlaceholder]}>
+                                    {entry.start_time || 'Start'}
+                                  </Text>
+                                </TouchableOpacity>
+                                <Text style={styles.timeSeparator}>to</Text>
+                                <TouchableOpacity
+                                  style={styles.timeInput}
+                                  onPress={() => openTimePicker(key, 'end_time')}
+                                >
+                                  <Text style={[styles.timeInputText, !entry.end_time && styles.timeInputPlaceholder]}>
+                                    {entry.end_time || 'End'}
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          </View>
+                        </View>
+                      ))}
+                  </View>
+
+                  {Object.keys(userWorkingHours).filter(key => 
+                    key.startsWith('preferred_') || key.startsWith('possible_')
+                  ).length > 0 && (
+                    <TouchableOpacity 
+                      style={[styles.saveButton, savingSchedule && styles.saveButtonDisabled]}
+                      onPress={() => saveUserWorkingHours(userWorkingHours)}
+                      disabled={savingSchedule}
+                    >
+                      <Text style={styles.saveButtonText}>
+                        {savingSchedule ? 'Saving...' : 'Save My Schedule'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Time Picker Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showTimePickerModal}
+        onRequestClose={handleTimeCancel}
+      >
+        <View style={styles.timePickerOverlay}>
+          <View style={styles.timePickerModal}>
+            <View style={styles.timePickerHeader}>
+              <Text style={styles.timePickerTitle}>Select Time</Text>
+              <TouchableOpacity 
+                style={styles.closeButton} 
+                onPress={handleTimeCancel}
+              >
+                <Feather name="x" size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.timePickerContent}>
+              <View style={styles.pickerContainer}>
+                <Text style={styles.pickerLabel}>Hour</Text>
+                <Picker
+                  selectedValue={selectedHour}
+                  onValueChange={(itemValue) => setSelectedHour(itemValue)}
+                  style={styles.picker}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <Picker.Item
+                      key={i}
+                      label={i.toString().padStart(2, '0')}
+                      value={i.toString().padStart(2, '0')}
+                    />
+                  ))}
+                </Picker>
+              </View>
+
+              <View style={styles.pickerContainer}>
+                <Text style={styles.pickerLabel}>Minute</Text>
+                <Picker
+                  selectedValue={selectedMinute}
+                  onValueChange={(itemValue) => setSelectedMinute(itemValue)}
+                  style={styles.picker}
+                >
+                  {Array.from({ length: 60 }, (_, i) => (
+                    <Picker.Item
+                      key={i}
+                      label={i.toString().padStart(2, '0')}
+                      value={i.toString().padStart(2, '0')}
+                    />
+                  ))}
+                </Picker>
+              </View>
+            </View>
+
+            <View style={styles.timePickerFooter}>
+              <TouchableOpacity style={styles.timePickerButtonCancel} onPress={handleTimeCancel}>
+                <Text style={styles.timePickerButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.timePickerButtonConfirm} onPress={handleTimeConfirm}>
+                <Text style={styles.timePickerButtonTextConfirm}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showConfirmationModal}
+        onRequestClose={() => setShowConfirmationModal(false)}
+      >
+        <View style={styles.confirmationOverlay}>
+          <View style={styles.confirmationModal}>
+            <View style={styles.confirmationContent}>
+              <View style={styles.confirmationIcon}>
+                <Feather name="check-circle" size={48} color="#10B981" />
+              </View>
+              <Text style={styles.confirmationTitle}>Schedule Saved!</Text>
+              <Text style={styles.confirmationMessage}>
+                Your working hours have been successfully updated and are now visible to your team.
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.confirmationButton}
+              onPress={() => setShowConfirmationModal(false)}
+            >
+              <Text style={styles.confirmationButtonText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Hours Modal */}
+      <Modal
+        animationType="slide"
+        transparent={false}
+        visible={showEditHoursModal}
+        onRequestClose={() => setShowEditHoursModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowEditHoursModal(false)}>
+              <Feather name="arrow-left" size={24} color="#303F9F" />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Edit Working Hours</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.editHoursContent}>
+              <Text style={styles.editHoursSubtitle}>Manage your saved working hours</Text>
+              
+              {/* Load/Edit Hours */}
+              <TouchableOpacity 
+                style={styles.loadHoursButton}
+                onPress={() => fetchUserWorkingHours()}
+              >
+                <Feather name="download" size={16} color="#303F9F" />
+                <Text style={styles.loadHoursButtonText}>Load My Hours</Text>
+              </TouchableOpacity>
+
+              {/* Schedule Entries for Editing */}
+              <View style={styles.editScheduleEntries}>
+                {Object.entries(userWorkingHours)
+                  .filter(([key, entry]) => key.startsWith('preferred_') || key.startsWith('possible_'))
+                  .map(([key, entry]) => (
+                    <View key={key} style={styles.editScheduleEntry}>
+                      <View style={styles.entryHeader}>
+                        <Text style={[
+                          styles.entryType, 
+                          entry.type === 'preferred' ? styles.preferredType : styles.possibleType
+                        ]}>
+                          {entry.type === 'preferred' ? 'Preferred' : 'Possible'}
+                        </Text>
+                        <TouchableOpacity 
+                          style={styles.removeButton}
+                          onPress={() => setUserWorkingHours(prev => {
+                            const updated = { ...prev };
+                            delete updated[key];
+                            return updated;
+                          })}
+                        >
+                          <Feather name="trash-2" size={16} color="#EF5350" />
+                        </TouchableOpacity>
+                      </View>
+                      
+                      <View style={styles.entryForm}>
+                        <View style={styles.formRow}>
+                          <Text style={styles.fieldLabel}>Day:</Text>
+                          <View style={styles.daySelector}>
+                            {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
+                              <TouchableOpacity
+                                key={day}
+                                style={[
+                                  styles.dayOption,
+                                  entry.day === day && styles.dayOptionSelected
+                                ]}
+                                onPress={() => setUserWorkingHours(prev => ({
+                                  ...prev,
+                                  [key]: { ...entry, day }
+                                }))}
+                              >
+                                <Text style={[
+                                  styles.dayOptionText,
+                                  entry.day === day && styles.dayOptionTextSelected
+                                ]}>
+                                  {day.charAt(0).toUpperCase() + day.slice(1, 3)}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+                        
+                        <View style={styles.formRow}>
+                          <Text style={styles.fieldLabel}>Time:</Text>
+                          <View style={styles.timeFields}>
+                            <TouchableOpacity
+                              style={styles.timeInput}
+                              onPress={() => openTimePicker(key, 'start_time')}
+                            >
+                              <Text style={[styles.timeInputText, !entry.start_time && styles.timeInputPlaceholder]}>
+                                {entry.start_time || 'Start'}
+                              </Text>
+                            </TouchableOpacity>
+                            <Text style={styles.timeSeparator}>to</Text>
+                            <TouchableOpacity
+                              style={styles.timeInput}
+                              onPress={() => openTimePicker(key, 'end_time')}
+                            >
+                              <Text style={[styles.timeInputText, !entry.end_time && styles.timeInputPlaceholder]}>
+                                {entry.end_time || 'End'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+              </View>
+
+              {Object.keys(userWorkingHours).filter(key => 
+                key.startsWith('preferred_') || key.startsWith('possible_')
+              ).length > 0 && (
+                <TouchableOpacity 
+                  style={[styles.saveButton, savingSchedule && styles.saveButtonDisabled]}
+                  onPress={() => saveUserWorkingHours(userWorkingHours)}
+                  disabled={savingSchedule}
+                >
+                  <Text style={styles.saveButtonText}>
+                    {savingSchedule ? 'Updating...' : 'Update Hours'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -786,6 +1419,12 @@ const styles = StyleSheet.create({
     padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  scheduleText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: "#303F9F",
+    fontWeight: '600',
   },
   logoutButton: {
     padding: 8,
@@ -1285,5 +1924,542 @@ const styles = StyleSheet.create({
     color: '#CBD5E0',
     marginTop: 4,
     textAlign: 'center',
+  },
+  // Schedule Modal Styles
+  collapsibleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 0,
+  },
+  collapsibleContent: {
+    marginTop: 16,
+  },
+  editHoursButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#F0F2F5',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  editHoursButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#303F9F',
+  },
+  scheduleSection: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  addButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  addButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#303F9F',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 8,
+  },
+  addButtonSecondary: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#303F9F',
+  },
+  addButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  addButtonTextSecondary: {
+    color: '#303F9F',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  scheduleEntries: {
+    gap: 16,
+  },
+  scheduleEntry: {
+    backgroundColor: '#F7F8FA',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  entryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  entryType: {
+    fontSize: 14,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  preferredType: {
+    backgroundColor: '#D4EDDA',
+    color: '#155724',
+  },
+  possibleType: {
+    backgroundColor: '#FFF3CD',
+    color: '#856404',
+  },
+  removeButton: {
+    padding: 4,
+  },
+  entryForm: {
+    gap: 12,
+  },
+  formRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4A5568',
+    width: 50,
+    marginRight: 12,
+  },
+  daySelector: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dayOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#E2E8F0',
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  dayOptionSelected: {
+    backgroundColor: '#303F9F',
+  },
+  dayOptionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4A5568',
+  },
+  dayOptionTextSelected: {
+    color: '#fff',
+  },
+  timeFields: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timeInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    minHeight: 36,
+  },
+  timeInputText: {
+    fontSize: 14,
+    color: '#2D3748',
+  },
+  timeInputPlaceholder: {
+    color: '#A0AEC0',
+    fontStyle: 'italic',
+  },
+  timeSeparator: {
+    fontSize: 14,
+    color: '#718096',
+    fontWeight: '500',
+  },
+  saveButton: {
+    backgroundColor: '#303F9F',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#A0AEC0',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  collaboratorSchedule: {
+    marginBottom: 24,
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  // Team Calendar Styles
+  teamCalendarContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#F8F9FA',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  calendarCorner: {
+    width: 120,
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#E2E8F0',
+  },
+  cornerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  dayHeader: {
+    flex: 1,
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#E2E8F0',
+  },
+  dayHeaderText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  calendarRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  userCell: {
+    width: 120,
+    padding: 12,
+    justifyContent: 'center',
+    backgroundColor: '#FAFBFC',
+    borderRightWidth: 1,
+    borderRightColor: '#E2E8F0',
+  },
+  userName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  userEmail: {
+    fontSize: 11,
+    color: '#6B7280',
+  },
+  dayCell: {
+    flex: 1,
+    minHeight: 80,
+    padding: 6,
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#F0F0F0',
+  },
+  timeBlock: {
+    gap: 2,
+    alignItems: 'center',
+  },
+  preferredTimeBlock: {
+    backgroundColor: '#D4EDDA',
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    borderRadius: 3,
+    marginBottom: 2,
+    minWidth: '100%',
+  },
+  possibleTimeBlock: {
+    backgroundColor: '#FFF3CD',
+    paddingHorizontal: 3,
+    paddingVertical: 1,
+    borderRadius: 3,
+    minWidth: '100%',
+  },
+  timeText: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#2D3748',
+    textAlign: 'center',
+  },
+  emptyCell: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#D1D5DB',
+  },
+  collaboratorHeader: {
+    marginBottom: 12,
+  },
+  collaboratorName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  collaboratorEmail: {
+    fontSize: 14,
+    color: '#718096',
+    marginTop: 2,
+  },
+  collaboratorScheduleGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dayScheduleSummary: {
+    flex: 1,
+    minWidth: 80,
+    alignItems: 'center',
+    padding: 8,
+    backgroundColor: '#F7F8FA',
+    borderRadius: 6,
+  },
+  daySummaryLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4A5568',
+    marginBottom: 4,
+    textTransform: 'capitalize',
+  },
+  hoursSummary: {
+    alignItems: 'center',
+  },
+  hoursText: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  preferredHours: {
+    color: '#303F9F',
+  },
+  possibleHours: {
+    color: '#718096',
+  },
+  noHoursText: {
+    fontSize: 11,
+    color: '#A0AEC0',
+    fontStyle: 'italic',
+  },
+  // Time Picker Modal Styles
+  timePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timePickerModal: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '85%',
+    maxWidth: 280,
+    padding: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  timePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 0,
+    position: 'relative',
+  },
+  timePickerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  closeButton: {
+    position: 'absolute',
+    right: 16,
+    top: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timePickerContent: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 16,
+  },
+  pickerContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  pickerLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#718096',
+    marginBottom: 8,
+  },
+  picker: {
+    width: '100%',
+    height: 40,
+  },
+  timePickerFooter: {
+    flexDirection: 'row',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    gap: 8,
+  },
+  timePickerButtonCancel: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+  },
+  timePickerButtonConfirm: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#303F9F',
+    alignItems: 'center',
+  },
+  timePickerButtonTextCancel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  timePickerButtonTextConfirm: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  // Confirmation Modal Styles
+  confirmationOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmationModal: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '85%',
+    maxWidth: 320,
+    padding: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  confirmationContent: {
+    padding: 32,
+    alignItems: 'center',
+  },
+  confirmationIcon: {
+    marginBottom: 16,
+  },
+  confirmationTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  confirmationMessage: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  confirmationButton: {
+    marginHorizontal: 32,
+    marginVertical: 20,
+    paddingVertical: 12,
+    backgroundColor: '#303F9F',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  confirmationButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  // Edit Hours Modal Styles
+  editHoursContent: {
+    padding: 20,
+  },
+  editHoursSubtitle: {
+    fontSize: 14,
+    color: '#718096',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  loadHoursButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 24,
+    gap: 8,
+  },
+  loadHoursButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#303F9F',
+  },
+  editScheduleEntries: {
+    gap: 16,
+  },
+  editScheduleEntry: {
+    backgroundColor: '#F7F8FA',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
 });
