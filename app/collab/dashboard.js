@@ -308,6 +308,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
   const [upcomingActivities, setUpcomingActivities] = useState([]);
   const [topContributors, setTopContributors] = useState(null); // Start with null to indicate initial loading
   const [showContributorsModal, setShowContributorsModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [allContributors, setAllContributors] = useState([]);
   const [contributorsSearch, setContributorsSearch] = useState('');
   const [contributorsRole, setContributorsRole] = useState('all');
@@ -433,14 +434,12 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
           </View>
           <TouchableOpacity 
             style={styles.refreshButton}
-            onPress={() => fetchDashboardStats(true)}
-            disabled={refreshing}
+            onPress={() => setShowScheduleModal(true)}
           >
             <Feather 
-              name="refresh-cw" 
+              name="calendar" 
               size={20} 
-              color={refreshing ? "#ccc" : "#303F9F"} 
-              style={{ transform: [{ rotate: refreshing ? '180deg' : '0deg' }] }}
+              color="#303F9F" 
             />
           </TouchableOpacity>
         </View>
