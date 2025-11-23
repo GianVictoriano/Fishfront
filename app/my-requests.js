@@ -19,8 +19,10 @@ export default function MyRequestsScreen() {
     try {
       const res = await apiClient.get('/api/contributions');
       const list = res.data.data ?? res.data;
+      // Ensure list is an array and filter out null items
+      const validList = Array.isArray(list) ? list.filter(item => item != null) : [];
       // Filter only current user's contributions
-      const userRequests = list.filter(item => item.user_id === user.id);
+      const userRequests = validList.filter(item => item.user_id === user.id);
       setRequests(userRequests);
     } catch (err) {
       console.error('Failed to load requests', err);
@@ -31,8 +33,10 @@ export default function MyRequestsScreen() {
   };
 
   useEffect(() => {
-    fetchRequests();
-  }, []);
+    if (user) {
+      fetchRequests();
+    }
+  }, [user]);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);

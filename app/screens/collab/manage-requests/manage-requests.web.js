@@ -25,8 +25,10 @@ export default function ManageRequestsScreen() {
     try {
       const res = await apiClient.get('/api/contributions');
       const list = res.data.data ?? res.data;
+      // Ensure list is an array and filter out null items
+      const validList = Array.isArray(list) ? list.filter(item => item != null) : [];
       // Filter only coverage type contributions
-      const coverageRequests = list.filter(item => item.category === 'coverage');
+      const coverageRequests = validList.filter(item => item.category === 'coverage');
       setRequests(coverageRequests);
       setFilteredRequests(coverageRequests);
     } catch (err) {
@@ -86,16 +88,17 @@ export default function ManageRequestsScreen() {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (item) =>
-          item.title?.toLowerCase().includes(query) ||
+          item &&
+          (item.title?.toLowerCase().includes(query) ||
           item.event_location?.toLowerCase().includes(query) ||
           item.user?.name?.toLowerCase().includes(query) ||
-          item.user?.email?.toLowerCase().includes(query)
+          item.user?.email?.toLowerCase().includes(query))
       );
     }
 
     // Apply status filter
     if (statusFilter !== 'all') {
-      filtered = filtered.filter((item) => item.status === statusFilter);
+      filtered = filtered.filter((item) => item && item.status === statusFilter);
     }
 
     // Apply sort order

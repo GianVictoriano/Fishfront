@@ -501,6 +501,16 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
     try {
       setSavingSchedule(true);
       
+      // Validate time ranges
+      for (const [key, entry] of Object.entries(workingHours)) {
+        if (key.startsWith('preferred_') || key.startsWith('possible_')) {
+          if (entry.start_time && entry.end_time && entry.start_time >= entry.end_time) {
+            alert(`Invalid time range for ${entry.type}: Start time must be before end time`);
+            return;
+          }
+        }
+      }
+      
       // Convert the new format to the API format
       const formattedData = Object.entries(workingHours)
         .filter(([key, entry]) => key.startsWith('preferred_') || key.startsWith('possible_'))
@@ -583,7 +593,6 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
 
   useEffect(() => {
     if (showScheduleModal) {
-      fetchUserWorkingHours();
       fetchCollaboratorsWorkingHours();
     }
   }, [showScheduleModal]);

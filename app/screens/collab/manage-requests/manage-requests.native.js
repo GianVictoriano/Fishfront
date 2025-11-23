@@ -20,8 +20,10 @@ export default function ManageRequestsScreen() {
     try {
       const res = await apiClient.get('/api/contributions');
       const list = res.data.data ?? res.data;
+      // Ensure list is an array and filter out null items
+      const validList = Array.isArray(list) ? list.filter(item => item != null) : [];
       // Filter only coverage type contributions
-      const coverageRequests = list.filter(item => item.category === 'coverage');
+      const coverageRequests = validList.filter(item => item.category === 'coverage');
       setRequests(coverageRequests);
     } catch (err) {
       console.error('Failed to load coverage requests', err);
