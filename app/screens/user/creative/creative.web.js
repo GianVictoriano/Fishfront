@@ -388,29 +388,33 @@ export default function CreativeScreen() {
     const fetchCreativeContent = async () => {
       try {
         setLoading(true);
-        const response = await apiClient.get('/public/articles?genre=creative');
+        console.log('Fetching creative works from /creatives-published');
+        const response = await apiClient.get('/creatives-published');
+        console.log('Creative API response:', response);
         
         if (Array.isArray(response.data?.data) && response.data.data.length > 0) {
-          const mapped = response.data.data.map(article => ({
-            id: article.id?.toString() || '',
-            title: article.title,
-            excerpt: article.content ? article.content.substring(0, 150) + '...' : '',
-            image: article.media && article.media.length > 0 
-              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`
+          console.log('Found', response.data.data.length, 'creative works');
+          const mapped = response.data.data.map(creative => ({
+            id: creative.id?.toString() || '',
+            title: creative.title,
+            excerpt: creative.caption,
+            image: creative.media && creative.media.length > 0 
+              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${creative.media[0].file_path.replace('public/', '')}`
               : null,
-            author: article.user?.name || 'Anonymous',
-            date: article.published_at 
-              ? new Date(article.published_at).toLocaleDateString('en-US', { 
+            author: creative.user?.name || 'Anonymous',
+            date: creative.created_at 
+              ? new Date(creative.created_at).toLocaleDateString('en-US', { 
                   year: 'numeric', 
                   month: 'long', 
                   day: 'numeric' 
                 })
               : '',
           }));
-          // Combine real articles with dummy artworks
-          setCreativeWorks([...mapped, ...dummyArtworks]);
+          console.log('Mapped creative works:', mapped);
+          setCreativeWorks(mapped);
         } else {
-          // If no real articles, use dummy artworks
+          console.log('No creative works found, using dummy data');
+          // If no real creatives, use dummy artworks
           setCreativeWorks(dummyArtworks);
         }
       } catch (error) {
@@ -498,7 +502,7 @@ export default function CreativeScreen() {
             </View>
           </View>
           <View style={styles.copyright}>
-            &copy; {new Date().getFullYear()} Fisherman's Network. All rights reserved.
+            <Text>&copy; {new Date().getFullYear()} Fisherman's Network. All rights reserved.</Text>
           </View>
         </footer>
       </ScrollView>

@@ -1,10 +1,212 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions, FlatList, TextInput, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions, FlatList, TextInput, Modal, Platform, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '~/context/AuthContext';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../utils/api';
+import Svg, { Rect, Circle, Text as SvgText, Line, Path, G } from 'react-native-svg';
+
+// Deadline Timeline Component
+const DeadlineGraph = ({ data, width = 400, height = 250 }) => {
+  if (!data || !data.deadlines || data.deadlines.length === 0) return (
+    <View style={{ alignItems: 'center', justifyContent: 'center', height: 200 }}>
+      <Text style={{ color: '#A0AEC0', fontSize: 14 }}>No deadlines to display</Text>
+    </View>
+  );
+
+  const deadlines = data.deadlines;
+  const now = new Date();
+
+  // Sort deadlines by date
+  const sortedDeadlines = [...deadlines].sort((a, b) => {
+    const dateA = new Date(a.deadline_raw);
+    const dateB = new Date(b.deadline_raw);
+    return dateA - dateB;
+  });
+
+  // Find min and max dates for timeline range
+  const dates = sortedDeadlines.map(d => new Date(d.deadline_raw));
+  const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+  const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+
+  // Extend range by 30 days on each side
+  const startDate = new Date(minDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const endDate = new Date(maxDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+  const timelineWidth = width - 60; // Leave space for labels
+  const timelineHeight = height - 80; // Leave space for title and labels
+
+  const getDatePosition = (date) => {
+    const totalRange = endDate.getTime() - startDate.getTime();
+    const dateOffset = date.getTime() - startDate.getTime();
+    return 40 + (dateOffset / totalRange) * timelineWidth; // 40px left margin
+  };
+
+  const getUrgencyColor = (urgency) => {
+    switch (urgency) {
+      case 'urgent': return '#F44336';
+      case 'warning': return '#FF9800';
+      default: return '#4CAF50';
+    }
+  };
+
+  const formatDate = (date) => {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Svg width={width} height={height}>
+        {/* Title */}
+        <SvgText
+          x={width / 2}
+          y={20}
+          fontSize="14"
+          fontWeight="bold"
+          fill="#1A202C"
+          textAnchor="middle"
+        >
+          Project Timeline
+        </SvgText>
+
+        {/* Timeline line */}
+        <Line
+          x1="40"
+          y1={height - 50}
+          x2={width - 20}
+          y2={height - 50}
+          stroke="#E2E8F0"
+          strokeWidth="2"
+        />
+
+        {/* Date markers - show key dates without overlaps */}
+        {(() => {
+          const dateMarkers = [];
+          
+          // Always show "Today" if it's within range
+          if (now >= startDate && now <= endDate) {
+            dateMarkers.push({ date: now, label: '', isToday: true });
+          }
+          
+          // Show min deadline
+          if (minDate.getTime() !== now.getTime() && minDate >= startDate && minDate <= endDate) {
+            dateMarkers.push({ date: minDate, label: formatDate(minDate), isToday: false });
+          }
+          
+          // Show nearest upcoming deadline (closest future deadline)
+          const upcomingDeadlines = sortedDeadlines.filter(d => new Date(d.deadline_raw) > now);
+          if (upcomingDeadlines.length > 0) {
+            const nearestUpcoming = upcomingDeadlines[0]; // Already sorted by date
+            const nearestDate = new Date(nearestUpcoming.deadline_raw);
+            if (nearestDate.getTime() !== now.getTime() && nearestDate.getTime() !== minDate.getTime()) {
+              dateMarkers.push({ date: nearestDate, label: formatDate(nearestDate), isToday: false });
+            }
+          }
+          
+          // Remove duplicates based on date
+          const uniqueMarkers = dateMarkers.filter((marker, index, self) => 
+            index === self.findIndex(m => m.date.getTime() === marker.date.getTime())
+          );
+          
+          return uniqueMarkers.slice(0, 3).map((marker, index) => {
+            const x = getDatePosition(marker.date);
+            return (
+              <G key={index}>
+                <Line
+                  x1={x}
+                  y1={height - 55}
+                  x2={x}
+                  y2={height - 45}
+                  stroke={marker.isToday ? "#303F9F" : "#CBD5E0"}
+                  strokeWidth={marker.isToday ? "2" : "1"}
+                />
+                <SvgText
+                  x={x}
+                  y={height - 35}
+                  fontSize="9"
+                  fill={marker.isToday ? "#303F9F" : "#666"}
+                  textAnchor="middle"
+                  fontWeight={marker.isToday ? "bold" : "normal"}
+                >
+                  {marker.label}
+                </SvgText>
+              </G>
+            );
+          });
+        })()}
+
+        {/* Project points */}
+        {sortedDeadlines.map((deadline, index) => {
+          const x = getDatePosition(new Date(deadline.deadline_raw));
+          const y = height - 50;
+          const color = getUrgencyColor(deadline.urgency);
+          
+          // Stagger the text vertically to avoid overlaps
+          const textOffset = (index % 4) * 20;
+          const nameY = y - 50 - textOffset;
+
+          return (
+            <G key={deadline.id}>
+              {/* Connection line to project name */}
+              <Line
+                x1={x}
+                y1={y - 15}
+                x2={x}
+                y2={nameY + 10}
+                stroke={color}
+                strokeWidth="1"
+                opacity="0.5"
+              />
+
+              {/* Project name */}
+              <SvgText
+                x={x}
+                y={nameY}
+                fontSize="9"
+                fill={color}
+                textAnchor="middle"
+                fontWeight="600"
+              >
+                {deadline.name.length > 12 ? deadline.name.substring(0, 12) + '...' : deadline.name}
+              </SvgText>
+
+              {/* Deadline point */}
+              <Circle
+                cx={x}
+                cy={y}
+                r="5"
+                fill={color}
+                stroke="#fff"
+                strokeWidth="2"
+              />
+            </G>
+          );
+        })}
+      </Svg>
+
+      {/* Legend */}
+      <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 20 }}>
+          <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#F44336', marginRight: 5 }} />
+          <Text style={{ fontSize: 12, color: '#666' }}>Urgent</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 20 }}>
+          <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#FF9800', marginRight: 5 }} />
+          <Text style={{ fontSize: 12, color: '#666' }}>Warning</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 20 }}>
+          <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#4CAF50', marginRight: 5 }} />
+          <Text style={{ fontSize: 12, color: '#666' }}>Normal</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ width: 2, height: 12, backgroundColor: '#303F9F', marginRight: 5 }} />
+          <Text style={{ fontSize: 12, color: '#666' }}>Today</Text>
+        </View>
+      </View>
+    </View>
+  );
+};
 
 // PDF Generation
 const generatePDFReport = async (activities, filter, activityGenres = {}) => {
@@ -256,6 +458,10 @@ export default function ActivityMonitorScreen() {
   const [activityDetails, setActivityDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [pdfSuccessModalVisible, setPdfSuccessModalVisible] = useState(false);
+  const [publicationTimelineVisible, setPublicationTimelineVisible] = useState(false);
+  const [publications, setPublications] = useState([]);
+  const [loadingPublications, setLoadingPublications] = useState(false);
+  const [deadlineData, setDeadlineData] = useState(null);
 
   const fetchGenresForActivities = async (activities) => {
     const articleActivities = activities.filter(activity => activity.id.startsWith('article_'));
@@ -537,6 +743,29 @@ export default function ActivityMonitorScreen() {
     }
   };
 
+  const getGenreColor = (genre) => {
+    const colors = {
+      articles: '#2196F3',
+      opinions: '#FF9800',
+      sports: '#4CAF50',
+      editorial: '#9C27B0',
+      artworks: '#FF5722',
+      creative: '#607D8B',
+    };
+    return colors[genre] || '#607D8B';
+  };
+
+  const getUrgencyStyle = (urgency) => {
+    switch (urgency) {
+      case 'urgent':
+        return { backgroundColor: '#F44336', borderColor: '#F44336' };
+      case 'warning':
+        return { backgroundColor: '#FF9800', borderColor: '#FF9800' };
+      default:
+        return { backgroundColor: '#4CAF50', borderColor: '#4CAF50' };
+    }
+  };
+
   useEffect(() => {
     fetchActivities();
   }, [filter, search]);
@@ -580,6 +809,32 @@ export default function ActivityMonitorScreen() {
     fetchActivities(true);
   };
 
+  const fetchPublications = async () => {
+    try {
+      setLoadingPublications(true);
+      const response = await apiClient.get('/publication-deadlines');
+      
+      if (response.data.success) {
+        setDeadlineData(response.data);
+        setPublications(response.data.deadlines || []);
+      } else {
+        setDeadlineData(null);
+        setPublications([]);
+      }
+    } catch (error) {
+      console.error('Error fetching publication deadlines:', error);
+      setDeadlineData(null);
+      setPublications([]);
+    } finally {
+      setLoadingPublications(false);
+    }
+  };
+
+  const handlePublicationTimelinePress = () => {
+    setPublicationTimelineVisible(true);
+    fetchPublications();
+  };
+
   const handleGenerateReport = async () => {
     setGeneratingPDF(true);
     try {
@@ -620,20 +875,35 @@ export default function ActivityMonitorScreen() {
             Track user activities and system events in real-time
           </Text>
         </View>
-        <TouchableOpacity
-          style={[styles.generateReportButton, isMobile && styles.generateReportButtonMobile]}
-          onPress={handleGenerateReport}
-          disabled={generatingPDF || activities.length === 0}
-        >
-          <Feather
-            name="file-text"
-            size={isMobile ? 16 : 20}
-            color={generatingPDF || activities.length === 0 ? "#ccc" : "#303F9F"}
-          />
-          <Text style={[styles.generateReportText, isMobile && styles.generateReportTextMobile]}>
-            {generatingPDF ? 'Generating...' : 'Generate Report'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={[styles.publicationTimelineButton, isMobile && styles.publicationTimelineButtonMobile]}
+            onPress={handlePublicationTimelinePress}
+          >
+            <Feather
+              name="calendar"
+              size={isMobile ? 16 : 20}
+              color="#303F9F"
+            />
+            <Text style={[styles.publicationTimelineText, isMobile && styles.publicationTimelineTextMobile]}>
+              Publication Timeline
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.generateReportButton, isMobile && styles.generateReportButtonMobile]}
+            onPress={handleGenerateReport}
+            disabled={generatingPDF || activities.length === 0}
+          >
+            <Feather
+              name="file-text"
+              size={isMobile ? 16 : 20}
+              color={generatingPDF || activities.length === 0 ? "#ccc" : "#303F9F"}
+            />
+            <Text style={[styles.generateReportText, isMobile && styles.generateReportTextMobile]}>
+              {generatingPDF ? 'Generating...' : 'Generate Report'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search and Filters */}
@@ -739,6 +1009,94 @@ export default function ActivityMonitorScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Publication Timeline Modal */}
+      <Modal 
+        visible={publicationTimelineVisible} 
+        animationType="fade" 
+        transparent 
+        onRequestClose={() => setPublicationTimelineVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, styles.timelineModalContent]}>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setPublicationTimelineVisible(false)}>
+              <Feather name="x" size={24} color="#666" />
+            </TouchableOpacity>
+            
+            <View style={styles.modalHeader}>
+              <Feather name="calendar" size={24} color="#303F9F" style={styles.modalIcon} />
+              <Text style={styles.modalTitle}>Publication Timeline</Text>
+            </View>
+            
+            <Text style={styles.timelineSubtitle}>Publication deadlines across all projects</Text>
+            
+            {loadingPublications ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#303F9F" />
+                <Text style={styles.loadingText}>Loading deadlines...</Text>
+              </View>
+            ) : deadlineData && deadlineData.total > 0 ? (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* Deadline Timeline */}
+                <View style={styles.graphContainer}>
+                  <Text style={styles.graphTitle}>Project Timeline</Text>
+                  <DeadlineGraph 
+                    data={deadlineData} 
+                    width={isMobile ? width - 80 : 500} 
+                    height={300} 
+                  />
+                </View>
+
+                {/* Upcoming Deadlines List */}
+                <View style={styles.deadlinesList}>
+                  <Text style={styles.deadlinesTitle}>Pending Deadlines ({deadlineData.total})</Text>
+                  {publications.map((item, index) => (
+                    <View key={item.id} style={[styles.deadlineItem, isMobile && styles.deadlineItemMobile]}>
+                      <View style={styles.deadlineConnector}>
+                        <View style={[styles.deadlineDot, getUrgencyStyle(item.urgency)]} />
+                        {index < publications.length - 1 && <View style={styles.deadlineLine} />}
+                      </View>
+                      <View style={styles.deadlineContent}>
+                        <View style={styles.deadlineHeader}>
+                          <Text style={[styles.deadlineTitle, isMobile && styles.deadlineTitleMobile]}>
+                            {item.name}
+                          </Text>
+                          <View style={[styles.urgencyBadge, getUrgencyStyle(item.urgency)]}>
+                            <Text style={styles.urgencyText}>
+                              {item.days_until_deadline <= 0 ? 'Overdue' : 
+                               item.days_until_deadline === 1 ? 'Tomorrow' : 
+                               `${item.days_until_deadline} days`}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.deadlineMeta}>
+                          <Text style={[styles.deadlineDate, isMobile && styles.deadlineDateMobile]}>
+                            📅 {item.deadline}
+                          </Text>
+                          <Text style={[styles.deadlineLead, isMobile && styles.deadlineLeadMobile]}>
+                            👤 {item.lead_reviewer}
+                          </Text>
+                          <Text style={[styles.deadlineMembers, isMobile && styles.deadlineMembersMobile]}>
+                            👥 {item.members_count} members
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Feather name="calendar" size={48} color="#ccc" />
+                <Text style={styles.emptyText}>No projects with deadlines found</Text>
+                <Text style={styles.emptySubtext}>
+                  Projects with deadlines will appear here
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -757,6 +1115,32 @@ const styles = StyleSheet.create({
   },
   headerMobile: {
     marginBottom: 16,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  publicationTimelineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  publicationTimelineButtonMobile: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  publicationTimelineText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#303F9F',
+  },
+  publicationTimelineTextMobile: {
+    fontSize: 12,
   },
   title: {
     fontSize: 28,
@@ -1153,5 +1537,228 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e2e2',
     marginBottom: 8,
+  },
+  // Publication Timeline Modal Styles
+  timelineModalContent: {
+    maxHeight: '80%',
+    width: '90%',
+    maxWidth: 600,
+  },
+  timelineSubtitle: {
+    fontSize: 14,
+    color: '#718096',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  graphContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  graphTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1A202C',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  deadlinesList: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  deadlinesTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1A202C',
+    marginBottom: 15,
+  },
+  deadlineItem: {
+    flexDirection: 'row',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F7F8FA',
+  },
+  deadlineItemMobile: {
+    paddingVertical: 12,
+  },
+  deadlineConnector: {
+    width: 40,
+    alignItems: 'center',
+    paddingTop: 4,
+  },
+  deadlineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  deadlineLine: {
+    width: 2,
+    height: 60,
+    backgroundColor: '#E2E8F0',
+    marginTop: 8,
+  },
+  deadlineContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  deadlineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  deadlineTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1A202C',
+    flex: 1,
+    marginRight: 12,
+  },
+  deadlineTitleMobile: {
+    fontSize: 16,
+  },
+  urgencyBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  urgencyText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  deadlineMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  deadlineDate: {
+    fontSize: 14,
+    color: '#4A5568',
+    flex: 1,
+  },
+  deadlineDateMobile: {
+    fontSize: 13,
+  },
+  deadlineLead: {
+    fontSize: 14,
+    color: '#4A5568',
+    flex: 1,
+    textAlign: 'center',
+  },
+  deadlineLeadMobile: {
+    fontSize: 13,
+  },
+  deadlineMembers: {
+    fontSize: 14,
+    color: '#4A5568',
+    textAlign: 'right',
+  },
+  deadlineMembersMobile: {
+    fontSize: 13,
+  },
+  publicationsList: {
+    padding: 20,
+  },
+  publicationItem: {
+    flexDirection: 'row',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F7F8FA',
+  },
+  publicationItemMobile: {
+    paddingVertical: 12,
+  },
+  publicationConnector: {
+    width: 40,
+    alignItems: 'center',
+    paddingTop: 4,
+  },
+  publicationDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#303F9F',
+  },
+  publicationLine: {
+    width: 2,
+    height: 60,
+    backgroundColor: '#E2E8F0',
+    marginTop: 8,
+  },
+  publicationContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  publicationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  publicationTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1A202C',
+    flex: 1,
+    marginRight: 12,
+  },
+  publicationTitleMobile: {
+    fontSize: 16,
+  },
+  genreBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  genreText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  publicationMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  publicationAuthor: {
+    fontSize: 14,
+    color: '#4A5568',
+    flex: 1,
+  },
+  publicationAuthorMobile: {
+    fontSize: 13,
+  },
+  publicationDate: {
+    fontSize: 14,
+    color: '#718096',
+  },
+  publicationDateMobile: {
+    fontSize: 13,
+  },
+  publicationExcerpt: {
+    fontSize: 14,
+    color: '#4A5568',
+    lineHeight: 20,
+  },
+  publicationExcerptMobile: {
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

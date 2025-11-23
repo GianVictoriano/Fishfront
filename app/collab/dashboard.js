@@ -280,6 +280,17 @@ export default function DashboardScreen() {
     return `${diffDays}d ago`;
   };
 
+  const getStatusStyle = (status) => {
+    switch (status) {
+      case 'approved':
+        return styles.approvedStatus;
+      case 'review':
+        return styles.reviewStatus;
+      default:
+        return styles.pendingStatus;
+    }
+  };
+
 const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }) => (
   <View style={styles.activityItem}>
     <Feather name="calendar" size={isMobile ? 18 : 24} color="#555" />
@@ -315,6 +326,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
   const [refreshing, setRefreshing] = useState(false);
   const [graphData, setGraphData] = useState(null);
   const [loadingGraphs, setLoadingGraphs] = useState(false);
+  const [groupChatTimeline, setGroupChatTimeline] = useState([]);
 
   const handleLogout = () => {
     logout();
@@ -387,6 +399,9 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
       // Ensure we have valid data and it's an array
       const contributors = Array.isArray(data.top_contributors) ? data.top_contributors : [];
       setTopContributors(contributors);
+      
+      // Set group chat timeline
+      setGroupChatTimeline(data.group_chat_timeline || []);
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
     } finally {
@@ -541,6 +556,41 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
                 <Text style={styles.noContributorsText}>
                   {topContributors === null ? 'Loading contributors...' : 'No contributor data available'}
                 </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionTitle}>Project Timeline</Text>
+          <View style={styles.timelineList}>
+            {groupChatTimeline.length > 0 ? (
+              groupChatTimeline.map((item, index) => (
+                <View key={item.id} style={styles.timelineItem}>
+                  <View style={styles.timelineConnector}>
+                    <View style={styles.timelineDot} />
+                    {index < groupChatTimeline.length - 1 && <View style={styles.timelineLine} />}
+                  </View>
+                  <View style={styles.timelineContent}>
+                    <View style={styles.timelineHeader}>
+                      <Text style={styles.timelineTitle}>{item.name}</Text>
+                      <View style={[styles.statusBadge, getStatusStyle(item.status)]}>
+                        <Text style={styles.statusText}>{item.status === 'approved' ? 'Approved' : item.status === 'review' ? 'In Review' : 'Pending'}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.timelineDetails}>
+                      <Text style={styles.timelineDeadline}>📅 Deadline: {item.deadline || 'No deadline set'}</Text>
+                      <Text style={styles.timelineLead}>👤 Lead: {item.lead_reviewer}</Text>
+                      <Text style={styles.timelineMembers}>👥 {item.members_count} members</Text>
+                    </View>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.noTimelineContainer}>
+                <Feather name="calendar" size={32} color="#ccc" />
+                <Text style={styles.noTimelineText}>No projects with deadlines found</Text>
+                <Text style={styles.noTimelineSubtext}>Projects with deadlines will appear here</Text>
               </View>
             )}
           </View>
@@ -1136,6 +1186,105 @@ const styles = StyleSheet.create({
   noDataText: {
     fontSize: 14,
     color: '#A0AEC0',
+    textAlign: 'center',
+  },
+  // Timeline Styles
+  timelineList: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F7F8FA',
+  },
+  timelineConnector: {
+    width: 40,
+    alignItems: 'center',
+    paddingTop: 4,
+  },
+  timelineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#303F9F',
+  },
+  timelineLine: {
+    width: 2,
+    height: 40,
+    backgroundColor: '#E2E8F0',
+    marginTop: 8,
+  },
+  timelineContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  timelineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  timelineTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+    flex: 1,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  approvedStatus: {
+    backgroundColor: '#D4EDDA',
+  },
+  reviewStatus: {
+    backgroundColor: '#FFF3CD',
+  },
+  pendingStatus: {
+    backgroundColor: '#F8D7DA',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  timelineDetails: {
+    gap: 4,
+  },
+  timelineDeadline: {
+    fontSize: 14,
+    color: '#4A5568',
+  },
+  timelineLead: {
+    fontSize: 14,
+    color: '#4A5568',
+  },
+  timelineMembers: {
+    fontSize: 14,
+    color: '#4A5568',
+  },
+  noTimelineContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+  },
+  noTimelineText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#A0AEC0',
+    marginTop: 8,
+  },
+  noTimelineSubtext: {
+    fontSize: 14,
+    color: '#CBD5E0',
+    marginTop: 4,
     textAlign: 'center',
   },
 });

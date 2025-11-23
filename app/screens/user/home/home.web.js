@@ -55,6 +55,7 @@ const HomeScreen = () => {
   const [isViewAllHovered, setIsViewAllHovered] = useState(false);
   const [isReadFeaturedHovered, setIsReadFeaturedHovered] = useState(false);
   const [isJoinUsHovered, setIsJoinUsHovered] = useState(false);
+  const [isSubmitWorkHovered, setIsSubmitWorkHovered] = useState(false);
   const [applicationPeriod, setApplicationPeriod] = useState(null);
   const [isCheckingPeriod, setIsCheckingPeriod] = useState(true);
   const [featuredData, setFeaturedData] = useState([]);
@@ -607,11 +608,11 @@ const HomeScreen = () => {
               <button
                 style={{
                   ...styles.ctaButton2,
-                  ...(false ? styles.ctaButtonHover : {}),
+                  ...(isSubmitWorkHovered ? styles.ctaButtonHover : {}),
                   alignSelf: 'flex-start'
                 }}
-                onMouseEnter={() => {}}
-                onMouseLeave={() => {}}
+                onMouseEnter={() => setIsSubmitWorkHovered(true)}
+                onMouseLeave={() => setIsSubmitWorkHovered(false)}
                 onClick={() => {
                   console.log('Submit Work clicked');
                   router.push('/submit');
