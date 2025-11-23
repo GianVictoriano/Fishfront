@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, FlatList, ScrollView, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import { Picker } from '@react-native-picker/picker';
 import apiClient from '../../utils/api';
 import { useBranding } from '~/context/BrandingContext';
 
@@ -64,6 +65,20 @@ export default function CreateContentScreen() {
   const [folioSearchResults, setFolioSearchResults] = useState([]);
   const [folioSearchByPosition, setFolioSearchByPosition] = useState(false);
   const [isJournalistsOnly, setIsJournalistsOnly] = useState(true);
+  
+  // Availability check state
+  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [availabilityDay, setAvailabilityDay] = useState('');
+  const [availabilityStartTime, setAvailabilityStartTime] = useState('');
+  const [availabilityEndTime, setAvailabilityEndTime] = useState('');
+  const [availablePeople, setAvailablePeople] = useState([]);
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
+  
+  // Time picker state
+  const [showTimePickerModal, setShowTimePickerModal] = useState(false);
+  const [currentTimeField, setCurrentTimeField] = useState(null); // { fieldType: 'start' | 'end' }
+  const [selectedHour, setSelectedHour] = useState('09');
+  const [selectedMinute, setSelectedMinute] = useState('00');
   
   // Feedback modal state
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
@@ -440,10 +455,138 @@ export default function CreateContentScreen() {
     }
   };
 
+  const checkAvailability = async () => {
+    if (!availabilityDay || !availabilityStartTime || !availabilityEndTime) {
+      setFeedbackModalConfig({
+        message: 'Please select a day and time range.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+      return;
+    }
+
+    setLoadingAvailability(true);
+    try {
+      // Fetch all collaborators' working hours
+      const response = await apiClient.get('/working-hours');
+      const collaborators = response.data.collaborators || [];
+
+      // Filter people who are available during the specified time
+      const availablePeopleFiltered = [];
+      
+      collaborators.forEach(collaborator => {
+        const dayHours = collaborator.working_hours.find(h => h.day_of_week === availabilityDay);
+        
+        if (dayHours) {
+          // Check if time ranges are valid (start before end)
+          const preferredValid = dayHours.preferred_start_time && dayHours.preferred_end_time && 
+            dayHours.preferred_start_time < dayHours.preferred_end_time;
+          const possibleValid = dayHours.possible_start_time && dayHours.possible_end_time && 
+            dayHours.possible_start_time < dayHours.possible_end_time;
+            
+          // TEMPORARY: For debugging, show invalid ranges too (with warning)
+          const preferredMatches = (preferredValid || (!preferredValid && dayHours.preferred_start_time && dayHours.preferred_end_time)) && 
+            dayHours.preferred_start_time <= availabilityEndTime && 
+            dayHours.preferred_end_time >= availabilityStartTime;
+            
+          const possibleMatches = (possibleValid || (!possibleValid && dayHours.possible_start_time && dayHours.possible_end_time)) && 
+            dayHours.possible_start_time <= availabilityEndTime && 
+            dayHours.possible_end_time >= availabilityStartTime;
+
+          if (preferredMatches || possibleMatches) {
+            const isInvalidRange = preferredMatches && !preferredValid;
+            availablePeopleFiltered.push({
+              ...collaborator,
+              availability_type: preferredMatches ? 'preferred' : 'possible',
+              availability_times: preferredMatches ? 
+                `${dayHours.preferred_start_time}-${dayHours.preferred_end_time}${isInvalidRange ? ' (INVALID)' : ''}` : 
+                `${dayHours.possible_start_time}-${dayHours.possible_end_time}`,
+              is_invalid: isInvalidRange
+            });
+          }
+        }
+      });
+
+      // Sort: preferred first, then possible
+      availablePeopleFiltered.sort((a, b) => {
+        if (a.availability_type === 'preferred' && b.availability_type === 'possible') return -1;
+        if (a.availability_type === 'possible' && b.availability_type === 'preferred') return 1;
+        return 0;
+      });
+
+      setAvailablePeople(availablePeopleFiltered);
+    } catch (error) {
+      console.error('Failed to check availability:', error);
+      setFeedbackModalConfig({
+        message: 'Failed to check availability. Please try again.',
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    } finally {
+      setLoadingAvailability(false);
+    }
+  };
+
+  const handleCloseAvailabilityModal = () => {
+    setShowAvailabilityModal(false);
+    setAvailabilityDay('');
+    setAvailabilityStartTime('');
+    setAvailabilityEndTime('');
+    setAvailablePeople([]);
+  };
+
+  const openTimePicker = (fieldType) => {
+    // Parse the current time for the field
+    const currentTime = fieldType === 'start' ? availabilityStartTime : availabilityEndTime;
+    if (currentTime && currentTime.includes(':')) {
+      const [hours, minutes] = currentTime.split(':');
+      setSelectedHour(hours);
+      setSelectedMinute(minutes);
+    } else {
+      setSelectedHour('09');
+      setSelectedMinute('00');
+    }
+
+    setCurrentTimeField({ fieldType });
+    setShowTimePickerModal(true);
+  };
+
+  const handleTimeConfirm = () => {
+    if (currentTimeField) {
+      const { fieldType } = currentTimeField;
+      const timeString = `${selectedHour}:${selectedMinute}`;
+      
+      if (fieldType === 'start') {
+        setAvailabilityStartTime(timeString);
+      } else {
+        setAvailabilityEndTime(timeString);
+      }
+    }
+    
+    setShowTimePickerModal(false);
+    setCurrentTimeField(null);
+  };
+
+  const handleTimeCancel = () => {
+    setShowTimePickerModal(false);
+    setCurrentTimeField(null);
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={[styles.header, { color: colors.primary || '#1a237e' }]}>Create New Content</Text>
-      <Text style={styles.subtitle}>Select a content type to begin.</Text>
+      <View style={styles.headerContainer}>
+        <View style={styles.headerTextContainer}>
+          <Text style={[styles.header, { color: colors.primary || '#1a237e' }]}>Create New Content</Text>
+          <Text style={styles.subtitle}>Select a content type to begin.</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.checkAvailabilityButton}
+          onPress={() => setShowAvailabilityModal(true)}
+        >
+          <Feather name="calendar" size={16} color="#303F9F" />
+          <Text style={styles.checkAvailabilityText}>Check Availability</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.optionsGrid}>
         <CreateOptionCard 
           icon="view-dashboard-variant-outline"
@@ -1476,6 +1619,214 @@ export default function CreateContentScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Availability Check Modal */}
+      <Modal
+        visible={showAvailabilityModal}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseAvailabilityModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.scrumPanel}>
+            <View style={styles.modalHeader}>
+              <View style={styles.headerIconContainer}>
+                <MaterialCommunityIcons name="calendar-check" size={28} color={colors.primary} />
+              </View>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.scrumPanelTitle}>Check Availability</Text>
+                <Text style={styles.scrumPanelSubtitle}>Find team members available for your content</Text>
+              </View>
+              <TouchableOpacity style={styles.closeButton} onPress={handleCloseAvailabilityModal}>
+                <Feather name="x" size={24} color="#6c757d" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.inputGroup}>
+                  <View style={styles.labelContainer}>
+                    <Feather name="calendar" size={16} color="#1a237e" />
+                    <Text style={[styles.label, {color: colors.primary}]}>Day</Text>
+                    <Text style={styles.requiredBadge}>Required</Text>
+                  </View>
+                  <View style={styles.dropdownContainer}>
+                    {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
+                      <TouchableOpacity 
+                        key={day}
+                        style={[
+                          styles.categoryChip, 
+                          availabilityDay === day && styles.categoryChipSelected
+                        ]}
+                        onPress={() => setAvailabilityDay(day)}
+                      >
+                        <Text style={[
+                          styles.categoryChipText, 
+                          availabilityDay === day && styles.categoryChipTextSelected
+                        ]}>
+                          {day.charAt(0).toUpperCase() + day.slice(1, 3)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <View style={styles.labelContainer}>
+                    <Feather name="clock" size={16} color="#1a237e" />
+                    <Text style={[styles.label, {color: colors.primary}]}>Time Range</Text>
+                    <Text style={styles.requiredBadge}>Required</Text>
+                  </View>
+                  <View style={styles.timeFields}>
+                    <TouchableOpacity
+                      style={[styles.input, { flex: 1 }]}
+                      onPress={() => openTimePicker('start')}
+                    >
+                      <Text style={[styles.timeInputText, !availabilityStartTime && styles.timeInputPlaceholder]}>
+                        {availabilityStartTime || 'Start time'}
+                      </Text>
+                    </TouchableOpacity>
+                    <Text style={styles.timeSeparator}>to</Text>
+                    <TouchableOpacity
+                      style={[styles.input, { flex: 1 }]}
+                      onPress={() => openTimePicker('end')}
+                    >
+                      <Text style={[styles.timeInputText, !availabilityEndTime && styles.timeInputPlaceholder]}>
+                        {availabilityEndTime || 'End time'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <TouchableOpacity 
+                  style={[styles.createButton, {backgroundColor: colors.primary || '#1a237e'}]}
+                  onPress={checkAvailability}
+                  disabled={loadingAvailability}
+                >
+                  <Feather name="search" size={18} color="#fff" style={{ marginRight: 6 }} />
+                  <Text style={styles.createButtonText}>
+                    {loadingAvailability ? 'Checking...' : 'Check Availability'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Results */}
+                {availablePeople.length > 0 && (
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.label, {color: colors.primary, marginBottom: 12}]}>Available Team Members</Text>
+                    {availablePeople.map((person, index) => (
+                      <View key={index} style={styles.collaboratorTag}>
+                        <View style={styles.collaboratorTagAvatar}>
+                          <Text style={styles.collaboratorTagAvatarText}>{person.name.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <View style={{flex: 1}}>
+                          <Text style={styles.collaboratorTagText}>{person.name}</Text>
+                          <View style={[
+                            styles.leadBadge, 
+                            {backgroundColor: person.availability_type === 'preferred' ? '#D4EDDA' : '#FFF3CD'}
+                          ]}>
+                            <Text style={[
+                              styles.leadBadgeText, 
+                              {color: person.availability_type === 'preferred' ? '#155724' : '#856404'}
+                            ]}>
+                              {person.availability_type === 'preferred' ? 'Preferred' : 'Possible'} • {person.availability_times}
+                              {person.is_invalid && ' ⚠️ INVALID RANGE'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {availablePeople.length === 0 && !loadingAvailability && (
+                  <View style={styles.inputGroup}>
+                    <View style={styles.emptyState}>
+                      <Feather name="users" size={32} color="#D1D5DB" />
+                      <Text style={styles.emptyStateText}>No results yet. Fill in the details above and check availability.</Text>
+                    </View>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={handleCloseAvailabilityModal}
+              >
+                <Text style={styles.cancelButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Time Picker Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showTimePickerModal}
+        onRequestClose={handleTimeCancel}
+      >
+        <View style={styles.timePickerOverlay}>
+          <View style={styles.timePickerModal}>
+            <View style={styles.timePickerHeader}>
+              <Text style={styles.timePickerTitle}>Select Time</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={handleTimeCancel}
+              >
+                <Feather name="x" size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.timePickerContent}>
+              <View style={styles.pickerContainer}>
+                <Text style={styles.pickerLabel}>Hour</Text>
+                <Picker
+                  selectedValue={selectedHour}
+                  onValueChange={(itemValue) => setSelectedHour(itemValue)}
+                  style={styles.picker}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <Picker.Item
+                      key={i}
+                      label={i.toString().padStart(2, '0')}
+                      value={i.toString().padStart(2, '0')}
+                    />
+                  ))}
+                </Picker>
+              </View>
+
+              <View style={styles.pickerContainer}>
+                <Text style={styles.pickerLabel}>Minute</Text>
+                <Picker
+                  selectedValue={selectedMinute}
+                  onValueChange={(itemValue) => setSelectedMinute(itemValue)}
+                  style={styles.picker}
+                >
+                  {Array.from({ length: 60 }, (_, i) => (
+                    <Picker.Item
+                      key={i}
+                      label={i.toString().padStart(2, '0')}
+                      value={i.toString().padStart(2, '0')}
+                    />
+                  ))}
+                </Picker>
+              </View>
+            </View>
+
+            <View style={styles.timePickerFooter}>
+              <TouchableOpacity style={styles.timePickerButtonCancel} onPress={handleTimeCancel}>
+                <Text style={styles.timePickerButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.timePickerButtonConfirm} onPress={handleTimeConfirm}>
+                <Text style={styles.timePickerButtonTextConfirm}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1919,6 +2270,30 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: '#f8f9fa',
   },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 30,
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
+  checkAvailabilityButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F2F5',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 8,
+    marginLeft: 16,
+  },
+  checkAvailabilityText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#303F9F',
+  },
   header: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -1928,7 +2303,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#6c757d',
-    marginBottom: 30,
   },
   optionsGrid: {
     // Using a simple column layout for now
@@ -2237,5 +2611,105 @@ const styles = StyleSheet.create({
     color: '#374151',
     fontWeight: '600',
     fontSize: 15,
+  },
+  // Time Picker Modal Styles
+  timePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timePickerModal: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '85%',
+    maxWidth: 280,
+    padding: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  timePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 0,
+    position: 'relative',
+  },
+  timePickerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  closeButton: {
+    position: 'absolute',
+    right: 16,
+    top: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timePickerContent: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 16,
+  },
+  pickerContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  pickerLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#718096',
+    marginBottom: 8,
+  },
+  picker: {
+    width: '100%',
+    height: 40,
+  },
+  timePickerFooter: {
+    flexDirection: 'row',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    gap: 8,
+  },
+  timePickerButtonCancel: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+  },
+  timePickerButtonConfirm: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#303F9F',
+    alignItems: 'center',
+  },
+  timePickerButtonTextCancel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  timePickerButtonTextConfirm: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  // Additional time input styles
+  timeInputText: {
+    fontSize: 15,
+    color: '#111827',
   },
 });

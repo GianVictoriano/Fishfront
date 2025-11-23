@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platfo
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AppNavbar from '../../../../components/AppNavbar';
+import apiClient from '../../../../utils/api';
 
 const GENRES = [
   { label: 'Artwork', value: 'artwork' },
@@ -39,21 +40,11 @@ export default function SubmitScreen() {
       submitData.append('file', formData.file);
 
       // Make API call to submit the work
-      const response = await fetch(process.env.EXPO_PUBLIC_API_URL + '/api/submissions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${await AsyncStorage.getItem('token')}`,
-        },
-        body: submitData,
-      });
+      const response = await apiClient.post('/submissions', submitData);
 
-      if (!response.ok) {
-        throw new Error('Failed to submit work');
-      }
-
-      const result = await response.json();
+      const result = await response.data;
       Alert.alert('Success', 'Your work has been submitted successfully!');
-      router.back();
+      router.push('/screens/user/my-submissions');
     } catch (error) {
       console.error('Submission error:', error);
       Alert.alert('Error', 'Failed to submit work. Please try again.');
