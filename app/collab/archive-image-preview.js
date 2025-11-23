@@ -10,6 +10,7 @@ import {
   Linking,
   Dimensions,
   Platform,
+  Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -17,6 +18,7 @@ import { Image } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import apiClient from '../../utils/api';
+import ApprovalWorkflow from './ApprovalWorkflow';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const { width, height } = Dimensions.get('window');
@@ -27,6 +29,7 @@ export default function ArchiveImagePreview() {
   const [image, setImage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [showWorkflow, setShowWorkflow] = useState(false);
 
   useEffect(() => {
     fetchImage();
@@ -185,6 +188,14 @@ export default function ArchiveImagePreview() {
               by {image.user?.name || 'Unknown User'}
             </Text>
           </View>
+
+          <TouchableOpacity 
+            style={styles.workflowButton}
+            onPress={() => setShowWorkflow(true)}
+          >
+            <Feather name="git-branch" size={16} color="#6366F1" />
+            <Text style={styles.workflowButtonText}>View Approval Workflow</Text>
+          </TouchableOpacity>
           
           {image.group && (
             <View style={styles.groupRow}>
@@ -240,6 +251,22 @@ export default function ArchiveImagePreview() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showWorkflow}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowWorkflow(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ApprovalWorkflow
+            visible={showWorkflow}
+            documentType="ReviewImage"
+            groupId={image.group_id}
+            onClose={() => setShowWorkflow(false)}
+          />
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -416,5 +443,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  workflowButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+  workflowButtonText: {
+    color: '#6366F1',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
 });
