@@ -461,8 +461,8 @@ export default function CreateContentScreen() {
         />
         <CreateOptionCard 
           icon="folder-multiple-outline"
-          title="Folio"
-          description="Group related documents in a folio."
+          title="Event"
+          description="Create an event for the publication."
           onPress={() => handlePress('Folio')}
           iconColor={colors.primary}
         />
@@ -1003,7 +1003,7 @@ export default function CreateContentScreen() {
                   <View style={styles.inputGroup}>
                     <View style={styles.labelContainer}>
                       <Feather name="edit-3" size={16} color="#1a237e" />
-                      <Text style={[styles.label, {color: colors.primary}]}>Folio Title</Text>
+                      <Text style={[styles.label, {color: colors.primary}]}>Event Title</Text>
                     </View>
                     <TextInput
                       style={styles.input}
@@ -1443,6 +1443,23 @@ export default function CreateContentScreen() {
                 <View style={styles.publishTypeOptionContent}>
                   <Text style={styles.publishTypeOptionTitle}>Literary Work</Text>
                   <Text style={styles.publishTypeOptionDescription}>Publish poems, stories, essays, and other literary pieces</Text>
+                </View>
+                <Feather name="chevron-right" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.publishTypeOption}
+                onPress={() => {
+                  setPublishTypeModalVisible(false);
+                  router.push('/collab/create-creative');
+                }}
+              >
+                <View style={styles.publishTypeOptionIcon}>
+                  <MaterialCommunityIcons name="palette" size={32} color="#1a237e" />
+                </View>
+                <View style={styles.publishTypeOptionContent}>
+                  <Text style={styles.publishTypeOptionTitle}>Creative Work</Text>
+                  <Text style={styles.publishTypeOptionDescription}>Share artwork, poems, essays, and other creative expressions</Text>
                 </View>
                 <Feather name="chevron-right" size={20} color="#9CA3AF" />
               </TouchableOpacity>

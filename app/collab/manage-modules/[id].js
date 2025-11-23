@@ -20,6 +20,8 @@ const ManageModulesScreen = () => {
     const [position, setPosition] = useState('');
     const [level, setLevel] = useState(1);
     const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
+    const [showAssignedModal, setShowAssignedModal] = useState(false);
+    const [assignedModules, setAssignedModules] = useState([]);
 
     const fetchData = useCallback(async () => {
     if (!id) return;
@@ -95,6 +97,11 @@ const ManageModulesScreen = () => {
             
             if (user && String(id) === String(user.id)) {
                 setShowLogoutPrompt(true); // Prompt for re-login if managing self
+            } else {
+                // Show assigned modules modal for other users
+                const assigned = allModules.filter(m => selectedModules.has(m.id)).map(m => m.display_name);
+                setAssignedModules(assigned);
+                setShowAssignedModal(true);
             }
 
         } catch (err) {
@@ -200,6 +207,38 @@ const ManageModulesScreen = () => {
                  }}
               >
                 <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Log Out</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+        <Modal
+          visible={showAssignedModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowAssignedModal(false)}
+        >
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+            <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 8, alignItems: 'center', width: 300, maxHeight: 400 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 16 }}>Modules Assigned</Text>
+              <ScrollView style={{ width: '100%', marginBottom: 16 }}>
+                {assignedModules.length > 0 ? (
+                  assignedModules.map((module, index) => (
+                    <Text key={index} style={{ fontSize: 16, marginBottom: 4, textAlign: 'center' }}>
+                      • {module}
+                    </Text>
+                  ))
+                ) : (
+                  <Text style={{ fontSize: 16, textAlign: 'center', color: '#6B7280' }}>No modules assigned</Text>
+                )}
+              </ScrollView>
+              <Pressable
+                style={{ backgroundColor: '#3B82F6', paddingVertical: 12, paddingHorizontal: 32, borderRadius: 6 }}
+                onPress={() => {
+                  setShowAssignedModal(false);
+                  router.back(); // Go back to manage users
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>OK</Text>
               </Pressable>
             </View>
           </View>

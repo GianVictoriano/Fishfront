@@ -794,6 +794,15 @@ const NewsCard = ({ item, compact, bigTrending, isFirst, onInteraction }) => {
     if (onInteraction) {
       onInteraction(item.id, 'view');
     }
+    
+    // Handle creative works differently
+    if (item.category && item.category.includes('Creative')) {
+      // For creative works, navigate to creative page
+      router.push('/creative');
+      return;
+    }
+    
+    // Default navigation for articles
     router.push(`/news/article/${item.id}`);
   };
   
@@ -1070,29 +1079,66 @@ export default function NewsScreen() {
       setLoading(true);
 
       try {
-        const isFeaturedFetch = activeGenre !== 'News' && activeGenre !== 'Creative';
         let url;
-        if (isFeaturedFetch) {
+        let isCreativeFetch = activeGenre === 'Creative';
+        
+        if (isCreativeFetch) {
+          // Fetch creative works
+          url = '/creatives-published';
+        } else if (activeGenre !== 'News') {
+          // Fetch trending articles by genre for featured tabs
           url = `/public/trending-articles?genre=${activeGenre.toLowerCase()}`;
         } else {
+          // Fetch general trending articles for News tab
           url = '/public/trending-articles';
         }
 
-        //asdasdasdasd
         const res = await apiClient.get(url);
+        console.log('API Response for', activeGenre, ':', res);
+        
         if (Array.isArray(res.data?.data)) {
-          const mapped = res.data.data.slice(0, 25).map(article => ({ // Increased to 25 items for more pagination
-            id: article.id?.toString() || '',
-            title: article.title,
-            excerpt: '',
-            image: article.image || article.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
-            date: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
-            category: article.genre || 'News',
-          }));
+          console.log('API returned', res.data.data.length, 'items for', activeGenre);
+          const mapped = res.data.data.slice(0, 25).map(item => {
+            if (isCreativeFetch) {
+              // Map creative data to the expected format
+              const mappedItem = {
+                id: item.id?.toString() || '',
+                title: item.title,
+                excerpt: item.caption,
+                image: item.media && item.media.length > 0 
+                  ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${item.media[0].file_path.replace('public/', '')}`
+                  : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+                date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
+                category: `${item.genre.charAt(0).toUpperCase() + item.genre.slice(1)} Creative`,
+              };
+              console.log('Mapped creative item:', mappedItem);
+              return mappedItem;
+            } else {
+              // Map article data (existing logic)
+              return {
+                id: item.id?.toString() || '',
+                title: item.title,
+                excerpt: '',
+                image: item.image || item.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+                date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
+                category: item.genre || 'News',
+              };
+            }
+          });
+          console.log('Setting news data for', activeGenre, ':', mapped);
           setNewsData(mapped);
-          await setCachedData(cacheKey, mapped);
+          if (isCreativeFetch) {
+            await clearAllCache(); // Clear cache for Creative tab
+          } else {
+            await setCachedData(cacheKey, mapped);
+          }
+        } else {
+          console.log('No data array found in response:', res.data);
         }
       } catch (error) {
+        console.error('Error fetching data for', activeGenre, ':', error);
+        console.error('Error response:', error.response);
+        console.log('Falling back to dummy data for', activeGenre);
         setNewsData(fallbackNewsData);
       } finally {
         setLoading(false);
@@ -1251,8 +1297,8 @@ export default function NewsScreen() {
     fetchTrendingStories();
   }, []); // Empty dependency array - only run once on mount
 
-  // Determine if we're on a featured tab (Articles, Opinion, Sports, Editorial)
-  const isFeaturedTab = activeGenre !== 'News' && activeGenre !== 'Creative';
+  // Determine if we're on a featured tab (Articles, Opinion, Sports, Editorial, Creative)
+  const isFeaturedTab = activeGenre !== 'News';
   
   const featuredStory = newsData[0];
   const gridStories = isFeaturedTab 
@@ -1309,8 +1355,8 @@ export default function NewsScreen() {
         ) : (
           <>
             <View style={styles.newsMainRow}>
-              {/* Full width layout for featured tabs (Articles, Opinion, Sports, Editorial) */}
-              {activeGenre !== 'News' && activeGenre !== 'Creative' ? (
+              {/* Full width layout for featured tabs (Articles, Opinion, Sports, Editorial, Creative) */}
+              {activeGenre !== 'News' ? (
                 <View style={{ width: '100%', maxWidth: 1300 }}>
                   <Text style={styles.latestContentTitle}>Featured Content</Text>
                   <View style={styles.threeColumnGrid}>
