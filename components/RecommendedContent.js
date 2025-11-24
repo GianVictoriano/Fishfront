@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import apiClient from '../utils/api';
 
@@ -8,6 +8,61 @@ const RecommendedContent = ({ userId, onInteraction }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const router = useRouter();
+  
+  // Mouse drag scrolling state
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const scrollContainerRef = useRef(null);
+
+  // Mouse drag scrolling handlers
+  const handleMouseDown = (e) => {
+    if (Platform.OS === 'web' && scrollContainerRef.current) {
+      setIsDragging(true);
+      setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
+      setScrollLeft(scrollContainerRef.current.scrollLeft);
+      e.preventDefault();
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging || Platform.OS !== 'web' || !scrollContainerRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollContainerRef.current.offsetLeft;
+    const walk = (x - startX) * 2; // Scroll speed
+    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  // Global mouse event listeners for drag scrolling
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const handleGlobalMouseMove = (e) => {
+      handleMouseMove(e);
+    };
+
+    const handleGlobalMouseUp = () => {
+      handleMouseUp();
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleGlobalMouseMove);
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleGlobalMouseMove);
+        document.removeEventListener('mouseup', handleGlobalMouseUp);
+      };
+    }
+  }, [isDragging, startX, scrollLeft]);
 
   useEffect(() => {
     fetchRecommendations();
@@ -171,13 +226,21 @@ const RecommendedContent = ({ userId, onInteraction }) => {
           {userId ? 'Personalized recommendations & trending stories' : 'Popular content & trending stories'}
         </Text>
       </View>
-      <div style={{ 
-        overflowX: 'auto', 
-        overflowY: 'hidden',
-        WebkitOverflowScrolling: 'touch',
-        scrollbarWidth: 'none',
-        msOverflowStyle: 'none',
-      }}>
+      <div 
+        ref={scrollContainerRef}
+        style={{ 
+          overflowX: 'auto', 
+          overflowY: 'hidden',
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+          cursor: isDragging ? 'grabbing' : 'grab',
+        }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+      >
         <style>{`
           div::-webkit-scrollbar {
             display: none;

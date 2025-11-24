@@ -18,12 +18,6 @@ export default function NewsNavbar() {
   const { width } = useWindowDimensions();
   const isSmallScreen = width < 768;
 
-  useEffect(() => {
-    if (isSmallScreen) {
-      setIsSearchVisible(true);
-    }
-  }, [isSmallScreen]);
-
   // Handle search input changes
   const handleSearchChange = (text) => {
     console.log('🔍 Text changed:', text);

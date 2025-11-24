@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     padding: '20px',
     borderTop: '1px solid #334155',
-    color: '#94a3b8',
+    color: '#ffffff',
     fontSize: 14,
   },
   cacheClearButton: {

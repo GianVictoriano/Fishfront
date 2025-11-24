@@ -326,7 +326,7 @@ const Forum = () => {
       <View style={styles.headerRow}>
         <Text style={styles.headerTitle}>Fisherman Forum</Text>
         <Button 
-          title={showNewTopicForm ? "Cancel" : "Create New Topic"} 
+          title={showNewTopicForm ? "Cancel" : "+ Topic"} 
           onPress={() => setShowNewTopicForm(!showNewTopicForm)} 
         />
       </View>
