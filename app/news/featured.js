@@ -1,10 +1,11 @@
 // app/news/featured.js
 import { Link, useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView, ActivityIndicator } from 'react-native';
+import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AppNavbar from '../../components/AppNavbar';
 import NewsNavbar from '../../components/newsnavbar';
+import RecommendedContent from '../../components/RecommendedContent';
 import useInteractionTracking from '../../hooks/useInteractionTracking';
 import apiClient from '../../utils/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -37,28 +38,34 @@ const styles = StyleSheet.create({
     marginLeft: 2,
     letterSpacing: 0.2,
   },
+  threeColumnGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gap: 14,
+    width: '100%',
+  },
   featuredCardWide: {
+    gridColumn: '1 / -1',
     flexDirection: 'row',
     display: 'flex',
     backgroundColor: '#fff',
     borderRadius: 0,
     overflow: 'hidden',
-    marginBottom: 24,
+    marginBottom: 32,
     boxShadow: 'none',
     border: 'none',
-    minHeight: 220,
+    minHeight: 280,
   },
   featuredImageContainer: {
-    width: '30%',
-    minWidth: '30%',
-    maxWidth: '30%',
+    width: '35%',
+    minWidth: '280px',
+    maxWidth: '400px',
     overflow: 'hidden',
-    flexShrink: 0,
   },
   featuredImageStyle: {
     width: '100%',
     height: '100%',
-    minHeight: 220,
+    minHeight: 280,
     objectFit: 'cover',
   },
   featuredContentContainer: {
@@ -71,8 +78,6 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     justifyContent: 'center',
     backgroundColor: '#fff',
-    minWidth: 0,
-    flexShrink: 1,
   },
   featuredCategoryLabel: {
     fontSize: 11,
@@ -83,19 +88,121 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   featuredTitleText: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '700',
     color: '#1a1a1a',
-    lineHeight: 32,
-    marginBottom: 16,
+    lineHeight: 36,
+    marginBottom: 12,
     textAlign: 'left',
-    flexWrap: 'wrap',
+    textAlignVertical: 'center',
     includeFontPadding: false,
-    width: '100%',
-    maxWidth: '100%',
+  },
+  featuredExcerptText: {
+    fontSize: 15,
+    color: '#666',
+    lineHeight: 1.5,
+    marginBottom: 16,
   },
   featuredMetaInfo: {
-    fontSize: 13,
+    fontSize: 12,
+    color: '#999',
+    fontWeight: '400',
+  },
+  regularCardNarrow: {
+    gridColumn: 'span 1',
+  },
+  card: {
+    backgroundColor: '#f4f6f8',
+    overflow: 'hidden',
+    marginBottom: 0,
+    position: 'relative',
+    transition: 'box-shadow 0.25s cubic-bezier(.4,2,.6,1), transform 0.18s cubic-bezier(.4,2,.6,1), background-color 0.2s ease',
+    cursor: 'pointer',
+    flex: 1,
+    minWidth: 0,
+    borderRadius: 0,
+    flexDirection: 'column',
+    display: 'flex',
+    paddingTop: 20,
+    paddingBottom: 20,
+  },
+  cardHover: {
+    backgroundColor: '#f4f6f8',
+    boxShadow: '0 10px 32px 0 rgba(60,72,88,0.18)',
+    transform: 'translateY(-4px) scale(1.02)',
+  },
+  cardImage: {
+    width: '100%',
+    height: 180,
+    objectFit: 'cover',
+    borderRadius: 0,
+    transition: 'opacity 0.2s',
+    marginBottom: 12,
+  },
+  cardImageWrapper: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+  },
+  cardOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0,
+    transition: 'opacity 0.2s ease',
+  },
+  cardOverlayHover: {
+    opacity: 1,
+  },
+  cardReadMore: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  cardContent: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+  },
+  cardCategory: {
+    fontSize: 10,
+    color: '#999',
+    fontWeight: '600',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  cardTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    lineHeight: 22,
+    marginBottom: 8,
+    marginTop: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    textAlign: 'left',
+    textIndent: 0,
+  },
+  cardTimeStamp: {
+    fontSize: 11,
     color: '#999',
     fontWeight: '400',
   },
@@ -110,6 +217,11 @@ const styles = StyleSheet.create({
     marginTop: 24,
     marginBottom: 16,
     cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    ':hover': {
+      backgroundColor: '#f9fafb',
+      borderColor: '#9ca3af'
+    }
   },
   loadMoreButtonText: {
     color: '#374151',
@@ -134,61 +246,83 @@ const styles = StyleSheet.create({
 const fallbackFeaturedData = [
   {
     id: '1',
-    title: 'No Featured Articles Available',
-    excerpt: 'Check back later for featured content...',
+    title: 'Welcome to Featured Articles',
+    excerpt: 'Stay tuned for the latest featured articles...',
     image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
     date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
     category: 'Featured'
   }
 ];
 
-const FeaturedArticleCard = ({ item, onInteraction }) => {
+const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+
+const getImageUrl = (url) => {
+  if (!url) return defaultImage;
+  // Convert to string if it's a number or other type
+  const urlStr = String(url);
+  if (urlStr.startsWith('http')) return urlStr;
+  return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
+};
+
+const NewsCard = ({ item, compact, onInteraction }) => {
   const router = useRouter();
-  const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
-  
-  const getImageUrl = (url) => {
-    if (!url) return defaultImage;
-    const urlStr = String(url);
-    if (urlStr.startsWith('http')) return urlStr;
-    return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
-  };
-  
+
   const [imageUri, setImageUri] = useState(getImageUrl(item?.image));
-  
+  const [isHovered, setIsHovered] = useState(false);
+
   const handlePress = () => {
     if (onInteraction) {
       onInteraction(item.id, 'view');
     }
     router.push(`/news/article/${item.id}`);
   };
-  
+
   useEffect(() => {
     setImageUri(getImageUrl(item?.image));
   }, [item?.image]);
-  
+
   const handleImageError = () => {
     setImageUri(defaultImage);
   };
 
   return (
     <TouchableOpacity
-      style={styles.featuredCardWide}
-      activeOpacity={0.9}
+      style={[
+        styles.card,
+        isHovered && styles.cardHover,
+      ]}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       onPress={handlePress}
+      activeOpacity={0.9}
     >
-      <View style={styles.featuredImageContainer}>
+      <View style={styles.cardImageWrapper}>
         <Image
-          source={{ uri: imageUri || defaultImage }}
-          style={styles.featuredImageStyle}
+          source={{ uri: imageUri }}
+          style={styles.cardImage}
           onError={handleImageError}
           defaultSource={{ uri: defaultImage }}
           resizeMode="cover"
         />
+        <View
+          style={[
+            styles.cardOverlay,
+            isHovered && styles.cardOverlayHover
+          ]}
+        >
+          <Text style={styles.cardReadMore}>Read Full Story</Text>
+        </View>
       </View>
-      <View style={styles.featuredContentContainer}>
-        <Text style={styles.featuredCategoryLabel}>FEATURED</Text>
-        <Text style={styles.featuredTitleText}>{item?.title}</Text>
-        <Text style={styles.featuredMetaInfo}>{item?.date}</Text>
+      <View style={styles.cardContent}>
+        <Text style={styles.cardCategory}>
+          {item?.category || 'General'}
+        </Text>
+        <Text style={styles.cardTitle} numberOfLines={2}>
+          {item?.title || 'Untitled Article'}
+        </Text>
+        <Text style={styles.cardTimeStamp}>
+          {item?.date || ''}
+        </Text>
       </View>
     </TouchableOpacity>
   );
@@ -203,12 +337,30 @@ const LoadingSpinner = () => (
 
 export default function FeaturedScreen() {
   const [featuredData, setFeaturedData] = useState(fallbackFeaturedData);
+  const [trendingStories, setTrendingStories] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [displayedArticles, setDisplayedArticles] = useState(9);
   const [loading, setLoading] = useState(false);
+  const [activeRequests, setActiveRequests] = useState(new Set());
+  const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
   const router = useRouter();
   const { recordView } = useInteractionTracking(currentUser?.id);
   const { setActiveGenre } = useNewsStore();
+
+  // State for featured image with error handling
+  const [featuredImageUri, setFeaturedImageUri] = useState(defaultImage);
+
+  // Listen for screen size changes
+  useEffect(() => {
+    const onChange = (result) => {
+      setScreenWidth(result.window.width);
+    };
+    const subscription = Dimensions.addEventListener('change', onChange);
+    return () => subscription?.remove();
+  }, []);
+
+  // Determine if we should use mobile layout
+  const isMobile = screenWidth <= 700;
 
   // Set active genre to Featured when component mounts
   useEffect(() => {
@@ -270,6 +422,9 @@ export default function FeaturedScreen() {
   // Fetch featured articles
   useEffect(() => {
     const fetchFeaturedData = async () => {
+      const requestId = 'featured-news';
+      if (activeRequests.has(requestId)) return;
+
       // Check cache first
       const cachedData = await getCachedData('featured');
       if (cachedData) {
@@ -278,6 +433,7 @@ export default function FeaturedScreen() {
         return;
       }
 
+      setActiveRequests(prev => new Set(prev).add(requestId));
       setLoading(true);
       setDisplayedArticles(9);
 
@@ -294,7 +450,7 @@ export default function FeaturedScreen() {
               ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`
               : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
             date: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
-            category: article.genre || 'Featured',
+            category: 'Featured',
           }));
           setFeaturedData(mapped);
           // Cache the result
@@ -305,18 +461,75 @@ export default function FeaturedScreen() {
         setFeaturedData(fallbackFeaturedData);
       } finally {
         setLoading(false);
+        setActiveRequests(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(requestId);
+          return newSet;
+        });
       }
     };
 
     fetchFeaturedData();
   }, []);
 
+  // fetch trending stories
+  useEffect(() => {
+    const fetchTrendingStories = async () => {
+      const requestId = 'trending-stories';
+      if (activeRequests.has(requestId)) return;
+
+      // Check cache first
+      const cachedData = await getCachedData('trending-stories');
+      if (cachedData) {
+        setTrendingStories(cachedData);
+        return;
+      }
+
+      setActiveRequests(prev => new Set(prev).add(requestId));
+
+      try {
+        const res = await apiClient.get('/public/trending-articles');
+        if (Array.isArray(res.data?.data)) {
+          const mapped = res.data.data.slice(0, 25).map(a => ({
+            id: a.id?.toString() || '',
+            title: a.title,
+            category: a.genre || 'News',
+            published_at: a.published_at,
+            image: getImageUrl(a.image),
+          }));
+          setTrendingStories(mapped);
+          await setCachedData('trending-stories', mapped);
+        }
+      } catch (error) {
+        console.log('Error fetching trending stories:', error);
+        setTrendingStories([]);
+      } finally {
+        setActiveRequests(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(requestId);
+          return newSet;
+        });
+      }
+    };
+
+    fetchTrendingStories();
+  }, []);
+
+  const featuredStory = featuredData[0];
+  const gridStories = featuredData.slice(1, displayedArticles);
   const currentArticles = featuredData.slice(0, displayedArticles);
   const hasMoreArticles = featuredData.length > displayedArticles;
   
   const handleLoadMore = () => {
     setDisplayedArticles(prev => prev + 8);
   };
+
+  // Update featured image URI when featured story changes
+  useEffect(() => {
+    if (featuredStory) {
+      setFeaturedImageUri(getImageUrl(featuredStory.image));
+    }
+  }, [featuredData]);
 
   if (loading) {
     return (
@@ -337,13 +550,18 @@ export default function FeaturedScreen() {
         <View style={styles.newsMainRow}>
           <View style={{ width: '100%', maxWidth: 1300 }}>
             <Text style={styles.latestContentTitle}>Featured Content</Text>
-            <View>
+            <View style={styles.threeColumnGrid}>
               {currentArticles.map((item) => (
-                <FeaturedArticleCard
+                <View
                   key={item.id}
-                  item={item}
-                  onInteraction={recordView}
-                />
+                  style={styles.regularCardNarrow}
+                >
+                  <NewsCard
+                    item={item}
+                    compact
+                    onInteraction={recordView}
+                  />
+                </View>
               ))}
             </View>
             {hasMoreArticles && (

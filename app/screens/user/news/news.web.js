@@ -1,7 +1,7 @@
 // app/screens/news/index.web.js
 import { Link, useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView, ActivityIndicator } from 'react-native';
+import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView, ActivityIndicator, Dimensions, Modal } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AppNavbar from '../../../../components/AppNavbar';
 import NewsNavbar from '../../../../components/newsnavbar';
@@ -40,6 +40,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f4f6f8',
   },
+  newsPageScrollTiny: {
+    paddingHorizontal: 12,
+  },
   newsMainRow: {
     width: '100%',
     maxWidth: 1300,
@@ -53,6 +56,9 @@ const styles = StyleSheet.create({
     minWidth: 340,
     maxWidth: '100%',
     width: '100%',
+  },
+  leftColWrapperTiny: {
+    minWidth: 0,
   },
   rightCol: {
     flex: 3,
@@ -625,12 +631,12 @@ const styles = StyleSheet.create({
   },
   threeColumnGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
     gap: 14,
     width: '100%',
   },
   featuredCardWide: {
-    gridColumn: 'span 4',
+    gridColumn: '1 / -1',
     flexDirection: 'row',
     display: 'flex',
     backgroundColor: '#fff',
@@ -640,12 +646,22 @@ const styles = StyleSheet.create({
     boxShadow: 'none',
     border: 'none',
     minHeight: 280,
+    '@media (max-width: 700px)': {
+      flexDirection: 'column',
+      minHeight: 'auto',
+    },
   },
   featuredImageContainer: {
     width: '35%',
-    minWidth: '35%',
-    maxWidth: '35%',
+    minWidth: '280px',
+    maxWidth: '400px',
     overflow: 'hidden',
+    '@media (max-width: 700px)': {
+      width: '100%',
+      minWidth: '100%',
+      maxWidth: '100%',
+      height: '200px',
+    },
   },
   featuredImageStyle: {
     width: '100%',
@@ -663,6 +679,12 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     justifyContent: 'center',
     backgroundColor: '#fff',
+    '@media (max-width: 700px)': {
+      paddingLeft: 20,
+      paddingRight: 20,
+      paddingTop: 16,
+      paddingBottom: 16,
+    },
   },
   featuredCategoryLabel: {
     fontSize: 11,
@@ -707,6 +729,59 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#999',
     fontWeight: '400',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  closeButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#f3f4f6',
+  },
+  viewTrendingButton: {
+    position: 'absolute',
+    marginTop: -13,
+
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+    zIndex: 10,
+  },
+  viewTrendingButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 8,
   },
   loadMoreButton: {
     alignSelf: 'center',
@@ -1044,6 +1119,61 @@ const TrendingStoryItem = ({ item, index }) => {
   );
 };
 
+const TrendingModal = ({ visible, onClose, trendingStories, displayedTrendingStories, handleLoadMore }) => {
+  const hasMoreTrending = trendingStories.length > displayedTrendingStories;
+  
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Trending Stories</Text>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeButton}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="close" size={24} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView showsVerticalScrollIndicator={true} style={{ maxHeight: 400 }}>
+            <Text style={{
+              fontSize: 14,
+              color: '#6b7280',
+              marginBottom: 16,
+              textAlign: 'center'
+            }}>
+              Most visited in last 3 days
+            </Text>
+            
+            <View style={styles.freshStoryList}>
+              {trendingStories.slice(0, displayedTrendingStories).map((item, index) => (
+                <TrendingStoryItem key={item.id} item={item} index={index} />
+              ))}
+            </View>
+            
+            {hasMoreTrending && (
+              <TouchableOpacity
+                style={styles.loadMoreButton}
+                onPress={handleLoadMore}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.loadMoreButtonText}>Load More Trending</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 export default function NewsScreen() {
   const [newsData, setNewsData] = useState(fallbackNewsData);
   const [trendingStories, setTrendingStories] = useState([]);
@@ -1054,11 +1184,28 @@ export default function NewsScreen() {
   const [displayedNewsItems, setDisplayedNewsItems] = useState(6); // For pagination of news items on News tab
   const [loading, setLoading] = useState(false);
   const [activeRequests, setActiveRequests] = useState(new Set()); // Track active requests to prevent duplicates
+  const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
   const router = useRouter();
   const { recordView, recordReaction, recordTimeSpent } = useInteractionTracking(currentUser?.id);
 
+  // Modal state for trending stories on mobile
+  const [showTrendingModal, setShowTrendingModal] = useState(false);
+
   // State for featured image with error handling
   const [featuredImageUri, setFeaturedImageUri] = useState(defaultImage);
+
+  // Listen for screen size changes
+  useEffect(() => {
+    const onChange = (result) => {
+      setScreenWidth(result.window.width);
+    };
+    const subscription = Dimensions.addEventListener('change', onChange);
+    return () => subscription?.remove();
+  }, []);
+
+  // Determine if we should use mobile layout
+  const isMobile = screenWidth <= 700;
+  const isTinyScreen = screenWidth < 380;
 
   // Fetch News data on component mount to ensure content loads
   useEffect(() => {
@@ -1345,193 +1492,233 @@ export default function NewsScreen() {
   }, [activeGenre, router]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <AppNavbar />
-      <NewsNavbar />
-      
-      <ScrollView contentContainerStyle={styles.newsPageScroll}>
-        {loading ? (
-          <SkeletonLoader />
-        ) : (
-          <>
-            <View style={styles.newsMainRow}>
-              {/* Full width layout for featured tabs (Articles, Opinion, Sports, Editorial, Creative) */}
-              {activeGenre !== 'News' ? (
-                <View style={{ width: '100%', maxWidth: 1300 }}>
-                  <Text style={styles.latestContentTitle}>Featured Content</Text>
-                  <View style={styles.threeColumnGrid}>
-                    {featuredStory && (
-                      <TouchableOpacity
-                        style={styles.featuredCardWide}
-                        onPress={() => {
-                          if (recordView) recordView(featuredStory.id, 'view');
-                          router.push(`/news/article/${featuredStory.id}`);
-                        }}
-                      >
-                        <View style={styles.featuredImageContainer}>
-                          <Image
-                            source={{ uri: featuredImageUri }}
-                            style={styles.featuredImageStyle}
-                            onError={() => setFeaturedImageUri(defaultImage)}
-                            resizeMode="cover"
-                          />
-                        </View>
-                        <View style={styles.featuredContentContainer}>
-                          <Text style={styles.featuredCategoryLabel}>{activeGenre.toUpperCase()}</Text>
-                          <Text style={styles.featuredTitleText}>{featuredStory.title}</Text>
-                          <Text style={styles.featuredExcerptText} numberOfLines={3}>
-                            {featuredStory.excerpt}
-                          </Text>
-                          <Text style={styles.featuredMetaInfo}>{featuredStory.date}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    )}
-                    {gridStories.map((item) => (
-                      <View
-                        key={item.id}
-                        style={styles.regularCardNarrow}
-                      >
-                        <NewsCard
-                          item={item}
-                          compact
-                          onInteraction={recordView}
-                        />
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              ) : (
-                // Original two-column layout for News tab
-                <>
-                  <View style={styles.leftColWrapper}>
-                    <Text style={styles.latestContentTitle}>Latest Content</Text>
-                    <View style={styles.trendingCardWrapper}>
+    <>
+      <View style={styles.container}>
+        <AppNavbar />
+        <NewsNavbar />
+        
+        <ScrollView contentContainerStyle={[styles.newsPageScroll, isTinyScreen && styles.newsPageScrollTiny]}>
+          {loading ? (
+            <SkeletonLoader />
+          ) : (
+            <>
+              <View style={styles.newsMainRow}>
+                {/* Full width layout for featured tabs (Articles, Opinion, Sports, Editorial, Creative) */}
+                {activeGenre !== 'News' ? (
+                  <View style={{ width: '100%', maxWidth: 1300 }}>
+                    <Text style={styles.latestContentTitle}>Latest {activeGenre}</Text>
+                    <View style={styles.threeColumnGrid}>
                       {featuredStory && (
-                        <TouchableOpacity style={styles.trendingContainer}>
-                          <NewsCard
-                            item={featuredStory}
-                            isFirst={true}
-                            onInteraction={recordView}
-                          />
+                        <TouchableOpacity
+                          style={[
+                            styles.featuredCardWide,
+                            isMobile && { flexDirection: 'column', marginBottom: 16 }
+                          ]}
+                          onPress={() => {
+                            if (recordView) recordView(featuredStory.id, 'view');
+                            router.push(`/news/article/${featuredStory.id}`);
+                          }}
+                        >
+                          <View style={[
+                            styles.featuredImageContainer,
+                            isMobile && { 
+                              width: '100%', 
+                              minWidth: '100%', 
+                              maxWidth: '100%', 
+                              height: '200px' 
+                            }
+                          ]}>
+                            <Image
+                              source={{ uri: featuredImageUri }}
+                              style={styles.featuredImageStyle}
+                              onError={() => setFeaturedImageUri(defaultImage)}
+                              resizeMode="cover"
+                            />
+                          </View>
+                          <View style={[
+                            styles.featuredContentContainer,
+                            isMobile && { 
+                              paddingLeft: 20, 
+                              paddingRight: 20, 
+                              paddingTop: 16, 
+                              paddingBottom: 16 
+                            }
+                          ]}>
+                            <Text style={styles.featuredCategoryLabel}>{activeGenre.toUpperCase()}</Text>
+                            <Text style={styles.featuredTitleText}>{featuredStory.title}</Text>
+                            <Text style={styles.featuredExcerptText} numberOfLines={3}>
+                              {featuredStory.excerpt}
+                            </Text>
+                            <Text style={styles.featuredMetaInfo}>{featuredStory.date}</Text>
+                          </View>
                         </TouchableOpacity>
                       )}
+                      {gridStories.map((item) => (
+                        <View
+                          key={item.id}
+                          style={styles.regularCardNarrow}
+                        >
+                          <NewsCard
+                            item={item}
+                            compact
+                            onInteraction={recordView}
+                          />
+                        </View>
+                      ))}
                     </View>
-                    {/* Show recommendations only for News tab */}
-                    {activeGenre === 'News' && (
-                      <RecommendedContent
-                        userId={currentUser?.id}
-                        onInteraction={recordView}
-                      />
-                    )}
-                    <FlatList
-                      data={gridStories}
-                      renderItem={({ item }) => (
-                        <NewsCard
-                          item={item}
-                          compact
+                  </View>
+                ) : (
+                  // Original two-column layout for News tab
+                  <>
+                    <View style={[styles.leftColWrapper, isTinyScreen && styles.leftColWrapperTiny, { position: 'relative' }]}>
+                      {isMobile && (
+                        <TouchableOpacity
+                          style={[styles.viewTrendingButton, { position: 'absolute', top: 10, right: 10, zIndex: 10 }]}
+                          onPress={() => setShowTrendingModal(true)}
+                          activeOpacity={0.8}
+                        >
+                          
+                          <Text style={styles.viewTrendingButtonText}>View Trending</Text>
+                        </TouchableOpacity>
+                      )}
+                      <Text style={styles.latestContentTitle}>Latest Content</Text>
+                      <View style={styles.trendingCardWrapper}>
+                        {featuredStory && (
+                          <TouchableOpacity style={styles.trendingContainer}>
+                            <NewsCard
+                              item={featuredStory}
+                              isFirst={true}
+                              onInteraction={recordView}
+                            />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      {/* Show recommendations only for News tab */}
+                      {activeGenre === 'News' && (
+                        <RecommendedContent
+                          userId={currentUser?.id}
                           onInteraction={recordView}
                         />
                       )}
-                      keyExtractor={item => item.id}
-                      numColumns={3}
-                      columnWrapperStyle={styles.gridRow}
-                      contentContainerStyle={styles.gridContainer}
-                      scrollEnabled={false}
-                    />
-                  </View>
-                  {activeGenre === 'News' && (
-                    <View style={styles.rightCol}>
-                      <ScrollView style={styles.rightColScroll} contentContainerStyle={{ paddingBottom: 16 }}>
-                        <View style={styles.freshStoriesSection}>
-                          <Text style={styles.freshStoriesHeader}>Trending Stories</Text>
-                          <Text style={styles.freshStoriesSubheader}>Most visited in last 3 days</Text>
-                          <View style={styles.freshStoryList}>
-                            {trendingStories.slice(0, displayedTrendingStories).map((item, index) => (
-                              <TrendingStoryItem key={item.id} item={item} index={index} />
-                            ))}
-                          </View>
-                        </View>
-                      </ScrollView>
+                      <FlatList
+                        data={gridStories}
+                        renderItem={({ item }) => (
+                          <NewsCard
+                            item={item}
+                            compact
+                            onInteraction={recordView}
+                          />
+                        )}
+                        keyExtractor={item => item.id}
+                        key={isMobile ? 'mobile' : 'desktop'}
+                        numColumns={isMobile ? 1 : 3}
+                        columnWrapperStyle={isMobile ? null : styles.gridRow}
+                        contentContainerStyle={isMobile ? null : styles.gridContainer}
+                        scrollEnabled={false}
+                      />
                     </View>
-                  )}
-                </>
+                    {/* Show right column only on desktop for News tab */}
+                    {activeGenre === 'News' && !isMobile && (
+                      <View style={styles.rightCol}>
+                        <ScrollView style={styles.rightColScroll} contentContainerStyle={{ paddingBottom: 16 }}>
+                          <View style={styles.freshStoriesSection}>
+                            <Text style={styles.freshStoriesHeader}>Trending Stories</Text>
+                            <Text style={styles.freshStoriesSubheader}>Most visited in last 3 days</Text>
+                            <View style={styles.freshStoryList}>
+                              {trendingStories.slice(0, displayedTrendingStories).map((item, index) => (
+                                <TrendingStoryItem key={item.id} item={item} index={index} />
+                              ))}
+                            </View>
+                          </View>
+                        </ScrollView>
+                      </View>
+                    )}
+                  </>
+                )}
+              </View>
+              {hasMoreContent && (
+                <TouchableOpacity onPress={handleLoadMore} style={styles.loadMoreButton}>
+                  <Text style={styles.loadMoreButtonText}>Load More Content</Text>
+                </TouchableOpacity>
               )}
-            </View>
+            </>
+          )}
 
-            {/* Load More Button */}
-            {hasMoreContent && (
-              <TouchableOpacity
-                style={styles.loadMoreButton}
-                onPress={handleLoadMore}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.loadMoreButtonText}>Load More Content</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Footer Section */}
-            <View style={styles.footer}>
-              <View style={styles.footerContent}>
-                <View style={styles.footerSection}>
-                  <Text style={styles.footerHeading}>Contact Us</Text>
-                  <View style={styles.contactItem}>
-                    <MaterialIcons name="facebook" size={20} color="#93c5fd" style={styles.contactIcon} />
-                    <Text
-                      style={styles.footerLink}
-                      onPress={() => window.open('https://facebook.com/fishermannetwork', '_blank')}
-                    >
-                      fishermannetwork
-                    </Text>
-                  </View>
-                  <View style={styles.contactItem}>
-                    <MaterialIcons name="email" size={20} color="#93c5fd" style={styles.contactIcon} />
-                    <Text
-                      style={styles.footerLink}
-                      onPress={() => window.open('mailto:info@fisherman.network')}
-                    >
-                      info@fisherman.network
-                    </Text>
-                  </View>
-                  <View style={styles.contactItem}>
-                    <MaterialIcons name="phone" size={20} color="#93c5fd" style={styles.contactIcon} />
-                    <Text style={styles.contactText}>+63 2 8123 4567</Text>
-                  </View>
-                  <View style={styles.contactItem}>
-                    <MaterialIcons name="smartphone" size={20} color="#93c5fd" style={styles.contactIcon} />
-                    <Text style={styles.contactText}>+63 912 345 6789</Text>
-                  </View>
-                </View>
-                <View style={styles.footerSection}>
-                  <Text style={styles.footerHeading}>Performance</Text>
-                  <TouchableOpacity
-                    style={styles.cacheClearButton}
-                    onPress={async () => {
-                      try {
-                        await clearAllCache();
-                        alert('Cache cleared successfully! The page will reload to apply changes.');
-                        window.location.reload();
-                      } catch (error) {
-                        console.error('Error clearing cache:', error);
-                        alert('Failed to clear cache. Please try refreshing the page manually.');
-                      }
-                    }}
-                    activeOpacity={0.8}
+          {/* Footer Section */}
+          <View style={styles.footer}>
+            <View style={styles.footerContent}>
+              <View style={styles.footerSection}>
+                <Text style={styles.footerHeading}>Contact Us</Text>
+                <View style={styles.contactItem}>
+                  <MaterialIcons name="facebook" size={20} color="#93c5fd" style={styles.contactIcon} />
+                  <Text
+                    style={styles.footerLink}
+                    onPress={() => window.open('https://facebook.com/fishermannetwork', '_blank')}
                   >
-                    <MaterialIcons name="cleaning-services" size={16} color="#374151" style={{ marginRight: 8 }} />
-                    <Text style={styles.cacheClearButtonText}>Clear Cache & Refresh</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.cacheClearDescription}>
-                    Use this if the website feels slow. This will clear cached data and refresh the page.
+                    fishermannetwork
                   </Text>
                 </View>
+                <View style={styles.contactItem}>
+                  <MaterialIcons name="email" size={20} color="#93c5fd" style={styles.contactIcon} />
+                  <Text
+                    style={styles.footerLink}
+                    onPress={() => window.open('mailto:info@fisherman.network')}
+                  >
+                    info@fisherman.network
+                  </Text>
+                </View>
+                <View style={styles.contactItem}>
+                  <MaterialIcons name="phone" size={20} color="#93c5fd" style={styles.contactIcon} />
+                  <Text style={styles.contactText}>+63 2 8123 4567</Text>
+                </View>
+                <View style={styles.contactItem}>
+                  <MaterialIcons name="smartphone" size={20} color="#93c5fd" style={styles.contactIcon} />
+                  <Text style={styles.contactText}>+63 912 345 6789</Text>
+                </View>
               </View>
-              <View style={styles.copyright}>
-                <Text>&copy; {new Date().getFullYear()} Fisherman's Network. All rights reserved.</Text>
+              <View style={styles.footerSection}>
+                <Text style={styles.footerHeading}>Performance</Text>
+                <TouchableOpacity
+                  style={styles.cacheClearButton}
+                  onPress={async () => {
+                    try {
+                      await clearAllCache();
+                      alert('Cache cleared successfully! The page will reload to apply changes.');
+                      window.location.reload();
+                    } catch (error) {
+                      console.error('Error clearing cache:', error);
+                      alert('Failed to clear cache. Please try refreshing the page manually.');
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="cleaning-services" size={16} color="#374151" style={{ marginRight: 8 }} />
+                  <Text style={styles.cacheClearButtonText}>Clear Cache & Refresh</Text>
+                </TouchableOpacity>
+                <Text style={styles.cacheClearDescription}>
+                  Use this if the website feels slow. This will clear cached data and refresh the page.
+                </Text>
               </View>
             </View>
-          </>
-        )}
-      </ScrollView>
-    </SafeAreaView>
+            <View style={styles.copyright}>
+              <Text>&copy; {new Date().getFullYear()} Fisherman's Network. All rights reserved.</Text>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+
+      {/* Trending Stories Modal */}
+      <TrendingModal
+        visible={showTrendingModal}
+        onClose={() => setShowTrendingModal(false)}
+        trendingStories={trendingStories}
+        displayedTrendingStories={displayedTrendingStories}
+        handleLoadMore={() => {
+          if (activeGenre === 'News') {
+            setDisplayedTrendingStories(prev => prev + 8);
+          }
+        }}
+      />
+    </>
   );
 }

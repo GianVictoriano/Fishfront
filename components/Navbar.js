@@ -14,7 +14,7 @@ import { FontAwesome } from '@expo/vector-icons'; // Using FontAwesome for icons
 const NavLink = ({ href, text, iconName, pathname, closeMenu, isActive: isActiveProp }) => {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const isMobile = width < 768;
+  const isMobile = width < 1061;
   
   // Use the provided isActive prop if available, otherwise calculate it
   let isActive = isActiveProp !== undefined ? isActiveProp : 
@@ -57,7 +57,7 @@ const Navbar = () => {
   const buttonRef = useRef(null);
   const [buttonWidth, setButtonWidth] = useState(200);
   const { width } = useWindowDimensions();
-  const isMobile = width < 768;
+  const isMobile = width < 1061;
   const [mobileMenuVisible, setMobileMenuVisible] = useState(false);
 
   const handleLogout = () => {

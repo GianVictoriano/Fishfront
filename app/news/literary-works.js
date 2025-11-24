@@ -262,9 +262,9 @@ export default function LiteraryWorksScreen() {
                   src={selectedWork?.heyzine_url}
                   style={styles.fullScreenIframe}
                   title="Literary Work Preview"
-                  frameborder="0"
-                  allowfullscreen
-                  sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                  frameBorder="0"
+                  allowFullScreen
+                  allow="fullscreen; clipboard-write *"
                 />
               </View>
             ) : (

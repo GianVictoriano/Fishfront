@@ -961,7 +961,6 @@ const styles = StyleSheet.create({
     marginTop: 32,
     marginRight: 24,
     marginBottom: 32,
-    marginLeft: 24,
     borderRadius: '8px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
     boxSizing: 'border-box',
@@ -1277,7 +1276,7 @@ const styles = StyleSheet.create({
   },
   submitSection: {
     backgroundColor: '#f0fdf4',
-    width: '96%',
+    width: '100%',
     padding: '48px 24px',
     marginTop: 32,
     marginBottom: 32,
@@ -1304,7 +1303,7 @@ const styles = StyleSheet.create({
   },
   recruitmentSection: {
     backgroundColor: '#f8f9fa',
-    width: '96%',
+    width: '100%',
     padding: '48px 24px',
     marginTop: 32,
     marginBottom: 32,

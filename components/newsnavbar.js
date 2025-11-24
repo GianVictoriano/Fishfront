@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, TextInput, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, TextInput, FlatList, useWindowDimensions } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import useNewsStore from '../store/newsStore';
@@ -15,6 +15,14 @@ export default function NewsNavbar() {
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const searchTimeoutRef = useRef(null);
+  const { width } = useWindowDimensions();
+  const isSmallScreen = width < 768;
+
+  useEffect(() => {
+    if (isSmallScreen) {
+      setIsSearchVisible(true);
+    }
+  }, [isSmallScreen]);
 
   // Handle search input changes
   const handleSearchChange = (text) => {
@@ -108,80 +116,107 @@ export default function NewsNavbar() {
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
-        <View style={styles.tabsWrapper}>
-          {sections.map(section => (
-            <TouchableOpacity
-              key={section}
-              style={[styles.tab, activeGenre === section && styles.activeTab]}
-              onPress={() => handleSectionPress(section)}
-            >
-              <Text style={[styles.tabText, activeGenre === section && styles.activeTabText]}>{section}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
-      <View style={[styles.searchContainer, isSearchVisible && styles.searchContainerExpanded]}>
-        {isSearchVisible ? (
-          <View style={styles.searchWrapper}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search..."
-              placeholderTextColor="#9ca3af"
-              value={searchQuery}
-              onChangeText={handleSearchChange}
-              autoFocus={true}
-            />
-            {searchQuery.length > 0 && (
-              <View style={styles.dropdown}>
-                {console.log('🔍 Rendering dropdown, query:', searchQuery, 'results:', searchResults.length, 'searching:', isSearching)}
-                {isSearching ? (
-                  <View style={styles.searchingIndicator}>
-                    <Text style={styles.searchingText}>Searching...</Text>
-                  </View>
-                ) : searchResults.length > 0 ? (
-                  <FlatList
-                    data={searchResults}
-                    keyExtractor={(item) => item.id.toString()}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity
-                        style={styles.dropdownItem}
-                        onPress={() => handleResultPress(item)}
-                      >
-                        <Text style={styles.dropdownTitle} numberOfLines={1}>
-                          {item.title}
-                        </Text>
-                        <Text style={styles.dropdownCategory}>
-                          {item.genre || item.category || 'News'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                  />
-                ) : (
-                  <View style={styles.searchingIndicator}>
-                    <Text style={styles.searchingText}>No results found</Text>
-                  </View>
-                )}
-              </View>
-            )}
-          </View>
-        ) : (
+  const renderSearchArea = () => (
+    <View
+      style={[
+        styles.searchContainer,
+        isSearchVisible && styles.searchContainerExpanded,
+        isSmallScreen && styles.searchContainerSmall,
+      ]}
+    >
+      {isSearchVisible ? (
+        <View style={styles.searchWrapper}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search..."
+            placeholderTextColor="#9ca3af"
+            value={searchQuery}
+            onChangeText={handleSearchChange}
+            autoFocus={true}
+          />
           <TouchableOpacity
-            style={styles.searchIconButton}
+            style={styles.closeButton}
             onPress={() => {
-              setIsSearchVisible(true);
+              setIsSearchVisible(false);
               setSearchQuery('');
               setSearchResults([]);
             }}
           >
-            <MaterialIcons name="search" size={24} color="#6b7280" />
+            <MaterialIcons name="close" size={20} color="#6b7280" />
           </TouchableOpacity>
-        )}
+          {searchQuery.length > 0 && (
+            <View style={styles.dropdown}>
+              {console.log('🔍 Rendering dropdown, query:', searchQuery, 'results:', searchResults.length, 'searching:', isSearching)}
+              {isSearching ? (
+                <View style={styles.searchingIndicator}>
+                  <Text style={styles.searchingText}>Searching...</Text>
+                </View>
+              ) : searchResults.length > 0 ? (
+                <FlatList
+                  data={searchResults}
+                  keyExtractor={(item) => item.id.toString()}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.dropdownItem}
+                      onPress={() => handleResultPress(item)}
+                    >
+                      <Text style={styles.dropdownTitle} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.dropdownCategory}>
+                        {item.genre || item.category || 'News'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                />
+              ) : (
+                <View style={styles.searchingIndicator}>
+                  <Text style={styles.searchingText}>No results found</Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={styles.searchIconButton}
+          onPress={() => {
+            setIsSearchVisible(true);
+            setSearchQuery('');
+            setSearchResults([]);
+          }}
+        >
+          <MaterialIcons name="search" size={24} color="#6b7280" />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.navRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll}>
+          <View style={styles.tabsWrapper}>
+            {sections.map(section => (
+              <TouchableOpacity
+                key={section}
+                style={[styles.tab, activeGenre === section && styles.activeTab]}
+                onPress={() => handleSectionPress(section)}
+              >
+                <Text style={[styles.tabText, activeGenre === section && styles.activeTabText]}>{section}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+        {!isSmallScreen && renderSearchArea()}
       </View>
+      {isSmallScreen && (
+        <View style={styles.searchRow}>
+          {renderSearchArea()}
+        </View>
+      )}
     </View>
   );
 }
@@ -198,13 +233,21 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
     paddingHorizontal: 16,
     position: 'relative',
     zIndex: 5,
     overflow: 'visible',
+  },
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  searchRow: {
+    width: '100%',
+    marginTop: 8,
   },
   tabsScroll: {
     flex: 1,
@@ -240,6 +283,11 @@ const styles = StyleSheet.create({
     width: 400,
     marginLeft: 'auto',
   },
+  searchContainerSmall: {
+    marginLeft: 0,
+    paddingRight: 0,
+    width: '100%',
+  },
   searchIconButton: {
     width: 40,
     height: 40,
@@ -259,12 +307,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#374151',
     backgroundColor: '#f9fafb',
-    width: '100%',
+    flex: 1,
   },
   searchWrapper: {
     position: 'relative',
     width: '100%',
     zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  closeButton: {
+    marginLeft: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   dropdown: {
     position: 'absolute',
