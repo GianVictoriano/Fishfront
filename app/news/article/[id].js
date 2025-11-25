@@ -19,6 +19,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
+
 import Navbar from '../../../components/Navbar';
 import NewsNavbar from '../../../components/newsnavbar';
 import LatestNewsSidebar from '../../../components/LatestNewsSidebar';
@@ -27,12 +28,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import useArticleTracking from '../../../hooks/useArticleTracking';
 import { MaterialIcons, Feather } from '@expo/vector-icons';
 
+
 // Redirect mobile traffic to native article view
 if (Platform.OS !== 'web') {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   router.replace(`/news/article/native_article/${id}`);
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -42,6 +45,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     alignItems: 'flex-start',
+
 
   },
   detailWrapper: {
@@ -332,6 +336,7 @@ const styles = StyleSheet.create({
   },
 });
 
+
 export default function ArticleDetail() {
   const router = useRouter();
   const { id: articleId } = useLocalSearchParams();
@@ -354,12 +359,15 @@ export default function ArticleDetail() {
   const [showNotesModal, setShowNotesModal] = useState(false);
   const contentRef = useRef(null);
 
+
   const { width: windowWidth } = useWindowDimensions();
   const isSmallScreen = windowWidth < 900;
+
 
   // Animation values
   const relatedSlideAnim = useRef(new Animated.Value(0)).current;
   const hotTopicsSlideAnim = useRef(new Animated.Value(0)).current;
+
 
   // Mouse drag scrolling state
   const [isDragging, setIsDragging] = useState(false);
@@ -369,9 +377,12 @@ export default function ArticleDetail() {
   const relatedScrollRef = useRef(null);
   const hotTopicsScrollRef = useRef(null);
 
+
   // Navbar visibility state
-  const navbarTranslateY = useRef(new Animated.Value(0)).current;
+  const navbarOpacity = useRef(new Animated.Value(1)).current;
+  const navbarHeight = useRef(new Animated.Value(isSmallScreen ? 88 : 64)).current; // default navbar height - responsive
   const lastScrollY = useRef(0);
+
 
   // Mouse drag scrolling handlers
   const handleMouseDown = (e, scrollRef) => {
@@ -384,6 +395,7 @@ export default function ArticleDetail() {
     }
   };
 
+
   const handleMouseMove = (e) => {
     if (!isDragging || Platform.OS !== 'web' || !activeScrollRef?.current) return;
     e.preventDefault();
@@ -392,27 +404,33 @@ export default function ArticleDetail() {
     activeScrollRef.current.scrollLeft = scrollLeft - walk;
   };
 
+
   const handleMouseUp = () => {
     setIsDragging(false);
     setActiveScrollRef(null);
   };
+
 
   const handleMouseLeave = () => {
     setIsDragging(false);
     setActiveScrollRef(null);
   };
 
+
   // Global mouse event listeners for drag scrolling
   useEffect(() => {
     if (Platform.OS !== 'web') return;
+
 
     const handleGlobalMouseMove = (e) => {
       handleMouseMove(e);
     };
 
+
     const handleGlobalMouseUp = () => {
       handleMouseUp();
     };
+
 
     if (isDragging) {
       document.addEventListener('mousemove', handleGlobalMouseMove);
@@ -424,6 +442,7 @@ export default function ArticleDetail() {
       };
     }
   }, [isDragging, startX, scrollLeft, activeScrollRef]);
+
 
   // Animate related stories slide
   const animateRelatedSlide = (direction) => {
@@ -441,6 +460,7 @@ export default function ArticleDetail() {
     ]).start();
   };
 
+
   // Animate hot topics slide
   const animateHotTopicsSlide = (direction) => {
     Animated.sequence([
@@ -457,6 +477,7 @@ export default function ArticleDetail() {
     ]).start();
   };
 
+
   // Handle related stories navigation
   const handleRelatedNext = () => {
     animateRelatedSlide('next');
@@ -465,12 +486,14 @@ export default function ArticleDetail() {
     }, 150);
   };
 
+
   const handleRelatedPrev = () => {
     animateRelatedSlide('prev');
     setTimeout(() => {
       setRelatedIndex(Math.max(0, relatedIndex - 1));
     }, 150);
   };
+
 
   // Handle hot topics navigation
   const handleHotTopicsNext = () => {
@@ -480,6 +503,7 @@ export default function ArticleDetail() {
     }, 150);
   };
 
+
   const handleHotTopicsPrev = () => {
     animateHotTopicsSlide('prev');
     setTimeout(() => {
@@ -487,11 +511,13 @@ export default function ArticleDetail() {
     }, 150);
   };
 
+
   // Initialize article tracking (time & scroll)
   const { handleScroll: handleArticleScroll, currentScrollPercentage, timeSpent } = useArticleTracking(
     articleId, 
     currentUser?.id
   );
+
 
   // Custom scroll handler for navbar visibility
   const handleScroll = (event) => {
@@ -503,22 +529,37 @@ export default function ArticleDetail() {
     
     if (currentScrollY > 100 && currentScrollY > lastScrollY.current) {
       // Scrolling down and past threshold - hide navbar with animation
-      Animated.timing(navbarTranslateY, {
-        toValue: -200, // Move navbar up by 100px
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
+      Animated.parallel([
+        Animated.timing(navbarOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(navbarHeight, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: false, // height animation needs layout
+        }),
+      ]).start();
     } else if (currentScrollY < 50) {
       // Near top - show navbar with animation
-      Animated.timing(navbarTranslateY, {
-        toValue: 0, // Move navbar back to original position
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
+      Animated.parallel([
+        Animated.timing(navbarOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(navbarHeight, {
+          toValue: isSmallScreen ? 88 : 64,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+      ]).start();
     }
     
     lastScrollY.current = currentScrollY;
   };
+
 
   // Load activeGenre from AsyncStorage on mount
   useEffect(() => {
@@ -534,6 +575,7 @@ export default function ArticleDetail() {
     };
     loadActiveGenre();
   }, []);
+
 
   // Get current user for tracking
   useEffect(() => {
@@ -563,6 +605,7 @@ export default function ArticleDetail() {
     getCurrentUser();
   }, []);
 
+
   // Fetch bookmarks for this article
   useEffect(() => {
     const fetchBookmarks = async () => {
@@ -579,9 +622,11 @@ export default function ArticleDetail() {
     fetchBookmarks();
   }, [articleId, currentUser]);
 
+
   // Inject CSS to enable text selection on web
   useEffect(() => {
     if (Platform.OS !== 'web') return;
+
 
     // Add CSS to enable text selection in article content
     const style = document.createElement('style');
@@ -615,14 +660,17 @@ export default function ArticleDetail() {
     `;
     document.head.appendChild(style);
 
+
     return () => {
       document.head.removeChild(style);
     };
   }, []);
 
+
   // Handle text selection on web
   useEffect(() => {
     if (Platform.OS !== 'web') return;
+
 
     const handleSelection = () => {
       const selection = window.getSelection();
@@ -645,9 +693,11 @@ export default function ArticleDetail() {
       }
     };
 
+
     document.addEventListener('selectionchange', handleSelection);
     return () => document.removeEventListener('selectionchange', handleSelection);
   }, []);
+
 
   // Save bookmark
   const handleSaveBookmark = async () => {
@@ -656,12 +706,14 @@ export default function ArticleDetail() {
       return;
     }
 
+
     try {
       const response = await apiClient.post('/bookmarks', {
         article_id: articleId,
         highlighted_text: selectedText,
         notes: bookmarkNotes || null
       });
+
 
       setBookmarks([...bookmarks, response.data.bookmark]);
       setShowBookmarkButton(false);
@@ -681,6 +733,7 @@ export default function ArticleDetail() {
     }
   };
 
+
   // Delete bookmark
   const handleDeleteBookmark = async (bookmarkId) => {
     try {
@@ -692,6 +745,7 @@ export default function ArticleDetail() {
       Alert.alert('Error', 'Failed to delete bookmark');
     }
   };
+
 
   // Handle genre change from navbar - save to storage and navigate back to news
   const handleGenreChange = async (genre) => {
@@ -719,6 +773,7 @@ export default function ArticleDetail() {
     }
   };
 
+
   // Fetch article data
   useEffect(() => {
     if (!articleId) return;
@@ -738,7 +793,7 @@ export default function ArticleDetail() {
           genre: raw.genre || 'news',
           // Build full image URL if media exists
           image: raw.media && raw.media.length > 0
-            ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${raw.media[0].file_path.replace('public/', '')}`
+            ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${raw.media[0].file_path.replace('public/', '')}` 
             : null,
           author: raw.user?.name || null,
           metrics: raw.metrics ?? { visits: 0, like_count: 0, heart_count: 0, sad_count: 0, wow_count: 0 },
@@ -762,6 +817,7 @@ export default function ArticleDetail() {
     
     fetchArticle();
   }, [articleId]);
+
 
   // Fetch related articles and hot topics using lightweight summaries endpoint
   useEffect(() => {
@@ -791,7 +847,7 @@ export default function ArticleDetail() {
               ...otherArticle,
               id: otherArticle.id?.toString() || '',
               image: otherArticle.image_path
-                ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.image_path.replace('public/', '')}`
+                ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.image_path.replace('public/', '')}` 
                 : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
               similarity: calculateSimilarity(article.title || '', otherArticle.title || '')
             }))
@@ -810,12 +866,12 @@ export default function ArticleDetail() {
                   ...otherArticle,
                   id: otherArticle.id?.toString() || '',
                   image: otherArticle.media && otherArticle.media.length > 0
-                    ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.media[0].file_path.replace('public/', '')}`
+                    ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.media[0].file_path.replace('public/', '')}` 
                     : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
                   totalReactions: (otherArticle.metrics?.like_count || 0) + 
-                                 (otherArticle.metrics?.heart_count || 0) + 
-                                 (otherArticle.metrics?.sad_count || 0) + 
-                                 (otherArticle.metrics?.wow_count || 0)
+                                (otherArticle.metrics?.heart_count || 0) + 
+                                (otherArticle.metrics?.sad_count || 0) + 
+                                (otherArticle.metrics?.wow_count || 0)
                 }));
               
               setHotTopics(hotTopicsData);
@@ -829,12 +885,12 @@ export default function ArticleDetail() {
                 ...otherArticle,
                 id: otherArticle.id?.toString() || '',
                 image: otherArticle.image_path
-                  ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.image_path.replace('public/', '')}`
+                  ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.image_path.replace('public/', '')}` 
                   : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
                 totalReactions: (otherArticle.metrics?.like_count || 0) + 
-                               (otherArticle.metrics?.heart_count || 0) + 
-                               (otherArticle.metrics?.sad_count || 0) + 
-                               (otherArticle.metrics?.wow_count || 0)
+                              (otherArticle.metrics?.heart_count || 0) + 
+                              (otherArticle.metrics?.sad_count || 0) + 
+                              (otherArticle.metrics?.wow_count || 0)
               }))
               .sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0))
               .slice(0, 10);
@@ -849,6 +905,7 @@ export default function ArticleDetail() {
     
     fetchRelatedAndHot();
   }, [articleId, article]);
+
 
   // Debug: Log the HTML content to see image URLs
   useEffect(() => {
@@ -866,6 +923,7 @@ export default function ArticleDetail() {
     }
   }, [article]);
 
+
   // Debug: Log tracking status
   useEffect(() => {
     if (articleId && currentUser?.id) {
@@ -878,6 +936,7 @@ export default function ArticleDetail() {
       });
     }
   }, [articleId, currentUser, currentScrollPercentage, timeSpent]);
+
 
   // ML-based content similarity calculation
   const calculateContentSimilarity = (currentArticle, otherArticle) => {
@@ -970,6 +1029,7 @@ export default function ArticleDetail() {
     return html.replace(/<[^>]*>/g, '').replace(/&[^;]+;/g, ' ');
   };
 
+
   const react = async (type) => {
     if (!article || reactingType) return; // Prevent multiple clicks
     
@@ -996,6 +1056,7 @@ export default function ArticleDetail() {
     }
   };
 
+
   if (loading || !article) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -1005,6 +1066,7 @@ export default function ArticleDetail() {
   }
   const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
   const imageUrl = article.image || defaultImage;
+
 
   // Render floating bookmark button
   const renderBookmarkButton = () => {
@@ -1060,6 +1122,7 @@ export default function ArticleDetail() {
     );
   };
 
+
   // Custom renderers to handle image URLs in HTML content
   const renderers = {
     img: ({ TDefaultRenderer, ...props }) => {
@@ -1096,15 +1159,16 @@ export default function ArticleDetail() {
     },
   };
 
+
   return (
     <SafeAreaView style={styles.container}>
       {renderBookmarkButton()}
       <Navbar />
       <Animated.View
         style={{
-          transform: [{ translateY: navbarTranslateY }],
-          position: 'relative',
-          zIndex: 1000,
+          opacity: navbarOpacity,
+          height: navbarHeight,
+          overflow: 'hidden',
         }}
       >
         <NewsNavbar activeGenre={activeGenre} onGenreChange={handleGenreChange} />
