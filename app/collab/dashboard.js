@@ -8,8 +8,10 @@ import apiClient from '../../utils/api';
 import Svg, { Rect, Circle, Text as SvgText, Line, Path } from 'react-native-svg';
 import { Picker } from '@react-native-picker/picker';
 
-// Simple Bar Chart Component
+// Simple Bar Chart Component with Tooltips
 const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
+  const [tooltip, setTooltip] = useState(null);
+
   if (!data || !data.datasets || !data.labels) return null;
 
   const values = data.datasets[0].data;
@@ -17,70 +19,151 @@ const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
   const barWidth = (width - 40) / values.length;
   const chartHeight = height - 40;
 
+  const handleBarPress = (index) => {
+    const genre = data.labels[index];
+    const count = values[index];
+
+    setTooltip({
+      x: 30 + index * barWidth + barWidth / 2,
+      y: 20 + (1 - count / maxValue) * (chartHeight - 40) - 10,
+      genre: genre,
+      count: count,
+      label: `${genre}: ${count} views`
+    });
+  };
+
   return (
-    <Svg width={width} height={height}>
-      {/* Y-axis labels */}
-      {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
-        const value = Math.round(maxValue * ratio);
-        const y = 20 + (1 - ratio) * (chartHeight - 40);
-        return (
-          <SvgText
-            key={i}
-            x={10}
-            y={y + 4}
-            fontSize="10"
-            fill="#666"
-            textAnchor="end"
+    <View style={{ position: 'relative' }}>
+      <Svg width={width} height={height}>
+        {/* Y-axis labels */}
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+          const value = Math.round(maxValue * ratio);
+          const y = 20 + (1 - ratio) * (chartHeight - 40);
+          return (
+            <SvgText
+              key={i}
+              x={10}
+              y={y + 4}
+              fontSize="10"
+              fill="#666"
+              textAnchor="end"
+            >
+              {value}
+            </SvgText>
+          );
+        })}
+
+        {/* Bars */}
+        {values.map((value, index) => {
+          const barHeight = (value / maxValue) * (chartHeight - 40);
+          const x = 30 + index * barWidth;
+          const y = 20 + (chartHeight - 40) - barHeight;
+
+          return (
+            <TouchableOpacity
+              key={index}
+              onPress={() => handleBarPress(index)}
+              style={{
+                position: 'absolute',
+                left: x,
+                top: y,
+                width: barWidth - 5,
+                height: barHeight,
+              }}
+            >
+              <Rect
+                x={x}
+                y={y}
+                width={barWidth - 5}
+                height={barHeight}
+                fill="#4CAF50"
+                rx="2"
+              />
+            </TouchableOpacity>
+          );
+        })}
+
+        {/* X-axis labels */}
+        {data.labels.map((label, index) => {
+          const x = 30 + index * barWidth + (barWidth - 5) / 2;
+          return (
+            <SvgText
+              key={index}
+              x={x}
+              y={height - 5}
+              fontSize="8"
+              fill="#666"
+              textAnchor="middle"
+            >
+              {label}
+            </SvgText>
+          );
+        })}
+      </Svg>
+
+      {/* Tooltip */}
+      {tooltip && (
+        <View style={{
+          position: 'absolute',
+          left: tooltip.x - 60,
+          top: tooltip.y - 40,
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          padding: 8,
+          borderRadius: 4,
+          minWidth: 120,
+        }}>
+          <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
+            {tooltip.genre}
+          </Text>
+          <Text style={{ color: 'white', fontSize: 12 }}>
+            {tooltip.count} total views
+          </Text>
+          <TouchableOpacity
+            onPress={() => setTooltip(null)}
+            style={{ position: 'absolute', top: 2, right: 2 }}
           >
-            {value}
-          </SvgText>
-        );
-      })}
+            <Text style={{ color: 'white', fontSize: 14 }}>×</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      {/* Bars */}
-      {values.map((value, index) => {
-        const barHeight = (value / maxValue) * (chartHeight - 40);
-        const x = 30 + index * barWidth;
-        const y = 20 + (chartHeight - 40) - barHeight;
-
-        return (
-          <Rect
-            key={index}
-            x={x}
-            y={y}
-            width={barWidth - 5}
-            height={barHeight}
-            fill="#4CAF50"
-            rx="2"
-          />
-        );
-      })}
-
-      {/* X-axis labels */}
-      {data.labels.map((label, index) => {
-        const x = 30 + index * barWidth + (barWidth - 5) / 2;
-        return (
-          <SvgText
-            key={index}
-            x={x}
-            y={height - 5}
-            fontSize="8"
-            fill="#666"
-            textAnchor="middle"
-          >
-            {label}
-          </SvgText>
-        );
-      })}
-    </Svg>
+      {/* Invisible overlay to dismiss tooltip */}
+      {tooltip && (
+        <TouchableOpacity
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          onPress={() => setTooltip(null)}
+        />
+      )}
+    </View>
   );
 };
 
-// Simple Pie Chart Component
+// Simple Pie Chart Component with Tooltips
 const SimplePieChart = ({ data, width = 300, height = 200 }) => {
-  if (!data || !Array.isArray(data)) return null;
+  const [tooltip, setTooltip] = useState(null);
 
-  const total = data.reduce((sum, item) => sum + item.count, 0);
+  if (!data || !Array.isArray(data)) {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative' }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', height: 200 }}>
+          <Text style={{ color: '#666', fontSize: 14 }}>No status data</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const filteredData = data.filter(item => item.count > 0);
+  if (filteredData.length === 0) {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative' }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', height: 200 }}>
+          <Text style={{ color: '#666', fontSize: 14 }}>No status data</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const total = filteredData.reduce((sum, item) => sum + item.count, 0);
   const radius = Math.min(width, height) / 2 - 20;
   const centerX = width / 2;
   const centerY = height / 2;
@@ -89,10 +172,33 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
 
   let currentAngle = -Math.PI / 2; // Start from top
 
+  const handleSlicePress = (index) => {
+    const item = filteredData[index];
+    const percentage = ((item.count / total) * 100).toFixed(1);
+
+    setTooltip({
+      name: item.name,
+      count: item.count,
+      percentage: percentage,
+      label: `${item.name}: ${item.count} (${percentage}%)`
+    });
+  };
+
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-      <Svg width={width} height={height}>
-        {data.map((item, index) => {
+    <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative' }}>
+      <TouchableOpacity
+        onPress={() => setTooltip(null)}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 1
+        }}
+      />
+      <Svg width={width} height={height} style={{ zIndex: 2 }}>
+        {filteredData.map((item, index) => {
           const percentage = item.count / total;
           const angle = percentage * 2 * Math.PI;
           const startAngle = currentAngle;
@@ -120,15 +226,20 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
               fill={colors[index % colors.length]}
               stroke="#fff"
               strokeWidth="1"
+              onPress={() => handleSlicePress(index)}
             />
           );
         })}
       </Svg>
 
-      {/* Legend */}
+      {/* Legend with tooltips */}
       <View style={{ marginLeft: 20 }}>
-        {data.map((item, index) => (
-          <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+        {filteredData.map((item, index) => (
+          <TouchableOpacity
+            key={index}
+            onPress={() => handleSlicePress(index)}
+            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}
+          >
             <View
               style={{
                 width: 12,
@@ -141,15 +252,46 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
             <Text style={{ fontSize: 12, color: '#666' }}>
               {item.name}: {item.count}
             </Text>
-          </View>
+          </TouchableOpacity>
         ))}
       </View>
+
+      {/* Tooltip */}
+      {tooltip && (
+        <View style={{
+          position: 'absolute',
+          right: 0,
+          top: '50%',
+          transform: [{ translateY: -25 }],
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          padding: 8,
+          borderRadius: 4,
+          minWidth: 140,
+          zIndex: 3,
+        }}>
+          <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
+            {tooltip.name}
+          </Text>
+          <Text style={{ color: 'white', fontSize: 12 }}>
+            {tooltip.count} projects ({tooltip.percentage}%)
+          </Text>
+          <TouchableOpacity
+            onPress={() => setTooltip(null)}
+            style={{ position: 'absolute', top: 2, right: 2 }}
+          >
+            <Text style={{ color: 'white', fontSize: 14 }}>×</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
 
-// Simple Line Chart Component
+// Simple Line Chart Component with Tooltips
 const SimpleLineChart = ({ data, width = 300, height = 200 }) => {
+  const [tooltip, setTooltip] = useState(null);
+  const [touchablePoints, setTouchablePoints] = useState([]);
+
   if (!data || !data.datasets || !data.labels) return null;
 
   const values = data.datasets[0].data;
@@ -158,90 +300,167 @@ const SimpleLineChart = ({ data, width = 300, height = 200 }) => {
   const chartHeight = height - 40;
   const stepX = chartWidth / (values.length - 1);
 
-  const points = values.map((value, index) => {
-    const x = 20 + index * stepX;
-    const y = 20 + (1 - value / maxValue) * (chartHeight - 40);
-    return `${x},${y}`;
-  }).join(' ');
+  const handlePointPress = (index) => {
+    const date = new Date(data.labels[index]);
+    const formattedDate = date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+    const count = values[index];
+
+    setTooltip({
+      x: 20 + index * stepX,
+      y: 20 + (1 - count / maxValue) * (chartHeight - 40),
+      date: formattedDate,
+      count: count,
+      label: `Submissions: ${count}`
+    });
+  };
+
+  // Calculate touchable points for positioning
+  const points = values.map((value, index) => ({
+    x: 20 + index * stepX,
+    y: 20 + (1 - value / maxValue) * (chartHeight - 40),
+    index
+  }));
 
   return (
-    <Svg width={width} height={height}>
-      {/* Grid lines */}
-      {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
-        const y = 20 + ratio * (chartHeight - 40);
-        return (
-          <Line
-            key={i}
-            x1="20"
-            y1={y}
-            x2={width - 20}
-            y2={y}
-            stroke="#e0e0e0"
-            strokeWidth="1"
-          />
-        );
-      })}
+    <View style={{ position: 'relative' }}>
+      {/* Touchable points positioned absolutely */}
+      {points.map((point) => (
+        <TouchableOpacity
+          key={`point-${point.index}`}
+          onPress={() => handlePointPress(point.index)}
+          style={{
+            position: 'absolute',
+            left: point.x - 8,
+            top: point.y - 8,
+            width: 16,
+            height: 16,
+            borderRadius: 8,
+            zIndex: 10,
+          }}
+        />
+      ))}
 
-      {/* Line */}
-      <Path
-        d={`M ${points}`}
-        stroke="#2196F3"
-        strokeWidth="3"
-        fill="none"
-      />
+      <Svg width={width} height={height}>
+        {/* Grid lines */}
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+          const y = 20 + ratio * (chartHeight - 40);
+          return (
+            <Line
+              key={i}
+              x1="20"
+              y1={y}
+              x2={width - 20}
+              y2={y}
+              stroke="#e0e0e0"
+              strokeWidth="1"
+            />
+          );
+        })}
 
-      {/* Data points */}
-      {values.map((value, index) => {
-        const x = 20 + index * stepX;
-        const y = 20 + (1 - value / maxValue) * (chartHeight - 40);
-        return (
-          <Circle
-            key={index}
-            cx={x}
-            cy={y}
-            r="4"
-            fill="#2196F3"
-            stroke="#fff"
-            strokeWidth="2"
-          />
-        );
-      })}
+        {/* Line */}
+        <Path
+          d={`M ${values.map((value, index) => {
+            const x = 20 + index * stepX;
+            const y = 20 + (1 - value / maxValue) * (chartHeight - 40);
+            return `${x},${y}`;
+          }).join(' L ')}`}
+          stroke="#2196F3"
+          strokeWidth="3"
+          fill="none"
+        />
 
-      {/* Y-axis labels */}
-      {[0, 0.5, 1].map((ratio, i) => {
-        const value = Math.round(maxValue * ratio);
-        const y = 20 + (1 - ratio) * (chartHeight - 40);
-        return (
-          <SvgText
-            key={i}
-            x="15"
-            y={y + 4}
-            fontSize="10"
-            fill="#666"
-            textAnchor="end"
+        {/* Data points */}
+        {values.map((value, index) => {
+          const x = 20 + index * stepX;
+          const y = 20 + (1 - value / maxValue) * (chartHeight - 40);
+          return (
+            <Circle
+              key={index}
+              cx={x}
+              cy={y}
+              r="4"
+              fill="#2196F3"
+              stroke="#fff"
+              strokeWidth="2"
+            />
+          );
+        })}
+
+        {/* Y-axis labels */}
+        {[0, 0.5, 1].map((ratio, i) => {
+          const value = Math.round(maxValue * ratio);
+          const y = 20 + (1 - ratio) * (chartHeight - 40);
+          return (
+            <SvgText
+              key={i}
+              x="15"
+              y={y + 4}
+              fontSize="10"
+              fill="#666"
+              textAnchor="end"
+            >
+              {value}
+            </SvgText>
+          );
+        })}
+
+        {/* X-axis labels */}
+        {data.labels.map((label, index) => {
+          const x = 20 + index * stepX;
+          return (
+            <SvgText
+              key={index}
+              x={x}
+              y={height - 5}
+              fontSize="10"
+              fill="#666"
+              textAnchor="middle"
+            >
+              {label}
+            </SvgText>
+          );
+        })}
+      </Svg>
+
+      {/* Tooltip */}
+      {tooltip && (
+        <View style={{
+          position: 'absolute',
+          left: tooltip.x - 50,
+          top: tooltip.y - 40,
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          padding: 8,
+          borderRadius: 4,
+          minWidth: 120,
+          zIndex: 20,
+        }}>
+          <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
+            {tooltip.date}
+          </Text>
+          <Text style={{ color: 'white', fontSize: 12 }}>
+            {tooltip.label}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setTooltip(null)}
+            style={{ position: 'absolute', top: 2, right: 2 }}
           >
-            {value}
-          </SvgText>
-        );
-      })}
+            <Text style={{ color: 'white', fontSize: 14 }}>×</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      {/* X-axis labels */}
-      {data.labels.map((label, index) => {
-        const x = 20 + index * stepX;
-        return (
-          <SvgText
-            key={index}
-            x={x}
-            y={height - 5}
-            fontSize="10"
-            fill="#666"
-            textAnchor="middle"
-          >
-            {label}
-          </SvgText>
-        );
-      })}
-    </Svg>
+      {/* Invisible overlay to dismiss tooltip */}
+      {tooltip && (
+        <TouchableOpacity
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 15 }}
+          onPress={() => setTooltip(null)}
+        />
+      )}
+    </View>
   );
 };
 
@@ -350,10 +569,17 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
     try {
       setLoadingGraphs(true);
       
-      const response = await apiClient.get('/graph-data?period=30');
-      const data = response.data;
-      
-      setGraphData(data);
+      const response = await apiClient.get('/graph-data?period=20')
+        .then(response => {
+          console.log('Graph data response:', response.data);
+          console.log('Group chat status:', response.data.group_chat_status);
+          setGraphData(response.data);
+          setLoadingGraphs(false);
+        })
+        .catch(error => {
+          console.error('Error fetching graph data:', error);
+          setLoadingGraphs(false);
+        });
     } catch (error) {
       console.error('Error fetching graph data:', error);
     } finally {

@@ -124,11 +124,9 @@ const HomeScreen = () => {
         const mapped = response.data.data.slice(0, 3).map(article => ({
           id: article.id?.toString() || '',
           title: article.title,
-          excerpt: article.content 
-            ? article.content.replace(/<[^>]*>/g, '') 
-            : '',
-          image: article.media && article.media.length > 0
-            ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}` 
+          excerpt: article.excerpt || '',
+          image: article.image_path
+            ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.image_path.replace('public/', '')}` 
             : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
           published_at: article.published_at,
           genre: article.genre || 'Featured',
@@ -822,7 +820,7 @@ const styles = StyleSheet.create({
     marginBottom: '2rem',
     opacity: 0.9,
     maxWidth: '90%',
-    marginLeft: '30px',
+    marginLeft: '15px',
   },
   ctaButton: {
     backgroundColor: '#3b82f6',

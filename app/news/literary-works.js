@@ -21,13 +21,41 @@ export default function LiteraryWorksScreen() {
 
   const fetchLiteraryWorks = async () => {
     try {
+      setLoading(true);
       const response = await apiClient.get('/literary-works');
-      if (response.data.success) {
-        setLiteraryWorks(response.data.data);
+      
+      if (response.data.success && Array.isArray(response.data.data)) {
+        const allWorks = response.data.data;
+        const batchSize = 5;
+        const initialBatch = allWorks.slice(0, batchSize);
+        const remainingWorks = allWorks.slice(batchSize);
+        
+        // Display first batch immediately for fast loading
+        setLiteraryWorks(initialBatch);
+        
+        // Load remaining works sequentially in background
+        const loadRemainingBatches = async () => {
+          const finalWorks = [...initialBatch];
+          
+          for (let i = 0; i < remainingWorks.length; i += batchSize) {
+            const batch = remainingWorks.slice(i, i + batchSize);
+            
+            // Small delay between batches for smooth loading
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Append batch to existing data
+            finalWorks.push(...batch);
+            setLiteraryWorks([...finalWorks]);
+          }
+        };
+        
+        // Start loading remaining batches
+        loadRemainingBatches();
       }
     } catch (error) {
       console.error('Error fetching literary works:', error);
       Alert.alert('Error', 'Failed to fetch literary works');
+      setLiteraryWorks([]); // Set empty array on error
     } finally {
       setLoading(false);
       setRefreshing(false);

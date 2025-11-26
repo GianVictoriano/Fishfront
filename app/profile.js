@@ -1,5 +1,5 @@
-import { Link, useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { Link, useRouter, useFocusEffect } from 'expo-router';
+import { useState, useEffect, useCallback } from 'react';
 import { ActivityIndicator, Image, Modal, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View, ScrollView, Switch } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -61,19 +61,20 @@ export default function ProfileScreen() {
       
       try {
         setLoadingBookmarks(true);
-        const [bookmarksRes, topicsRes, commentsRes] = await Promise.all([
+        
+        // Fetch all data in parallel - no more heavy topics loading!
+        const [bookmarksRes, postsCountRes, commentsCountRes] = await Promise.all([
           apiClient.get(`/users/${user.id}/bookmarks`).catch(() => ({ data: [] })),
-          apiClient.get('/topics').catch(() => ({ data: [] })),
-          apiClient.get('/topics').catch(() => ({ data: [] })) // We'll count comments from topics
+          apiClient.get(`/users/${user.id}/posts-count`).catch(() => ({ data: { count: 0 } })),
+          apiClient.get(`/users/${user.id}/comments-count`).catch(() => ({ data: { count: 0 } }))
         ]);
         
         setBookmarks(bookmarksRes.data || []);
         
-        // Calculate stats
-        const userTopics = Array.isArray(topicsRes.data) ? topicsRes.data.filter(t => t.user_id === user.id) : [];
+        // Set stats from dedicated endpoints (much faster!)
         setStats({
-          posts: userTopics.length,
-          comments: 0 // Will be updated when we have comments endpoint
+          posts: postsCountRes.data.count || 0,
+          comments: commentsCountRes.data.count || 0
         });
         
         // Load anonymous mode preference
@@ -88,6 +89,32 @@ export default function ProfileScreen() {
     
     fetchData();
   }, [user]);
+
+  // Refresh user data from local storage when screen gains focus (after editing profile)
+  useFocusEffect(
+    useCallback(() => {
+      const refreshUserData = async () => {
+        try {
+          // Get fresh user data from local storage (updated by edit-profile)
+          const userDataString = await AsyncStorage.getItem('user_data');
+          if (userDataString) {
+            const freshUserData = JSON.parse(userDataString);
+            // Update auth context with fresh data
+            setAuth(freshUserData);
+            
+            // Update anonymous mode preference from fresh data
+            setIsAnonymous(freshUserData.profile?.is_anonymous === 1 || freshUserData.profile?.is_anonymous === true);
+            
+            console.log('[Profile] User data refreshed from local storage');
+          }
+        } catch (error) {
+          console.error('[Profile] Error refreshing user data:', error);
+        }
+      };
+      
+      refreshUserData();
+    }, [setAuth])
+  );
 
   // Delete bookmark
   const handleDeleteBookmark = async (bookmarkId) => {

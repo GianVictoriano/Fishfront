@@ -32,9 +32,12 @@ export default function UserProfileScreen() {
         const topicsRes = await apiClient.get('/topics').catch(() => ({ data: [] }));
         const userTopics = Array.isArray(topicsRes.data) ? topicsRes.data.filter(t => t.user_id === parseInt(userId)) : [];
         
+        // Fetch user comments count
+        const commentsRes = await apiClient.get(`/users/${userId}/comments-count`).catch(() => ({ data: { count: 0 } }));
+        
         setStats({
           posts: userTopics.length,
-          comments: 0
+          comments: commentsRes.data.count || 0
         });
       } catch (error) {
         console.error('Error fetching user data:', error);

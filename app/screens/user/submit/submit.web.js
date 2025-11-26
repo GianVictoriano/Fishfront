@@ -44,7 +44,7 @@ export default function SubmitScreen() {
 
       const result = await response.data;
       Alert.alert('Success', 'Your work has been submitted successfully!');
-      router.push('/screens/user/my-submissions');
+      router.push('/my-requests?tab=submissions');
     } catch (error) {
       console.error('Submission error:', error);
       Alert.alert('Error', 'Failed to submit work. Please try again.');

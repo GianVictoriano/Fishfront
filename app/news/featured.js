@@ -337,7 +337,6 @@ const LoadingSpinner = () => (
 
 export default function FeaturedScreen() {
   const [featuredData, setFeaturedData] = useState(fallbackFeaturedData);
-  const [trendingStories, setTrendingStories] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [displayedArticles, setDisplayedArticles] = useState(9);
   const [loading, setLoading] = useState(false);
@@ -367,20 +366,18 @@ export default function FeaturedScreen() {
     setActiveGenre('Featured');
   }, [setActiveGenre]);
 
-  // Get current user for personalization
+  // Get current user from local storage only (no extra /user fetch)
   useEffect(() => {
     const getCurrentUser = async () => {
       try {
-        const token = await AsyncStorage.getItem('auth_token'); 
-        if (token) {
-          const userData = await AsyncStorage.getItem('user_data');
-          if (userData) {
-            setCurrentUser(JSON.parse(userData));
-          } else {
-            const response = await apiClient.get('/user');
-            setCurrentUser(response.data);
-          }
+        const token = await AsyncStorage.getItem('auth_token');
+        if (!token) return;
+
+        const userData = await AsyncStorage.getItem('user_data');
+        if (userData) {
+          setCurrentUser(JSON.parse(userData));
         }
+        // If user_data is missing, we simply skip fetching /user for Featured
       } catch (error) {
         console.log('User not authenticated');
       }
@@ -424,15 +421,6 @@ export default function FeaturedScreen() {
     const fetchFeaturedData = async () => {
       const requestId = 'featured-news';
       if (activeRequests.has(requestId)) return;
-
-      // Check cache first
-      const cachedData = await getCachedData('featured');
-      if (cachedData) {
-        setFeaturedData(cachedData);
-        setLoading(false);
-        return;
-      }
-
       setActiveRequests(prev => new Set(prev).add(requestId));
       setLoading(true);
       setDisplayedArticles(9);
@@ -445,16 +433,14 @@ export default function FeaturedScreen() {
           const mapped = res.data.data.slice(0, limit).map(article => ({
             id: article.id?.toString() || '',
             title: article.title,
-            excerpt: article.content ? article.content.substring(0, 150) + '...' : '',
-            image: article.media && article.media.length > 0
-              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`
+            excerpt: article.excerpt || '',
+            image: article.image_path
+              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.image_path.replace('public/', '')}`
               : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
             date: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
             category: 'Featured',
           }));
           setFeaturedData(mapped);
-          // Cache the result
-          await setCachedData('featured', mapped);
         }
       } catch (error) {
         console.log('Failed to fetch featured data:', error);
@@ -470,49 +456,6 @@ export default function FeaturedScreen() {
     };
 
     fetchFeaturedData();
-  }, []);
-
-  // fetch trending stories
-  useEffect(() => {
-    const fetchTrendingStories = async () => {
-      const requestId = 'trending-stories';
-      if (activeRequests.has(requestId)) return;
-
-      // Check cache first
-      const cachedData = await getCachedData('trending-stories');
-      if (cachedData) {
-        setTrendingStories(cachedData);
-        return;
-      }
-
-      setActiveRequests(prev => new Set(prev).add(requestId));
-
-      try {
-        const res = await apiClient.get('/public/trending-articles');
-        if (Array.isArray(res.data?.data)) {
-          const mapped = res.data.data.slice(0, 25).map(a => ({
-            id: a.id?.toString() || '',
-            title: a.title,
-            category: a.genre || 'News',
-            published_at: a.published_at,
-            image: getImageUrl(a.image),
-          }));
-          setTrendingStories(mapped);
-          await setCachedData('trending-stories', mapped);
-        }
-      } catch (error) {
-        console.log('Error fetching trending stories:', error);
-        setTrendingStories([]);
-      } finally {
-        setActiveRequests(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(requestId);
-          return newSet;
-        });
-      }
-    };
-
-    fetchTrendingStories();
   }, []);
 
   const featuredStory = featuredData[0];

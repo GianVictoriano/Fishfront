@@ -237,6 +237,7 @@ const Contribute = () => {
         'artwork': 'artwork',
         'story': 'story',
         'coverage': 'coverage',
+        'documentation': 'documentation', // Add documentation mapping
         'poetry': 'poetry',      // Added poetry
         'essay': 'essay'         // Added essay
       };
@@ -284,7 +285,7 @@ const Contribute = () => {
       }
       
       Alert.alert('Success', 'Your contribution has been submitted for review!');
-      router.push('/home');
+      router.push('/my-requests');
     } catch (error) {
       console.error('Submission error:', error);
       Alert.alert('Error', 'Failed to submit contribution. Please try again.');

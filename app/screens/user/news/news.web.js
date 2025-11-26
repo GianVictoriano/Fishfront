@@ -1207,18 +1207,20 @@ export default function NewsScreen() {
   const isMobile = screenWidth <= 700;
   const isTinyScreen = screenWidth < 380;
 
-  // Fetch News data on component mount to ensure content loads
+  // Fetch News/genre data whenever the active genre changes
   useEffect(() => {
     const fetchInitialNewsData = async () => {
-      const requestId = 'initial-news';
+      // Track requests per-genre so switching tabs still triggers a fetch
+      const requestId = `initial-news-${activeGenre}`;
       if (activeRequests.has(requestId)) return;
 
-      // Check cache first
+      // Check cache first (per-genre)
       const cacheKey = `news-${activeGenre}`;
       const cachedData = await getCachedData(cacheKey);
       if (cachedData) {
         setNewsData(cachedData);
-        // Don't set loading to false immediately - let the component handle it naturally
+        // Ensure loading state is cleared when serving from cache
+        setLoading(false);
         return;
       }
 
@@ -1245,10 +1247,17 @@ export default function NewsScreen() {
         
         if (Array.isArray(res.data?.data)) {
           console.log('API returned', res.data.data.length, 'items for', activeGenre);
-          const mapped = res.data.data.slice(0, 25).map(item => {
+          
+          // Sequential loading: Load first 5 immediately, then load rest in batches
+          const allItems = res.data.data;
+          const batchSize = 5;
+          const initialBatch = allItems.slice(0, batchSize);
+          const remainingItems = allItems.slice(batchSize);
+          
+          // Map and display first batch immediately
+          const initialMapped = initialBatch.map(item => {
             if (isCreativeFetch) {
-              // Map creative data to the expected format
-              const mappedItem = {
+              return {
                 id: item.id?.toString() || '',
                 title: item.title,
                 excerpt: item.caption,
@@ -1258,10 +1267,7 @@ export default function NewsScreen() {
                 date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
                 category: `${item.genre.charAt(0).toUpperCase() + item.genre.slice(1)} Creative`,
               };
-              console.log('Mapped creative item:', mappedItem);
-              return mappedItem;
             } else {
-              // Map article data (existing logic)
               return {
                 id: item.id?.toString() || '',
                 title: item.title,
@@ -1272,12 +1278,82 @@ export default function NewsScreen() {
               };
             }
           });
-          console.log('Setting news data for', activeGenre, ':', mapped);
-          setNewsData(mapped);
+          
+          // Set initial data immediately for fast loading
+          setNewsData(initialMapped);
+          
+          // Load remaining items sequentially in background
+          const loadRemainingBatches = async () => {
+            const finalMapped = [...initialMapped];
+            
+            for (let i = 0; i < remainingItems.length; i += batchSize) {
+              const batch = remainingItems.slice(i, i + batchSize);
+              
+              // Small delay between batches for smooth loading
+              await new Promise(resolve => setTimeout(resolve, 100));
+              
+              const batchMapped = batch.map(item => {
+                if (isCreativeFetch) {
+                  return {
+                    id: item.id?.toString() || '',
+                    title: item.title,
+                    excerpt: item.caption,
+                    image: item.media && item.media.length > 0 
+                      ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${item.media[0].file_path.replace('public/', '')}`
+                      : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+                    date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
+                    category: `${item.genre.charAt(0).toUpperCase() + item.genre.slice(1)} Creative`,
+                  };
+                } else {
+                  return {
+                    id: item.id?.toString() || '',
+                    title: item.title,
+                    excerpt: '',
+                    image: item.image || item.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+                    date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
+                    category: item.genre || 'News',
+                  };
+                }
+              });
+              
+              // Append batch to existing data
+              finalMapped.push(...batchMapped);
+              setNewsData([...finalMapped]);
+            }
+          };
+          
+          // Start loading remaining batches
+          loadRemainingBatches();
+          
+          // Cache the full data when done
+          const fullMapped = allItems.slice(0, 25).map(item => {
+            if (isCreativeFetch) {
+              return {
+                id: item.id?.toString() || '',
+                title: item.title,
+                excerpt: item.caption,
+                image: item.media && item.media.length > 0 
+                  ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${item.media[0].file_path.replace('public/', '')}`
+                  : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+                date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
+                category: `${item.genre.charAt(0).toUpperCase() + item.genre.slice(1)} Creative`,
+              };
+            } else {
+              return {
+                id: item.id?.toString() || '',
+                title: item.title,
+                excerpt: '',
+                image: item.image || item.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+                date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
+                category: item.genre || 'News',
+              };
+            }
+          });
+          
           if (isCreativeFetch) {
             await clearAllCache(); // Clear cache for Creative tab
           } else {
-            await setCachedData(cacheKey, mapped);
+            await setCachedData(cacheKey, fullMapped);
           }
         } else {
           console.log('No data array found in response:', res.data);

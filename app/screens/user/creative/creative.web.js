@@ -394,7 +394,15 @@ export default function CreativeScreen() {
         
         if (Array.isArray(response.data?.data) && response.data.data.length > 0) {
           console.log('Found', response.data.data.length, 'creative works');
-          const mapped = response.data.data.map(creative => ({
+          
+          // Sequential loading: Load first 5 immediately, then load rest in batches
+          const allWorks = response.data.data;
+          const batchSize = 5;
+          const initialBatch = allWorks.slice(0, batchSize);
+          const remainingWorks = allWorks.slice(batchSize);
+          
+          // Map and display first batch immediately
+          const initialMapped = initialBatch.map(creative => ({
             id: creative.id?.toString() || '',
             title: creative.title,
             excerpt: creative.caption,
@@ -410,8 +418,45 @@ export default function CreativeScreen() {
                 })
               : '',
           }));
-          console.log('Mapped creative works:', mapped);
-          setCreativeWorks(mapped);
+          
+          console.log('Setting initial creative works batch:', initialMapped);
+          setCreativeWorks(initialMapped);
+          
+          // Load remaining works sequentially in background
+          const loadRemainingBatches = async () => {
+            const finalWorks = [...initialMapped];
+            
+            for (let i = 0; i < remainingWorks.length; i += batchSize) {
+              const batch = remainingWorks.slice(i, i + batchSize);
+              
+              // Small delay between batches for smooth loading
+              await new Promise(resolve => setTimeout(resolve, 100));
+              
+              const batchMapped = batch.map(creative => ({
+                id: creative.id?.toString() || '',
+                title: creative.title,
+                excerpt: creative.caption,
+                image: creative.media && creative.media.length > 0 
+                  ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${creative.media[0].file_path.replace('public/', '')}`
+                  : null,
+                author: creative.user?.name || 'Anonymous',
+                date: creative.created_at 
+                  ? new Date(creative.created_at).toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })
+                  : '',
+              }));
+              
+              // Append batch to existing data
+              finalWorks.push(...batchMapped);
+              setCreativeWorks([...finalWorks]);
+            }
+          };
+          
+          // Start loading remaining batches
+          loadRemainingBatches();
         } else {
           console.log('No creative works found, using dummy data');
           // If no real creatives, use dummy artworks
