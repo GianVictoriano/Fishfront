@@ -475,35 +475,49 @@ export default function CreateContentScreen() {
       const availablePeopleFiltered = [];
       
       collaborators.forEach(collaborator => {
-        const dayHours = collaborator.working_hours.find(h => h.day_of_week === availabilityDay);
+        // Get all working hours entries for the specified day
+        const dayHoursEntries = collaborator.working_hours.filter(h => h.day_of_week === availabilityDay);
         
-        if (dayHours) {
+        // Check if any of the entries match the availability criteria
+        let isAvailable = false;
+        let availabilityType = null;
+        let availabilityTimes = null;
+        let isInvalid = false;
+        
+        for (const dayHours of dayHoursEntries) {
           // Check if time ranges are valid (start before end)
           const preferredValid = dayHours.preferred_start_time && dayHours.preferred_end_time && 
             dayHours.preferred_start_time < dayHours.preferred_end_time;
           const possibleValid = dayHours.possible_start_time && dayHours.possible_end_time && 
             dayHours.possible_start_time < dayHours.possible_end_time;
-            
+              
           // TEMPORARY: For debugging, show invalid ranges too (with warning)
           const preferredMatches = (preferredValid || (!preferredValid && dayHours.preferred_start_time && dayHours.preferred_end_time)) && 
             dayHours.preferred_start_time <= availabilityEndTime && 
             dayHours.preferred_end_time >= availabilityStartTime;
-            
+              
           const possibleMatches = (possibleValid || (!possibleValid && dayHours.possible_start_time && dayHours.possible_end_time)) && 
             dayHours.possible_start_time <= availabilityEndTime && 
             dayHours.possible_end_time >= availabilityStartTime;
 
           if (preferredMatches || possibleMatches) {
-            const isInvalidRange = preferredMatches && !preferredValid;
-            availablePeopleFiltered.push({
-              ...collaborator,
-              availability_type: preferredMatches ? 'preferred' : 'possible',
-              availability_times: preferredMatches ? 
-                `${dayHours.preferred_start_time}-${dayHours.preferred_end_time}${isInvalidRange ? ' (INVALID)' : ''}` : 
-                `${dayHours.possible_start_time}-${dayHours.possible_end_time}`,
-              is_invalid: isInvalidRange
-            });
+            isAvailable = true;
+            availabilityType = preferredMatches ? 'preferred' : 'possible';
+            availabilityTimes = preferredMatches ? 
+              `${dayHours.preferred_start_time}-${dayHours.preferred_end_time}${preferredMatches && !preferredValid ? ' (INVALID)' : ''}` : 
+              `${dayHours.possible_start_time}-${dayHours.possible_end_time}`;
+            isInvalid = preferredMatches && !preferredValid;
+            break; // Found a match, no need to check other entries
           }
+        }
+        
+        if (isAvailable) {
+          availablePeopleFiltered.push({
+            ...collaborator,
+            availability_type: availabilityType,
+            availability_times: availabilityTimes,
+            is_invalid: isInvalid
+          });
         }
       });
 
@@ -1023,6 +1037,9 @@ export default function CreateContentScreen() {
                   <View style={[styles.countBadge, {backgroundColor: colors.primary || '#1a237e'}]}>
                     <Text style={styles.countBadgeText}>{selectedActivityMembers.length}</Text>
                   </View>
+                  <TouchableOpacity style={styles.broadcastButton}>
+                    <Text style={styles.broadcastButtonText}>Broadcast</Text>
+                  </TouchableOpacity>
                 </View>
                 <View style={styles.searchInputContainer}>
                   <Feather name="search" size={18} color="#9CA3AF" style={styles.searchIcon} />
@@ -1679,7 +1696,7 @@ export default function CreateContentScreen() {
                   </View>
                   <View style={styles.timeFields}>
                     <TouchableOpacity
-                      style={[styles.input, { flex: 1 }]}
+                      style={[styles.input, { flex: 1, height: 64, justifyContent: 'center' }]}
                       onPress={() => openTimePicker('start')}
                     >
                       <Text style={[styles.timeInputText, !availabilityStartTime && styles.timeInputPlaceholder]}>
@@ -1688,7 +1705,7 @@ export default function CreateContentScreen() {
                     </TouchableOpacity>
                     <Text style={styles.timeSeparator}>to</Text>
                     <TouchableOpacity
-                      style={[styles.input, { flex: 1 }]}
+                      style={[styles.input, { flex: 1, height: 64, justifyContent: 'center' }]}
                       onPress={() => openTimePicker('end')}
                     >
                       <Text style={[styles.timeInputText, !availabilityEndTime && styles.timeInputPlaceholder]}>
@@ -2708,8 +2725,33 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   // Additional time input styles
+  timeFields: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  timeSeparator: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginHorizontal: 8,
+  },
   timeInputText: {
     fontSize: 15,
     color: '#111827',
+  },
+  broadcastButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#1a237e',
+    marginLeft: 'auto',
+  },
+  broadcastButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1a237e',
   },
 });

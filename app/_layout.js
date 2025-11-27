@@ -1,6 +1,7 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuth } from '~/context/AuthContext';
 import { BrandingProvider } from '~/context/BrandingContext';
+import { NotificationProvider } from '~/context/NotificationContext';
 import { useRef, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
@@ -52,7 +53,9 @@ export default function RootLayout() {
     <ActionSheetProvider>
       <BrandingProvider>
         <AuthProvider>
-          <InitialLayout />
+          <NotificationProvider>
+            <InitialLayout />
+          </NotificationProvider>
         </AuthProvider>
       </BrandingProvider>
     </ActionSheetProvider>

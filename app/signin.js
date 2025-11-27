@@ -58,7 +58,14 @@ export default function SignInScreen() {
 
   useEffect(() => {
     if (user) {
-      router.replace('/home');
+      // Check user role and redirect accordingly
+      if (user.profile?.role === 'collaborator') {
+        // Collaborator -> redirect to collab/dashboard
+        router.replace('/collab/dashboard');
+      } else {
+        // Regular user -> redirect to home
+        router.replace('/home');
+      }
     }
   }, [user]);
 

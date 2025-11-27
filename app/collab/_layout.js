@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Platform, Image, Pressable, ScrollView } from 'react-native';
 import { Slot, useRouter, useSegments, Tabs } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,9 +6,11 @@ import { Feather } from '@expo/vector-icons';
 import { useWindowDimensions } from 'react-native';
 import { useAuth } from '~/context/AuthContext';
 import { useBranding } from '~/context/BrandingContext';
+import { useNotifications } from '~/context/NotificationContext';
+import apiClient from '../../utils/api';
 
 // A single link in the sidebar with hover effects
-const SidebarLink = ({ href, text, iconName, isMinimized, onPress, hoverColor, colors, textColor, iconColor }) => {
+const SidebarLink = ({ href, text, iconName, isMinimized, onPress, hoverColor, colors, textColor, iconColor, notificationCount }) => {
   const router = useRouter();
   const segments = useSegments();
   const isActive = href ? segments.includes(href.split('/').pop()) : false;
@@ -38,16 +40,23 @@ const SidebarLink = ({ href, text, iconName, isMinimized, onPress, hoverColor, c
             ]}
           />
           {!isMinimized && (
-            <Text
-              style={[
-                styles.sidebarLinkText,
-                { color: textColor || '#D1D5DB' },
-                isActive && styles.sidebarLinkTextActive,
-                hovered && Platform.OS === 'web' && (isLogout ? styles.logoutTextHover : styles.sidebarLinkTextHover),
-              ]}
-            >
-              {text}
-            </Text>
+            <View style={styles.sidebarLinkTextContainer}>
+              <Text
+                style={[
+                  styles.sidebarLinkText,
+                  { color: textColor || '#D1D5DB' },
+                  isActive && styles.sidebarLinkTextActive,
+                  hovered && Platform.OS === 'web' && (isLogout ? styles.logoutTextHover : styles.sidebarLinkTextHover),
+                ]}
+              >
+                {text}
+              </Text>
+              {notificationCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>{notificationCount}</Text>
+                </View>
+              )}
+            </View>
           )}
         </>
       )}
@@ -116,12 +125,34 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
 const Sidebar = ({ isMinimized }) => {
   const { user, logout, hasModule } = useAuth();
   const { logoUrl, loading: brandingLoading, colors } = useBranding();
+  const { pendingReviewCount, pendingApplicantsCount, pendingRequestsCount, setPendingReviewCount, setPendingApplicantsCount, setPendingRequestsCount } = useNotifications();
   const router = useRouter();
+  const [applicantsNotifCleared, setApplicantsNotifCleared] = useState(false);
+  const [reviewNotifCleared, setReviewNotifCleared] = useState(false);
+  const [requestsNotifCleared, setRequestsNotifCleared] = useState(false);
 
   const handleLogout = async () => {
     await logout();
     router.replace('/'); // Redirect is handled by AuthContext now, but good to have fallback.
   };
+
+  // Clear notifications when tabs are clicked
+  const segments = useSegments();
+  const isOnApplicantsPage = segments.includes('manage-applicants');
+  const isOnReviewPage = segments.includes('review-content');
+  const isOnRequestsPage = segments.includes('manage-requests');
+  
+  useEffect(() => {
+    if (isOnApplicantsPage && pendingApplicantsCount > 0) {
+      setApplicantsNotifCleared(true);
+    }
+    if (isOnReviewPage && pendingReviewCount > 0) {
+      setReviewNotifCleared(true);
+    }
+    if (isOnRequestsPage && pendingRequestsCount > 0) {
+      setRequestsNotifCleared(true);
+    }
+  }, [isOnApplicantsPage, isOnReviewPage, isOnRequestsPage, pendingApplicantsCount, pendingReviewCount, pendingRequestsCount]);
 
   return (
     <View style={[styles.sidebar, isMinimized && styles.sidebarMinimized, { backgroundColor: colors.primary || '#111827' }]} className="sidebar">
@@ -141,14 +172,14 @@ const Sidebar = ({ isMinimized }) => {
         >
           {hasModule('dashboard') && <SidebarLink href="/collab/dashboard" text="Dashboard" iconName="grid" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('create-content') && <SidebarLink href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
-          {hasModule('review-content') && <SidebarLink href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('review-content') && <SidebarLink href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} notificationCount={reviewNotifCleared ? 0 : pendingReviewCount} />}
           {hasModule('collaborate') && <SidebarLink href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('activity-monitor') && <SidebarLink href="/collab/activity-monitor" text="Activity Monitor" iconName="activity" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('branding') && <SidebarLink href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('forum') && <SidebarLink href="/collab/manage-forum" text="Manage Forum" iconName="message-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('folio') && <SidebarLink href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
-          {hasModule('applicants') && <SidebarLink href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
-          {hasModule('requests') && <SidebarLink href="/collab/manage-requests" text="Manage Requests" iconName="file-text" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('applicants') && <SidebarLink href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} notificationCount={applicantsNotifCleared ? 0 : pendingApplicantsCount} />}
+          {hasModule('requests') && <SidebarLink href="/collab/manage-requests" text="Manage Requests" iconName="file-text" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} notificationCount={requestsNotifCleared ? 0 : pendingRequestsCount} />}
           {hasModule('archives') && <SidebarLink href="/collab/archives" text="Archives" iconName="archive" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('manage-media') && <SidebarLink href="/collab/manage-media" text="Manage Media" iconName="folder" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {(user?.profile?.level === 2 || user?.profile?.level === 3) && (
@@ -162,14 +193,14 @@ const Sidebar = ({ isMinimized }) => {
             const links = [];
             if (hasModule('dashboard')) links.push(<SidebarLink key="dashboard" href="/collab/dashboard" text="Dashboard" iconName="grid" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('create-content')) links.push(<SidebarLink key="create-content" href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
-            if (hasModule('review-content')) links.push(<SidebarLink key="review-content" href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('review-content')) links.push(<SidebarLink key="review-content" href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} notificationCount={reviewNotifCleared ? 0 : pendingReviewCount} />);
             if (hasModule('collaborate')) links.push(<SidebarLink key="collaborate" href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('activity-monitor')) links.push(<SidebarLink key="activity-monitor" href="/collab/activity-monitor" text="Activity Monitor" iconName="activity" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('branding')) links.push(<SidebarLink key="branding" href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('forum')) links.push(<SidebarLink key="manage-forum" href="/collab/manage-forum" text="Manage Forum" iconName="message-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('folio')) links.push(<SidebarLink key="manage-folio" href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
-            if (hasModule('applicants')) links.push(<SidebarLink key="manage-applicants" href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
-            if (hasModule('requests')) links.push(<SidebarLink key="manage-requests" href="/collab/manage-requests" text="Manage Requests" iconName="file-text" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('applicants')) links.push(<SidebarLink key="manage-applicants" href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} notificationCount={applicantsNotifCleared ? 0 : pendingApplicantsCount} />);
+            if (hasModule('requests')) links.push(<SidebarLink key="manage-requests" href="/collab/manage-requests" text="Manage Requests" iconName="file-text" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} notificationCount={requestsNotifCleared ? 0 : pendingRequestsCount} />);
             if (hasModule('archives')) links.push(<SidebarLink key="archives" href="/collab/archives" text="Archives" iconName="archive" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('manage-media')) links.push(<SidebarLink key="manage-media" href="/collab/manage-media" text="Manage Media" iconName="folder" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (user?.profile?.level === 2 || user?.profile?.level === 3) links.push(<SidebarLink key="manage-users" href="/collab/manage-users" text="Manage Users" iconName="sliders" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
@@ -509,6 +540,44 @@ const styles = StyleSheet.create({
   },
   logoutTextHover: {
     color: '#FEE2E2', // Light red for logout text on hover
+  },
+  sidebarLinkTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  notificationBadge: {
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+    animation: 'pulse 2s infinite',
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '600',
+    textAlign: 'center',
+    includeFontPadding: false,
+    marginLeft: -1,
+    marginTop: -3,
+  },
+  '@keyframes pulse': {
+    '0%': {
+      transform: 'scale(1)',
+      opacity: 1,
+    },
+    '50%': {
+      transform: 'scale(1.1)',
+      opacity: 0.9,
+    },
+    '100%': {
+      transform: 'scale(1)',
+      opacity: 1,
+    },
   },
 
   contentContainer: {

@@ -19,6 +19,7 @@ export default function ManageRequestsScreen() {
   const [detailsModal, setDetailsModal] = useState({ visible: false, request: null });
   const [actionModal, setActionModal] = useState({ visible: false, request: null, action: null });
   const [processing, setProcessing] = useState(false);
+  const [requestType, setRequestType] = useState('coverage');
   const { colors } = useBranding();
 
   const fetchRequests = async () => {
@@ -27,13 +28,14 @@ export default function ManageRequestsScreen() {
       const list = res.data.data ?? res.data;
       // Ensure list is an array and filter out null items
       const validList = Array.isArray(list) ? list.filter(item => item != null) : [];
-      // Filter only coverage type contributions
-      const coverageRequests = validList.filter(item => item.category === 'coverage');
-      setRequests(coverageRequests);
-      setFilteredRequests(coverageRequests);
+      // Filter by request type
+      const categoryFilter = requestType === 'coverage' ? 'coverage' : 'documentation';
+      const filteredRequests = validList.filter(item => item.category === categoryFilter);
+      setRequests(filteredRequests);
+      setFilteredRequests(filteredRequests);
     } catch (err) {
-      console.error('Failed to load coverage requests', err);
-      setError('Failed to load coverage requests');
+      console.error(`Failed to load ${requestType} requests`, err);
+      setError(`Failed to load ${requestType} requests`);
     } finally {
       setLoading(false);
     }
@@ -117,6 +119,10 @@ export default function ManageRequestsScreen() {
 
   useEffect(() => {
     fetchRequests();
+  }, [requestType]);
+
+  useEffect(() => {
+    fetchRequests();
   }, []);
 
   const formatDate = (dateString) => {
@@ -151,7 +157,29 @@ export default function ManageRequestsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerContainer}>
-        <Text style={styles.title}>Manage Coverage Requests</Text>
+        <View>
+          <Text style={styles.title}>Manage {requestType === 'coverage' ? 'Coverage' : 'Document'} Requests</Text>
+        </View>
+        <View style={styles.headerButtons}>
+          <View style={styles.toggleContainer}>
+            <TouchableOpacity 
+              style={[styles.toggleButton, requestType === 'coverage' && styles.toggleButtonActive]}
+              onPress={() => setRequestType('coverage')}
+            >
+              <Text style={[styles.toggleButtonText, requestType === 'coverage' && styles.toggleButtonTextActive]}>
+                Coverage
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.toggleButton, requestType === 'document' && styles.toggleButtonActive]}
+              onPress={() => setRequestType('document')}
+            >
+              <Text style={[styles.toggleButtonText, requestType === 'document' && styles.toggleButtonTextActive]}>
+                Document
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
       
       {/* Filters and Search */}
@@ -452,6 +480,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: 19,
     paddingTop: 16,
     paddingBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 20,
+    padding: 2,
+    gap: 2,
+  },
+  toggleButton: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 80,
+  },
+  toggleButtonActive: {
+    backgroundColor: '#303F9F',
+    shadowColor: '#303F9F',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  toggleButtonTextActive: {
+    color: '#FFFFFF',
   },
   title: {
     fontSize: 28,

@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, useWindowDimensions, Modal, TextInput, FlatList, Dimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '~/context/AuthContext';
+import { useBranding } from '~/context/BrandingContext';
+import { useNotifications } from '~/context/NotificationContext';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../utils/api';
@@ -11,6 +13,8 @@ import { Picker } from '@react-native-picker/picker';
 // Simple Bar Chart Component with Tooltips
 const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
   const [tooltip, setTooltip] = useState(null);
+  const [hoveredBarIndex, setHoveredBarIndex] = useState(null);
+  const hoverTimeoutRef = useRef(null);
 
   if (!data || !data.datasets || !data.labels) return null;
 
@@ -19,21 +23,101 @@ const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
   const barWidth = (width - 40) / values.length;
   const chartHeight = height - 40;
 
+  // Calculate bar positions for mouse tracking
+  const barPositions = values.map((value, index) => ({
+    index,
+    x: 30 + index * barWidth,
+    y: 20 + (chartHeight - 40) - (value / maxValue) * (chartHeight - 40),
+    width: barWidth - 5,
+    height: (value / maxValue) * (chartHeight - 40)
+  }));
+
+  const handleMouseMove = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    // Find which bar the mouse is over
+    let hoveredIndex = null;
+    for (const bar of barPositions) {
+      if (mouseX >= bar.x && mouseX <= bar.x + bar.width &&
+          mouseY >= bar.y && mouseY <= bar.y + bar.height) {
+        hoveredIndex = bar.index;
+        break;
+      }
+    }
+
+    if (hoveredIndex !== hoveredBarIndex) {
+      // Clear any existing timeout
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+
+      if (hoveredIndex !== null) {
+        // Mouse entered a bar - show tooltip immediately
+        hoverTimeoutRef.current = setTimeout(() => {
+          const genre = data.labels[hoveredIndex];
+          const count = values[hoveredIndex];
+          const barHeight = (count / maxValue) * (chartHeight - 40);
+
+          // Position tooltip above the bar
+          const tooltipX = 30 + hoveredIndex * barWidth + (barWidth - 5) / 2;
+          const tooltipY = 20 + (chartHeight - 40) - barHeight - 10;
+
+          setTooltip({
+            x: tooltipX,
+            y: tooltipY,
+            genre: genre,
+            count: count,
+            label: `${genre}: ${count} views`
+          });
+          setHoveredBarIndex(hoveredIndex);
+        }, 0);
+      } else {
+        // Mouse left all bars - hide tooltip immediately
+        hoverTimeoutRef.current = setTimeout(() => {
+          setTooltip(null);
+          setHoveredBarIndex(null);
+        }, 0);
+      }
+    }
+  };
+
   const handleBarPress = (index) => {
     const genre = data.labels[index];
     const count = values[index];
 
     setTooltip({
-      x: 30 + index * barWidth + barWidth / 2,
-      y: 20 + (1 - count / maxValue) * (chartHeight - 40) - 10,
       genre: genre,
       count: count,
       label: `${genre}: ${count} views`
     });
   };
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
+
   return (
     <View style={{ position: 'relative' }}>
+      {/* Invisible overlay for mouse tracking */}
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: width,
+          height: height,
+          zIndex: 5,
+        }}
+        onMouseMove={handleMouseMove}
+      />
+
       <Svg width={width} height={height}>
         {/* Y-axis labels */}
         {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
@@ -44,7 +128,7 @@ const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
               key={i}
               x={10}
               y={y + 4}
-              fontSize="10"
+              fontSize="12"
               fill="#666"
               textAnchor="end"
             >
@@ -60,26 +144,15 @@ const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
           const y = 20 + (chartHeight - 40) - barHeight;
 
           return (
-            <TouchableOpacity
+            <Rect
               key={index}
-              onPress={() => handleBarPress(index)}
-              style={{
-                position: 'absolute',
-                left: x,
-                top: y,
-                width: barWidth - 5,
-                height: barHeight,
-              }}
-            >
-              <Rect
-                x={x}
-                y={y}
-                width={barWidth - 5}
-                height={barHeight}
-                fill="#4CAF50"
-                rx="2"
-              />
-            </TouchableOpacity>
+              x={x}
+              y={y}
+              width={barWidth - 5}
+              height={barHeight}
+              fill="#4CAF50"
+              rx="2"
+            />
           );
         })}
 
@@ -91,7 +164,7 @@ const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
               key={index}
               x={x}
               y={height - 5}
-              fontSize="8"
+              fontSize="12"
               fill="#666"
               textAnchor="middle"
             >
@@ -111,6 +184,7 @@ const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
           padding: 8,
           borderRadius: 4,
           minWidth: 120,
+          zIndex: 20,
         }}>
           <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
             {tooltip.genre}
@@ -118,12 +192,6 @@ const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
           <Text style={{ color: 'white', fontSize: 12 }}>
             {tooltip.count} total views
           </Text>
-          <TouchableOpacity
-            onPress={() => setTooltip(null)}
-            style={{ position: 'absolute', top: 2, right: 2 }}
-          >
-            <Text style={{ color: 'white', fontSize: 14 }}>×</Text>
-          </TouchableOpacity>
         </View>
       )}
 
@@ -184,19 +252,24 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
     }
   };
 
-  let currentAngle = -Math.PI / 2; // Start from top
+  const [hoveredSlice, setHoveredSlice] = useState(null);
 
-  const handleSlicePress = (index) => {
+  const handleSliceHover = (index) => {
     const item = filteredData[index];
-    const percentage = ((item.count / total) * 100).toFixed(1);
-
-    setTooltip({
+    
+    setHoveredSlice({
       name: item.name,
       count: item.count,
-      percentage: percentage,
-      label: `${item.name}: ${item.count} (${percentage}%)`
+      percentage: ((item.count / total) * 100).toFixed(1),
+      groups: item.groups || []
     });
   };
+
+  const handleSliceLeave = () => {
+    setHoveredSlice(null);
+  };
+
+  let currentAngle = -Math.PI / 2; // Start from top
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative' }}>
@@ -241,6 +314,9 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
               stroke="#fff"
               strokeWidth="1"
               onPress={() => handleSlicePress(index)}
+              onMouseEnter={() => handleSliceHover(index)}
+              onMouseLeave={handleSliceLeave}
+              style={{ cursor: 'pointer' }}
             />
           );
         })}
@@ -252,7 +328,9 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
           <TouchableOpacity
             key={index}
             onPress={() => handleSlicePress(index)}
-            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}
+            onMouseEnter={() => handleSliceHover(index)}
+            onMouseLeave={handleSliceLeave}
+            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, cursor: 'pointer' }}
           >
             <View
               style={{
@@ -271,30 +349,45 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
       </View>
 
       {/* Tooltip */}
-      {tooltip && (
+      {(tooltip || hoveredSlice) && (
         <View style={{
           position: 'absolute',
           right: 0,
           top: '50%',
           transform: [{ translateY: -25 }],
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          padding: 8,
-          borderRadius: 4,
-          minWidth: 140,
+          backgroundColor: 'rgba(0,0,0,0.9)',
+          padding: 12,
+          borderRadius: 6,
+          minWidth: 200,
+          maxWidth: 300,
           zIndex: 3,
         }}>
-          <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
-            {tooltip.name}
+          <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
+            {(hoveredSlice || tooltip).name} Projects
           </Text>
-          <Text style={{ color: 'white', fontSize: 12 }}>
-            {tooltip.count} projects ({tooltip.percentage}%)
+          <Text style={{ color: 'white', fontSize: 12, marginBottom: 8 }}>
+            Count: {(hoveredSlice || tooltip).count} ({(hoveredSlice || tooltip).percentage}%)
           </Text>
-          <TouchableOpacity
-            onPress={() => setTooltip(null)}
-            style={{ position: 'absolute', top: 2, right: 2 }}
-          >
-            <Text style={{ color: 'white', fontSize: 14 }}>×</Text>
-          </TouchableOpacity>
+          {(hoveredSlice || tooltip).groups && (hoveredSlice || tooltip).groups.length > 0 && (
+            <View>
+              <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold', marginBottom: 4 }}>
+                Projects:
+              </Text>
+              {(hoveredSlice || tooltip).groups.map((groupName, idx) => (
+                <Text key={idx} style={{ color: 'white', fontSize: 11, marginLeft: 8, marginBottom: 2 }}>
+                  • {groupName}
+                </Text>
+              ))}
+            </View>
+          )}
+          {tooltip && (
+            <TouchableOpacity
+              onPress={() => setTooltip(null)}
+              style={{ position: 'absolute', top: 4, right: 4 }}
+            >
+              <Text style={{ color: 'white', fontSize: 16 }}>×</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
@@ -304,35 +397,62 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
 // Simple Line Chart Component with Tooltips
 const SimpleLineChart = ({ data, width = 300, height = 200 }) => {
   const [tooltip, setTooltip] = useState(null);
-  const [touchablePoints, setTouchablePoints] = useState([]);
+  const [hoveredPoint, setHoveredPoint] = useState(null);
 
-  if (!data || !data.datasets || !data.labels) return null;
+  // Calculate distance between two points
+  const getDistance = (x1, y1, x2, y2) => {
+    return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+  };
+
+  // Track which point is currently being hovered
+  const [activePointIndex, setActivePointIndex] = useState(null);
+
+  const hoverTimeoutRef = useRef(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Handle mouse movement on the chart area to check distance from active point
+  const handleMouseMove = (event) => {
+    if (activePointIndex !== null && points[activePointIndex]) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+      
+      const activePoint = points[activePointIndex];
+      const distance = getDistance(mouseX, mouseY, activePoint.x, activePoint.y);
+      
+      // Hide tooltip if mouse moves beyond 35 pixel radius from data point
+      if (distance > 35) {
+        if (hoverTimeoutRef.current) {
+          clearTimeout(hoverTimeoutRef.current);
+        }
+        
+        hoverTimeoutRef.current = setTimeout(() => {
+          setHoveredPoint(null);
+          setActivePointIndex(null);
+        }, 150); // Increased delay to 150ms for more forgiveness
+      } else {
+        // Mouse is still within radius, cancel any pending hide
+        if (hoverTimeoutRef.current) {
+          clearTimeout(hoverTimeoutRef.current);
+          hoverTimeoutRef.current = null;
+        }
+      }
+    }
+  };
 
   const values = data.datasets[0].data;
   const maxValue = Math.max(...values);
   const chartWidth = width - 40;
   const chartHeight = height - 40;
   const stepX = chartWidth / (values.length - 1);
-
-  const handlePointPress = (index) => {
-    const date = new Date(data.labels[index]);
-    const formattedDate = date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-    const count = values[index];
-    const groupNames = data.datasets[0].group_names ? data.datasets[0].group_names[index] || [] : [];
-
-    setTooltip({
-      x: 20 + index * stepX,
-      y: 20 + (1 - count / maxValue) * (chartHeight - 40),
-      date: formattedDate,
-      count: count,
-      groupNames: groupNames,
-      label: `Submissions: ${count}`
-    });
-  };
 
   // Calculate touchable points for positioning
   const points = values.map((value, index) => ({
@@ -341,26 +461,100 @@ const SimpleLineChart = ({ data, width = 300, height = 200 }) => {
     index
   }));
 
+  const handlePointHover = (index) => {
+    // Clear any existing timeout
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+
+    // Set active point
+    setActivePointIndex(index);
+
+    // Set new timeout to show tooltip after 50ms delay
+    hoverTimeoutRef.current = setTimeout(() => {
+      const date = new Date(data.labels[index]);
+      const formattedDate = date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+      const count = values[index];
+      const groupNames = data.datasets[0].group_names ? data.datasets[0].group_names[index] || [] : [];
+
+      setHoveredPoint({
+        x: 20 + index * stepX,
+        y: 20 + (1 - count / maxValue) * (chartHeight - 40),
+        date: formattedDate,
+        count: count,
+        groupNames: groupNames,
+        label: `Submissions: ${count}`
+      });
+    }, 50);
+  };
+
+  const handlePointLeave = () => {
+    // Don't hide immediately - the distance tracking will handle it
+    // Just clear any existing timeout to avoid conflicts
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+  };
+
   return (
-    <View style={{ position: 'relative' }}>
+    <View 
+      style={{ position: 'relative' }}
+      onMouseLeave={() => {
+        // Hide tooltip immediately when mouse leaves the chart area
+        if (hoverTimeoutRef.current) {
+          clearTimeout(hoverTimeoutRef.current);
+        }
+        setHoveredPoint(null);
+        setActivePointIndex(null);
+      }}
+    >
+      {/* Invisible overlay for mouse movement tracking */}
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: width,
+          height: height,
+          zIndex: 5,
+        }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => {
+          // Hide tooltip immediately when mouse leaves the overlay
+          if (hoverTimeoutRef.current) {
+            clearTimeout(hoverTimeoutRef.current);
+          }
+          setHoveredPoint(null);
+          setActivePointIndex(null);
+        }}
+      />
+      
       {/* Touchable points positioned absolutely */}
       {points.map((point) => (
         <TouchableOpacity
           key={`point-${point.index}`}
           onPress={() => handlePointPress(point.index)}
+          onMouseEnter={() => handlePointHover(point.index)}
+          onMouseLeave={handlePointLeave}
           style={{
             position: 'absolute',
-            left: point.x - 8,
-            top: point.y - 8,
-            width: 16,
-            height: 16,
-            borderRadius: 8,
-            zIndex: 10,
+            left: point.x - 12,
+            top: point.y - 12,
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            zIndex: 15,
+            cursor: 'pointer',
           }}
         />
       ))}
 
-      <Svg width={width} height={height}>
+      <Svg width={width} height={height} style={{ zIndex: 10 }}>
         {/* Grid lines */}
         {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
           const y = 20 + ratio * (chartHeight - 40);
@@ -443,42 +637,54 @@ const SimpleLineChart = ({ data, width = 300, height = 200 }) => {
       </Svg>
 
       {/* Tooltip */}
-      {tooltip && (
-        <View style={{
-          position: 'absolute',
-          left: tooltip.x - 50,
-          top: tooltip.y - 40,
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          padding: 8,
-          borderRadius: 4,
-          minWidth: 120,
-          zIndex: 20,
-        }}>
+      {(tooltip || hoveredPoint) && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            left: (hoveredPoint || tooltip).x - 50,
+            top: (hoveredPoint || tooltip).y - 40,
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            padding: 8,
+            borderRadius: 4,
+            minWidth: 120,
+            zIndex: 20,
+          }}
+          onMouseLeave={() => {
+            // Hide tooltip when mouse leaves the tooltip itself
+            if (hoverTimeoutRef.current) {
+              clearTimeout(hoverTimeoutRef.current);
+            }
+            setHoveredPoint(null);
+            setActivePointIndex(null);
+          }}
+        >
           <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
-            {tooltip.date}
+            {(hoveredPoint || tooltip).date}
           </Text>
           <Text style={{ color: 'white', fontSize: 12 }}>
-            {tooltip.label}
+            {(hoveredPoint || tooltip).label}
           </Text>
-          {tooltip.groupNames && tooltip.groupNames.length > 0 && (
+          {(hoveredPoint || tooltip).groupNames && (hoveredPoint || tooltip).groupNames.length > 0 && (
             <View style={{ marginTop: 4 }}>
               <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>
                 Projects:
               </Text>
-              {tooltip.groupNames.map((name, idx) => (
+              {(hoveredPoint || tooltip).groupNames.map((name, idx) => (
                 <Text key={idx} style={{ color: 'white', fontSize: 10, marginLeft: 8 }}>
                   • {name}
                 </Text>
               ))}
             </View>
           )}
-          <TouchableOpacity
-            onPress={() => setTooltip(null)}
-            style={{ position: 'absolute', top: 2, right: 2 }}
-          >
-            <Text style={{ color: 'white', fontSize: 14 }}>×</Text>
-          </TouchableOpacity>
-        </View>
+          {tooltip && (
+            <TouchableOpacity
+              onPress={() => setTooltip(null)}
+              style={{ position: 'absolute', top: 2, right: 2 }}
+            >
+              <Text style={{ color: 'white', fontSize: 14 }}>×</Text>
+            </TouchableOpacity>
+          )}
+        </TouchableOpacity>
       )}
 
       {/* Invisible overlay to dismiss tooltip */}
@@ -557,6 +763,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const { pendingReviewCount, pendingApplicantsCount, pendingRequestsCount, setPendingReviewCount, setPendingApplicantsCount, setPendingRequestsCount } = useNotifications();
   const [stats, setStats] = useState([
     { title: "In Review", value: "0", iconName: "file-text", color: "#FFA726" },
     { title: "Approved", value: "0", iconName: "check-square", color: "#66BB6A" },
@@ -587,6 +794,11 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
   const [showMyWorkingHours, setShowMyWorkingHours] = useState(false);
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [showEditHoursModal, setShowEditHoursModal] = useState(false);
+
+  // Dashboard notification visibility state (separate from sidebar badges)
+  const [showReviewNotification, setShowReviewNotification] = useState(true);
+  const [showApplicantsNotification, setShowApplicantsNotification] = useState(true);
+  const [showRequestsNotification, setShowRequestsNotification] = useState(true);
 
   const handleLogout = () => {
     logout();
@@ -864,6 +1076,80 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
 
   return (
     <View style={{ flex: 1 }}>
+      {/* Notification Popups */}
+      {(pendingReviewCount > 0 || pendingApplicantsCount > 0 || pendingRequestsCount > 0) && (
+        <View style={styles.notificationsContainer}>
+          {pendingReviewCount > 0 && (
+            <View style={[styles.notificationPopup, styles.reviewNotification]}>
+              <TouchableOpacity 
+                style={styles.notificationContent}
+                onPress={() => router.push('/collab/review-content')}
+              >
+                <Feather name="eye" size={20} color="#FFF" />
+                <View style={styles.notificationTextContainer}>
+                  <Text style={styles.notificationTitle}>Review Content</Text>
+                  <Text style={styles.notificationMessage}>
+                    {pendingReviewCount} item{pendingReviewCount > 1 ? 's' : ''} awaiting review
+                  </Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.notificationClose}
+                  onPress={() => setPendingReviewCount(0)}
+                >
+                  <Text style={styles.notificationCloseText}>×</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {pendingApplicantsCount > 0 && (
+            <View style={[styles.notificationPopup, styles.applicantNotification]}>
+              <TouchableOpacity 
+                style={styles.notificationContent}
+                onPress={() => router.push('/collab/manage-applicants')}
+              >
+                <Feather name="users" size={20} color="#FFF" />
+                <View style={styles.notificationTextContainer}>
+                  <Text style={styles.notificationTitle}>Manage Applicants</Text>
+                  <Text style={styles.notificationMessage}>
+                    {pendingApplicantsCount} pending applicant{pendingApplicantsCount > 1 ? 's' : ''}
+                  </Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.notificationClose}
+                  onPress={() => setPendingApplicantsCount(0)}
+                >
+                  <Text style={styles.notificationCloseText}>×</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {pendingRequestsCount > 0 && (
+            <View style={[styles.notificationPopup, styles.requestNotification]}>
+              <TouchableOpacity 
+                style={styles.notificationContent}
+                onPress={() => router.push('/collab/manage-requests')}
+              >
+                <Feather name="file-text" size={20} color="#FFF" />
+                <View style={styles.notificationTextContainer}>
+                  <Text style={styles.notificationTitle}>Manage Requests</Text>
+                  <Text style={styles.notificationMessage}>
+                    {pendingRequestsCount} pending request{pendingRequestsCount > 1 ? 's' : ''}
+                  </Text>
+                </View>
+                <TouchableOpacity 
+                  style={styles.notificationClose}
+                  onPress={() => setPendingRequestsCount(0)}
+                >
+                  <Text style={styles.notificationCloseText}>×</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      )}
+
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.header}>
           <View>
@@ -1025,7 +1311,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
           
           {/* Content Submissions Over Time */}
           <View style={styles.chartContainer}>
-            <Text style={styles.chartTitle}>Content Submissions (Last 30 Days)</Text>
+            <Text style={styles.chartTitle}>Content Submissions (Last 20 Days)</Text>
             {loadingGraphs ? (
               <View style={styles.loadingContainer}>
                 <Text>Loading chart data...</Text>
@@ -1055,10 +1341,12 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
 
         <View style={styles.sectionContainer}>
           
-          <View style={[styles.chartsGrid, isMobile && styles.mobileChartsGrid]}>
-            
-            {/* Group Chat Status Distribution */}
-            <View style={styles.chartContainer}>
+          <View style={[styles.chartsGrid, isMobile && styles.mobileChartsGrid, { flexDirection: isMobile ? 'column' : 'row', marginHorizontal: 0 }]}>
+            {/* Project Status */}
+            <View style={[styles.chartContainer, { 
+              width: isMobile ? width - 48 : Math.floor((width - 370 - 20) / 2),
+              marginRight: isMobile ? 0 : 10
+            }]}>
               <Text style={styles.chartTitle}>Project Status</Text>
               {loadingGraphs ? (
                 <View style={styles.loadingContainer}>
@@ -1069,15 +1357,18 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
                   const pieData = [
                     {
                       name: 'Pending',
-                      count: graphData.group_chat_status.pending || 0,
+                      count: graphData.group_chat_status.pending?.count || 0,
+                      groups: graphData.group_chat_status.pending?.groups || []
                     },
                     {
                       name: 'In Review',
-                      count: graphData.group_chat_status.in_review || 0,
+                      count: graphData.group_chat_status.review?.count || 0,
+                      groups: graphData.group_chat_status.review?.groups || []
                     },
                     {
                       name: 'Approved',
-                      count: graphData.group_chat_status.approved || 0,
+                      count: graphData.group_chat_status.approved?.count || 0,
+                      groups: graphData.group_chat_status.approved?.groups || []
                     }
                   ].filter(item => item.count > 0);
                   
@@ -1087,7 +1378,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
                   return (
                     <SimplePieChart
                       data={pieData}
-                      width={isMobile ? width - 48 : 350}
+                      width={isMobile ? width - 48 : Math.floor((width - 370 - 20) / 2)}
                       height={200}
                     />
                   );
@@ -1100,7 +1391,10 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
             </View>
 
             {/* Most Viewed Articles by Genre */}
-            <View style={styles.chartContainer}>
+            <View style={[styles.chartContainer, { 
+              width: isMobile ? width - 48 : Math.floor((width - 370 - 20) / 2),
+              marginLeft: isMobile ? 0 : 10
+            }]}>
               <Text style={styles.chartTitle}>Most Viewed by Genre</Text>
               {loadingGraphs ? (
                 <View style={styles.loadingContainer}>
@@ -1114,7 +1408,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
                       data: graphData.article_publications.map(item => item.count)
                     }]
                   }}
-                  width={isMobile ? width - 32 : 534} // Bigger width for most viewed by genre
+                  width={isMobile ? width - 48 : Math.floor((width - 370 - 20) / 2)}
                   height={200}
                 />
               ) : (
@@ -2738,5 +3032,64 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  // Notification Popup Styles
+  notificationsContainer: {
+    position: 'absolute',
+    top: 100,
+    right: 24,
+    zIndex: 1000,
+    gap: 12,
+  },
+  notificationPopup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    minWidth: 280,
+    maxWidth: 320,
+  },
+  reviewNotification: {
+    backgroundColor: '#FFA726',
+  },
+  applicantNotification: {
+    backgroundColor: '#EF5350',
+  },
+  requestNotification: {
+    backgroundColor: '#42A5F5',
+  },
+  notificationContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  notificationTextContainer: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  notificationTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  notificationMessage: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    opacity: 0.9,
+  },
+  notificationClose: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  notificationCloseText: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: 'bold',
   },
 });
