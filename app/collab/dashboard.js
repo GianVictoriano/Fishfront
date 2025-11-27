@@ -308,12 +308,14 @@ const SimpleLineChart = ({ data, width = 300, height = 200 }) => {
       year: 'numeric'
     });
     const count = values[index];
+    const groupNames = data.datasets[0].group_names ? data.datasets[0].group_names[index] || [] : [];
 
     setTooltip({
       x: 20 + index * stepX,
       y: 20 + (1 - count / maxValue) * (chartHeight - 40),
       date: formattedDate,
       count: count,
+      groupNames: groupNames,
       label: `Submissions: ${count}`
     });
   };
@@ -444,6 +446,18 @@ const SimpleLineChart = ({ data, width = 300, height = 200 }) => {
           <Text style={{ color: 'white', fontSize: 12 }}>
             {tooltip.label}
           </Text>
+          {tooltip.groupNames && tooltip.groupNames.length > 0 && (
+            <View style={{ marginTop: 4 }}>
+              <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>
+                Projects:
+              </Text>
+              {tooltip.groupNames.map((name, idx) => (
+                <Text key={idx} style={{ color: 'white', fontSize: 10, marginLeft: 8 }}>
+                  • {name}
+                </Text>
+              ))}
+            </View>
+          )}
           <TouchableOpacity
             onPress={() => setTooltip(null)}
             style={{ position: 'absolute', top: 2, right: 2 }}
@@ -566,9 +580,11 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
   };
 
   const fetchGraphData = async () => {
+    console.log('fetchGraphData called');
     try {
       setLoadingGraphs(true);
       
+      console.log('Making API call to /graph-data?period=20');
       const response = await apiClient.get('/graph-data?period=20')
         .then(response => {
           console.log('Graph data response:', response.data);
@@ -578,6 +594,8 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
         })
         .catch(error => {
           console.error('Error fetching graph data:', error);
+          console.error('Error response:', error.response);
+          console.error('Error status:', error.response?.status);
           setLoadingGraphs(false);
         });
     } catch (error) {
@@ -1007,6 +1025,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
                   }),
                   datasets: [{
                     data: graphData.content_submissions.map(item => item.count),
+                    group_names: graphData.content_submissions.map(item => item.group_names || [])
                   }]
                 }}
                 width={isMobile ? width - 48 : width - 370} // Use full screen width without 800px limit
