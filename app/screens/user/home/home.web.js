@@ -61,6 +61,12 @@ const HomeScreen = () => {
   const [featuredData, setFeaturedData] = useState([]);
   const [genreData, setGenreData] = useState({});
 
+  // Helper function to strip HTML tags from content
+  const stripHtmlTags = (html) => {
+    if (!html) return '';
+    return html.replace(/<[^>]*>/g, '').trim();
+  };
+
   useEffect(() => {
     fetchArticlesByCategory();
     fetchApplicationPeriod();
@@ -124,7 +130,7 @@ const HomeScreen = () => {
         const mapped = response.data.data.slice(0, 3).map(article => ({
           id: article.id?.toString() || '',
           title: article.title,
-          excerpt: article.excerpt || '',
+          content: article.content || '',
           image: article.image_path
             ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.image_path.replace('public/', '')}` 
             : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
@@ -224,7 +230,7 @@ const HomeScreen = () => {
           categoryData[category].push({
             id: article.id?.toString() || '',
             title: article.title || 'Untitled Article',
-            summary: '', // Removed content display
+            summary: article.excerpt || article.content || 'No summary available',
             image: article.media && article.media.length > 0 
               ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`
               : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
@@ -372,7 +378,7 @@ const HomeScreen = () => {
                         </div>
                         <div style={styles.publicationContent}>
                           <h3 style={styles.publicationTitle} data-title>{article.title}</h3>
-                          <p style={styles.publicationSummary}>{article.excerpt}</p>
+                          <p style={styles.publicationSummary}>{stripHtmlTags(article.content) || 'No content available'}</p>
                           <div style={styles.articleMeta}>
                             <div style={styles.metaItem}>
                               <MaterialIcons name="schedule" size={14} color="#64748b" style={styles.metaIcon} />
@@ -393,6 +399,7 @@ const HomeScreen = () => {
                           <React.Fragment>
                             <div style={styles.publicationContent}>
                               <h3 style={{...styles.publicationTitle, textAlign: 'right'}} data-title>{article.title}</h3>
+                              <p style={{...styles.publicationSummary, textAlign: 'right'}}>{stripHtmlTags(article.content) || 'No content available'}</p>
                               <div style={{...styles.articleMeta, justifyContent: 'flex-end'}}>
                                 <div style={{...styles.metaItem, justifyContent: 'flex-end', textAlign: 'right', width: '100%'}}>
                                   <MaterialIcons name="schedule" size={14} color="#64748b" style={styles.metaIcon} />
@@ -481,7 +488,7 @@ const HomeScreen = () => {
                             </div>
                             <div style={styles.publicationContent}>
                               <h3 style={styles.publicationTitle} data-title>{article.title}</h3>
-                              <p style={styles.publicationSummary}>{article.excerpt}</p>
+                              <p style={styles.publicationSummary}>{stripHtmlTags(article.content) || 'No content available'}</p>
                               <div style={styles.articleMeta}>
                                 <div style={styles.metaItem}>
                                   <MaterialIcons name="schedule" size={14} color="#64748b" style={styles.metaIcon} />
@@ -755,12 +762,21 @@ const styles = StyleSheet.create({
     minHeight: '100vh',
     display: 'flex',
     flexDirection: 'column',
+    overflowY: 'auto',
     overflowX: 'hidden',
     position: 'relative',
+    scrollbarWidth: 'none', // Firefox
+    '&::-webkit-scrollbar': {
+      display: 'none', // Chrome, Safari, Edge
+    },
   },
   navbarContainer: {
-    position: 'relative',
-    zIndex: 1000, // Ensure navbar is above other elements
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    width: '100%',
+    zIndex: 1000,
   },
   hero: {
     minHeight: '85vh',
@@ -768,7 +784,7 @@ const styles = StyleSheet.create({
     width: '100%',
     flexShrink: 0,
     zIndex: 1, // Ensure hero is below navbar
-    marginTop: '0',
+    marginTop: '30px',
   },
   heroImage: {
     width: '100%',
