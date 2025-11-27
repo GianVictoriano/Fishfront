@@ -170,6 +170,20 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
 
   const colors = ['#FF5722', '#FF9800', '#4CAF50', '#2196F3', '#9C27B0'];
 
+  // Color mapping for status types
+  const getStatusColor = (statusName) => {
+    switch (statusName.toLowerCase()) {
+      case 'pending':
+        return '#FF5722'; // Red
+      case 'in review':
+        return '#FF9800'; // Orange
+      case 'approved':
+        return '#4CAF50'; // Green
+      default:
+        return colors[0]; // Fallback
+    }
+  };
+
   let currentAngle = -Math.PI / 2; // Start from top
 
   const handleSlicePress = (index) => {
@@ -223,7 +237,7 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
             <Path
               key={index}
               d={pathData}
-              fill={colors[index % colors.length]}
+              fill={getStatusColor(item.name)}
               stroke="#fff"
               strokeWidth="1"
               onPress={() => handleSlicePress(index)}
@@ -244,7 +258,7 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
               style={{
                 width: 12,
                 height: 12,
-                backgroundColor: colors[index % colors.length],
+                backgroundColor: getStatusColor(item.name),
                 marginRight: 8,
                 borderRadius: 2
               }}
@@ -1051,8 +1065,8 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
                   <Text>Loading...</Text>
                 </View>
               ) : graphData && graphData.group_chat_status ? (
-                <SimplePieChart
-                  data={[
+                (() => {
+                  const pieData = [
                     {
                       name: 'Pending',
                       count: graphData.group_chat_status.pending || 0,
@@ -1065,10 +1079,19 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
                       name: 'Approved',
                       count: graphData.group_chat_status.approved || 0,
                     }
-                  ].filter(item => item.count > 0)}
-                  width={isMobile ? width - 48 : 350}
-                  height={200}
-                />
+                  ].filter(item => item.count > 0);
+                  
+                  console.log('Pie chart data:', pieData);
+                  console.log('Raw group_chat_status:', graphData.group_chat_status);
+                  
+                  return (
+                    <SimplePieChart
+                      data={pieData}
+                      width={isMobile ? width - 48 : 350}
+                      height={200}
+                    />
+                  );
+                })()
               ) : (
                 <View style={styles.noDataContainer}>
                   <Text style={styles.noDataText}>No status data</Text>
