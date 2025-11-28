@@ -1207,6 +1207,75 @@ export default function NewsScreen() {
   const isMobile = screenWidth <= 700;
   const isTinyScreen = screenWidth < 380;
 
+  // Read genre from URL query parameters and set active genre
+  useEffect(() => {
+    console.log('🔍 News page - router.query:', router.query);
+    console.log('🔍 News page - current activeGenre:', activeGenre);
+    
+    // Debug: Show the actual URL
+    if (typeof window !== 'undefined' && window.location) {
+      console.log('🔍 Current URL:', window.location.href);
+      console.log('🔍 URL search:', window.location.search);
+    }
+    
+    // Clear any existing localStorage cache that might interfere
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.removeItem('activeGenre');
+        console.log('🔍 Cleared activeGenre from localStorage');
+      }
+    } catch (error) {
+      console.log('Error clearing localStorage:', error);
+    }
+    
+    let genreFromQuery = null;
+    
+    // Try to get genre from router.query first
+    if (router.query?.genre) {
+      genreFromQuery = router.query.genre;
+      console.log('🔍 Found genre from router.query:', genreFromQuery);
+    } else {
+      // Fallback to window.location for web
+      if (typeof window !== 'undefined' && window.location) {
+        const urlParams = new URLSearchParams(window.location.search);
+        genreFromQuery = urlParams.get('genre');
+        console.log('🔍 Found genre from window.location:', genreFromQuery);
+      }
+    }
+    
+    if (genreFromQuery) {
+      console.log('🔍 Final genre from URL:', genreFromQuery);
+      
+      // Map home page genres to NewsNavbar sections
+      const genreMapping = {
+        'articles': 'Articles',
+        'sports': 'Sports', 
+        'opinion': 'Opinion',
+        'editorial': 'Editorial',
+        'creative': 'Creative',
+        'literary': 'Literary Works',
+        'featured': 'Featured',
+        'news': 'News'
+      };
+      
+      const mappedGenre = genreMapping[genreFromQuery.toLowerCase()];
+      console.log('🔍 Mapped genre:', mappedGenre);
+      
+      // Only set if it's a valid genre that exists in NewsNavbar
+      const validGenres = ['Featured', 'News', 'Articles', 'Opinion', 'Sports', 'Editorial', 'Creative', 'Literary Works'];
+      
+      if (mappedGenre && validGenres.includes(mappedGenre)) {
+        // Force set the genre from URL parameter with a delay
+        setTimeout(() => {
+          console.log('🔍 Force setting activeGenre to:', mappedGenre);
+          setActiveGenre(mappedGenre);
+        }, 100);
+      }
+    } else {
+      console.log('🔍 No genre parameter found in URL');
+    }
+  }, [router.query?.genre, setActiveGenre, activeGenre]);
+
   // Fetch News/genre data whenever the active genre changes
   useEffect(() => {
     const fetchInitialNewsData = async () => {

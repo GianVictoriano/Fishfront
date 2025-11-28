@@ -32,6 +32,9 @@ const Forum = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortOption, setSortOption] = useState('date_desc');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [dateFilterEnabled, setDateFilterEnabled] = useState(false);
   const [showNewTopicForm, setShowNewTopicForm] = useState(false);
   const [newTopic, setNewTopic] = useState({
     title: '',
@@ -130,6 +133,22 @@ const Forum = () => {
       const lower = searchQuery.trim().toLowerCase();
       filtered = filtered.filter(t => t.title.toLowerCase().includes(lower));
     }
+    if (dateFilterEnabled && (startDate || endDate)) {
+      filtered = filtered.filter(t => {
+        const topicDate = new Date(t.created_at).toISOString().split('T')[0];
+        const start = startDate ? new Date(startDate).toISOString().split('T')[0] : null;
+        const end = endDate ? new Date(endDate).toISOString().split('T')[0] : null;
+        
+        if (start && end) {
+          return topicDate >= start && topicDate <= end;
+        } else if (start) {
+          return topicDate >= start;
+        } else if (end) {
+          return topicDate <= end;
+        }
+        return true;
+      });
+    }
     
     const sorted = [...filtered];
     if (sortOption === 'date_desc') {
@@ -142,7 +161,7 @@ const Forum = () => {
       sorted.sort((a, b) => b.title.localeCompare(a.title));
     }
     setFilteredTopics(sorted);
-  }, [topics, searchQuery, selectedCategory, sortOption]);
+  }, [topics, searchQuery, selectedCategory, sortOption, dateFilterEnabled, startDate, endDate]);
 
   const fetchTopics = async () => {
     try {
@@ -256,19 +275,32 @@ const Forum = () => {
         </View>
       </View>
       <View style={styles.sidebarSection}>
-        <Text style={styles.sidebarTitle}>Categories</Text>
-        <View style={styles.dropdownContainer}>
-          <select
-            value={selectedCategory}
-            onChange={e => setSelectedCategory(e.target.value)}
-            style={styles.dropdown}
-          >
-            <option value="All">All</option>
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
+        <Text style={styles.sidebarTitle}>Date Filter</Text>
+        <View style={styles.checkboxContainer}>
+          <input
+            type="checkbox"
+            checked={dateFilterEnabled}
+            onChange={(e) => setDateFilterEnabled(e.target.checked)}
+            style={styles.checkbox}
+          />
+          <Text style={styles.checkboxLabel}>Enable date filtering</Text>
         </View>
+        {dateFilterEnabled && (
+          <View style={styles.dateInputsContainer}>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              style={styles.dateInput}
+            />
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              style={styles.dateInput}
+            />
+          </View>
+        )}
       </View>
     </View>
   );
@@ -1359,6 +1391,33 @@ const styles = StyleSheet.create({
   },
   topicMetaContainer: {
     marginBottom: 8,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  checkbox: {
+    marginRight: 8,
+    width: 16,
+    height: 16,
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: '#333',
+  },
+  dateInputsContainer: {
+    marginTop: 8,
+  },
+  dateInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 4,
+    padding: 8,
+    marginBottom: 8,
+    fontSize: 14,
+    backgroundColor: '#fff',
+    width: '100%',
   },
   topicBody: {
     fontSize: 14,

@@ -61,6 +61,12 @@ const HomeScreen = () => {
   const [featuredData, setFeaturedData] = useState([]);
   const [genreData, setGenreData] = useState({});
 
+  // Helper function to strip HTML tags from content
+  const stripHtmlTags = (html) => {
+    if (!html) return '';
+    return html.replace(/<[^>]*>/g, '').trim();
+  };
+
   useEffect(() => {
     fetchArticlesByCategory();
     fetchApplicationPeriod();
@@ -124,7 +130,7 @@ const HomeScreen = () => {
         const mapped = response.data.data.slice(0, 3).map(article => ({
           id: article.id?.toString() || '',
           title: article.title,
-          excerpt: article.excerpt || '',
+          content: article.content || '',
           image: article.image_path
             ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.image_path.replace('public/', '')}` 
             : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
@@ -152,69 +158,11 @@ const HomeScreen = () => {
       
       const allArticles = response.data.data;
       const categoryData = {};
-      const genreData = {};
       
       // Initialize each category with an empty array
       CATEGORIES.forEach(category => {
         categoryData[category] = [];
       });
-      
-      // Initialize each genre with an empty array
-      GENRES.forEach(genre => {
-        genreData[genre] = [];
-      });
-      
-      // Categorize articles by their genre for the genre section
-      allArticles.forEach(article => {
-        const genre = article.genre?.toLowerCase();
-        if (GENRES.includes(genre) && genreData[genre].length < 1) { // Only take the latest (first) article per genre
-          let dummyImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070'; // Default dummy image
-          
-          // Use specific dummy images for each genre
-          if (genre === 'articles') {
-            dummyImage = 'https://images.unsplash.com/photo-1586339949216-35c2747cc36d?q=80&w=2070&auto=format&fit=crop';
-          } else if (genre === 'sports') {
-            dummyImage = 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=2070&auto=format&fit=crop';
-          } else if (genre === 'opinion') {
-            dummyImage = 'https://images.unsplash.com/photo-1504711331083-9c895941bf81?q=80&w=2070&auto=format&fit=crop';
-          } else if (genre === 'editorial') {
-            dummyImage = 'https://images.unsplash.com/photo-1455390582262-044cdead277a?q=80&w=2070&auto=format&fit=crop';
-          }
-          
-          genreData[genre].push({
-            id: article.id?.toString() || '',
-            title: article.title || 'Untitled Article',
-            image: dummyImage,
-            link: `news/article/${article.slug || article.id}`,
-            genre: article.genre,
-            published_at: article.published_at
-          });
-        }
-      });
-      
-      // Add dummy entry for creative genre if no articles exist
-      if (!genreData['creative'] || genreData['creative'].length === 0) {
-        genreData['creative'] = [{
-          id: 'creative-dummy',
-          title: 'Creative Works',
-          image: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?q=80&w=2070&auto=format&fit=crop',
-          link: '/news?genre=creative',
-          genre: 'creative',
-          published_at: new Date().toISOString()
-        }];
-      }
-      
-      // Add dummy entry for literary genre if no articles exist
-      if (!genreData['literary'] || genreData['literary'].length === 0) {
-        genreData['literary'] = [{
-          id: 'literary-dummy',
-          title: 'Literary Works',
-          image: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?q=80&w=2070&auto=format&fit=crop',
-          link: '/news?genre=literary',
-          genre: 'literary',
-          published_at: new Date().toISOString()
-        }];
-      }
       
       // Categorize articles by their genre (legacy for News category)
       allArticles.forEach(article => {
@@ -224,7 +172,7 @@ const HomeScreen = () => {
           categoryData[category].push({
             id: article.id?.toString() || '',
             title: article.title || 'Untitled Article',
-            summary: '', // Removed content display
+            summary: article.excerpt || article.content || 'No summary available',
             image: article.media && article.media.length > 0 
               ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`
               : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
@@ -236,7 +184,60 @@ const HomeScreen = () => {
       });
       
       setPublications(categoryData);
-      setGenreData(genreData);
+      
+      // Set static genre data - no longer fetched from database
+      const staticGenreData = {
+        'articles': [{
+          id: 'articles-static',
+          title: 'Articles',
+          image: 'https://images.unsplash.com/photo-1586339949216-35c2747cc36d?q=80&w=2070&auto=format&fit=crop',
+          link: '/news?genre=articles',
+          genre: 'articles',
+          published_at: new Date().toISOString()
+        }],
+        'sports': [{
+          id: 'sports-static',
+          title: 'Sports',
+          image: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?q=80&w=2070&auto=format&fit=crop',
+          link: '/news?genre=sports',
+          genre: 'sports',
+          published_at: new Date().toISOString()
+        }],
+        'opinion': [{
+          id: 'opinion-static',
+          title: 'Opinion',
+          image: 'https://images.unsplash.com/photo-1504711331083-9c895941bf81?q=80&w=2070&auto=format&fit=crop',
+          link: '/news?genre=opinion',
+          genre: 'opinion',
+          published_at: new Date().toISOString()
+        }],
+        'editorial': [{
+          id: 'editorial-static',
+          title: 'Editorial',
+          image: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?q=80&w=2070&auto=format&fit=crop',
+          link: '/news?genre=editorial',
+          genre: 'editorial',
+          published_at: new Date().toISOString()
+        }],
+        'creative': [{
+          id: 'creative-static',
+          title: 'Creative Works',
+          image: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?q=80&w=2070&auto=format&fit=crop',
+          link: '/creative',
+          genre: 'creative',
+          published_at: new Date().toISOString()
+        }],
+        'literary': [{
+          id: 'literary-static',
+          title: 'Literary Works',
+          image: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?q=80&w=2070&auto=format&fit=crop',
+          link: '/news/literary-works',
+          genre: 'literary',
+          published_at: new Date().toISOString()
+        }]
+      };
+      
+      setGenreData(staticGenreData);
     } catch (err) {
       console.error('Error fetching articles:', err);
       setError('Failed to load articles. Please try again later.');
@@ -252,47 +253,45 @@ const HomeScreen = () => {
         <AppNavbar isWeb={true} />
       </div>
 
-      {/* Hero Section */}
-      <div style={styles.hero}>
-        <ImageBackground
-          source={{ uri: backgroundUrl?.uri || backgroundUrl || "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070" }}
-          style={styles.heroImage}
-        >
-          <div style={styles.heroOverlay}>
-            <div style={{...styles.heroContent, padding: isMobile ? '120px 20px 20px 20px' : '0 20px', justifyContent: 'center', alignItems: 'center'}}>
-              <div style={{...styles.heroText, margin: isMobile ? '0 auto' : '0 auto', textAlign: 'center'}}>
-                <h1 style={{...styles.heroTitle, marginTop: isMobile ? '0px' : '8rem'}}>Welcome to the Fisherman Publication</h1>
-                <p style={{...styles.heroSummary, fontSize: isMobile ? '14px' : '16px'}}>
-                  The Student Publication Body of Batangas State University-ARASOF dedicated on providing the latest news and inspiring works of the students of Batangas State University-ARASOF.
-                </p>
-                <button 
-                  style={{
-                    ...styles.ctaButton,
-                    ...(isReadFeaturedHovered ? styles.ctaButtonHover : {})
-                  }}
-                  onMouseEnter={() => setIsReadFeaturedHovered(true)}
-                  onMouseLeave={() => setIsReadFeaturedHovered(false)}
-                  onClick={() => router.push('/news')}
-                >
-                  Read Featured
-                </button>
-              </div>
+      {/* Hero Section - Window like view with fixed background */}
+      <div style={styles.heroWindow}>
+        <div style={{
+          ...styles.heroImage,
+          backgroundImage: `url(${backgroundUrl?.uri || backgroundUrl || "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070"})`
+        }}></div>
+        <div style={styles.heroOverlay}>
+          <div style={{...styles.heroContent, padding: isMobile ? '120px 20px 20px 20px' : '0 20px', justifyContent: 'center', alignItems: 'center'}}>
+            <div style={{...styles.heroText, margin: isMobile ? '0 auto' : '0 auto', textAlign: 'center'}}>
+              <h1 style={{...styles.heroTitle, marginTop: width < 768 ? '-25%' : '0px'}}>{width < 429 ? 'Fisherman Publication' : 'Welcome to the Fisherman Publication'}</h1>
+              <p style={{...styles.heroSummary, fontSize: isMobile ? '14px' : '16px'}}>
+                The Student Publication Body of Batangas State University-ARASOF dedicated on providing the latest news and inspiring works of the students of Batangas State University-ARASOF.
+              </p>
+              <button 
+                style={{
+                  ...styles.ctaButton,
+                  ...(isReadFeaturedHovered ? styles.ctaButtonHover : {})
+                }}
+                onMouseEnter={() => setIsReadFeaturedHovered(true)}
+                onMouseLeave={() => setIsReadFeaturedHovered(false)}
+                onClick={() => router.push('/news')}
+              >
+                Read Featured
+              </button>
             </div>
           </div>
-          <div style={styles.waveContainer}>
-            <SvgWave color={'#f3f6fa'} height={130} />
-          </div>
-        </ImageBackground>
+
+        </div>
       </div>
-      {/* Main Content */}
-      <div style={styles.mainContent}>
+
+      {/* Card Container - White background for all content sections */}
+      <div style={styles.cardContainer}>
         {/* Decorative Background Elements */}
         <div style={styles.sectionBackground}>
           <div style={styles.bgShape1}></div>
           <div style={styles.bgShape2}></div>
           <div style={styles.bgShape3}></div>
         </div>
-        
+
         {/* Genre Section */}
         <div style={styles.genreSection}>
           <div style={styles.genreTitleContainer}>
@@ -311,7 +310,24 @@ const HomeScreen = () => {
 
                   <div 
                     style={{...styles.genreContent, height: isMobile ? '150px' : '500px'}}
-                    onClick={() => router.push(genreData[genre][0].link)}
+                    onClick={() => {
+                      if (genre === 'creative') {
+                        console.log('🏠 Home - navigating to /creative');
+                        router.push('/creative');
+                      } else if (genre === 'literary') {
+                        console.log('🏠 Home - navigating to /news/literary-works');
+                        router.push('/news/literary-works');
+                      } else {
+                        const url = `/news?genre=${genre}`;
+                        console.log('🏠 Home - navigating to:', url);
+                        // For web, use window.location.href to ensure URL changes
+                        if (typeof window !== 'undefined') {
+                          window.location.href = url;
+                        } else {
+                          router.push(url);
+                        }
+                      }
+                    }}
                   >
                     <img 
                       src={genreData[genre][0].image} 
@@ -331,7 +347,7 @@ const HomeScreen = () => {
             ))}
           </div>
         </div>
-        
+
         {featuredData.length > 0 && (
           <React.Fragment>
             <div style={styles.featuredSection}>
@@ -372,7 +388,7 @@ const HomeScreen = () => {
                         </div>
                         <div style={styles.publicationContent}>
                           <h3 style={styles.publicationTitle} data-title>{article.title}</h3>
-                          <p style={styles.publicationSummary}>{article.excerpt}</p>
+                          <p style={styles.publicationSummary}>{stripHtmlTags(article.content) || 'No content available'}</p>
                           <div style={styles.articleMeta}>
                             <div style={styles.metaItem}>
                               <MaterialIcons name="schedule" size={14} color="#64748b" style={styles.metaIcon} />
@@ -393,6 +409,7 @@ const HomeScreen = () => {
                           <React.Fragment>
                             <div style={styles.publicationContent}>
                               <h3 style={{...styles.publicationTitle, textAlign: 'right'}} data-title>{article.title}</h3>
+                              <p style={{...styles.publicationSummary, textAlign: 'right'}}>{stripHtmlTags(article.content) || 'No content available'}</p>
                               <div style={{...styles.articleMeta, justifyContent: 'flex-end'}}>
                                 <div style={{...styles.metaItem, justifyContent: 'flex-end', textAlign: 'right', width: '100%'}}>
                                   <MaterialIcons name="schedule" size={14} color="#64748b" style={styles.metaIcon} />
@@ -481,7 +498,7 @@ const HomeScreen = () => {
                             </div>
                             <div style={styles.publicationContent}>
                               <h3 style={styles.publicationTitle} data-title>{article.title}</h3>
-                              <p style={styles.publicationSummary}>{article.excerpt}</p>
+                              <p style={styles.publicationSummary}>{stripHtmlTags(article.content) || 'No content available'}</p>
                               <div style={styles.articleMeta}>
                                 <div style={styles.metaItem}>
                                   <MaterialIcons name="schedule" size={14} color="#64748b" style={styles.metaIcon} />
@@ -755,12 +772,21 @@ const styles = StyleSheet.create({
     minHeight: '100vh',
     display: 'flex',
     flexDirection: 'column',
+    overflowY: 'auto',
     overflowX: 'hidden',
     position: 'relative',
+    scrollbarWidth: 'none', // Firefox
+    '&::-webkit-scrollbar': {
+      display: 'none', // Chrome, Safari, Edge
+    },
   },
   navbarContainer: {
-    position: 'relative',
-    zIndex: 1000, // Ensure navbar is above other elements
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    width: '100%',
+    zIndex: 1000,
   },
   hero: {
     minHeight: '85vh',
@@ -768,18 +794,23 @@ const styles = StyleSheet.create({
     width: '100%',
     flexShrink: 0,
     zIndex: 1, // Ensure hero is below navbar
-    marginTop: '0',
+    marginTop: '30px',
   },
   heroImage: {
     width: '100%',
     height: '100%',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
-    position: 'relative',
+    backgroundAttachment: 'fixed',
+    position: 'fixed',
+    top: '30px',
+    left: 0,
+    right: 0,
+    zIndex: -1,
   },
   heroOverlay: {
     backgroundColor: 'rgba(46, 46, 54, 0.65)',
-    height: '105%',
+    height: '100vh',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -788,7 +819,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
     position: 'relative',
-
+    zIndex: 2,
   },
   heroContent: {
     maxWidth: '1200px',
@@ -797,7 +828,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: '-200px',
+    marginTop: 0,
     gap: '40px',
   },
   heroText: {
@@ -811,7 +842,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: '1.5rem',
     lineHeight: 1.2,
-    marginTop: '8rem',
+    marginTop: 0,
     textShadow: '0 2px 4px rgba(0,0,0,0.3)',
   },
   heroSummary: {
@@ -893,7 +924,19 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     marginLeft: 'auto',
     position: 'relative',
+    zIndex: 10,
     background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 50%, #f1f5f9 100%)',
+  },
+  cardContainer: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: '20px 20px 0 0',
+    marginTop: '-60px',
+    position: 'relative',
+    zIndex: 5,
+    boxShadow: '0 -10px 30px rgba(0,0,0,0.1)',
+    padding: '40px',
+    boxSizing: 'border-box',
   },
   sectionBackground: {
     position: 'absolute',

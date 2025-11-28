@@ -15,6 +15,9 @@ const NavLink = ({ href, text, iconName, pathname, closeMenu, isActive: isActive
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 1061;
+  const [isHovered, setIsHovered] = useState(false);
+  const [buttonWidth, setButtonWidth] = useState(0);
+  const [textWidth, setTextWidth] = useState(0);
   
   // Use the provided isActive prop if available, otherwise calculate it
   let isActive = isActiveProp !== undefined ? isActiveProp : 
@@ -40,10 +43,28 @@ const NavLink = ({ href, text, iconName, pathname, closeMenu, isActive: isActive
       closeMenu();
     }
   };
+
+  const leftPercent = buttonWidth && textWidth ? `${((buttonWidth - textWidth) / 2) / buttonWidth * 100}%` : '0%';
+  const widthPercent = buttonWidth && textWidth ? `${textWidth / buttonWidth * 100}%` : '0%';
+
   return (
-    <TouchableOpacity style={linkStyle} onPress={handlePress}>
+    <TouchableOpacity 
+      style={[linkStyle, {position: 'relative'}]} 
+      onPress={handlePress}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onLayout={(e) => setButtonWidth(e.nativeEvent.layout.width)}
+    >
       {iconName && <FontAwesome name={iconName} style={iconStyle} />}
-      <Text style={textStyle}>{text}</Text>
+      <Text 
+        style={textStyle} 
+        onLayout={(e) => setTextWidth(e.nativeEvent.layout.width)}
+      >
+        {text}
+      </Text>
+      {!isMobile && (
+        <View style={[styles.underline, {left: leftPercent, width: widthPercent, transform: [{scaleX: (isActive || isHovered) ? 1 : 0}]}]} />
+      )}
     </TouchableOpacity>
   );
 };
@@ -78,13 +99,13 @@ const Navbar = () => {
         
         {!isMobile && (
           <View style={styles.navLinksContainer}>
-            <NavLink href="home" text="Home" iconName="home" pathname={pathname} />
-            <NavLink href="news" text="News" iconName="newspaper-o" pathname={pathname} />
-            <NavLink href="about" text="About" iconName="info-circle" pathname={pathname} />
+            <NavLink href="home" text="Home" pathname={pathname} />
+            <NavLink href="news" text="News" pathname={pathname} />
+            <NavLink href="about" text="About" pathname={pathname} />
             {user ? (
               <>
-            <NavLink href="forum" text="Forum" iconName="comments" pathname={pathname} />
-            <NavLink href="contribute" text="Request" iconName="plus-circle" pathname={pathname} />
+            <NavLink href="forum" text="Forum" pathname={pathname} />
+            <NavLink href="contribute" text="Request" pathname={pathname} />
         <View style={styles.userMenuContainer}>
           <TouchableOpacity ref={buttonRef} style={styles.userMenuButton} onPress={() => setDropdownVisible(!dropdownVisible)} onLayout={(e) => setButtonWidth(e.nativeEvent.layout.width)}>
                         {user?.profile?.avatar ? (
@@ -154,13 +175,13 @@ const Navbar = () => {
             <TouchableOpacity style={styles.closeButton} onPress={() => setMobileMenuVisible(false)}>
               <FontAwesome name="times" size={24} color="#333" />
             </TouchableOpacity>
-            <NavLink href="home" text="Home" iconName="home" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
-            <NavLink href="news" text="News" iconName="newspaper-o" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
-            <NavLink href="about" text="About" iconName="info-circle" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
+            <NavLink href="home" text="Home" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
+            <NavLink href="news" text="News" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
+            <NavLink href="about" text="About" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
             {user ? (
               <>
-                <NavLink href="forum" text="Forum" iconName="comments" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
-                <NavLink href="contribute" text="Request" iconName="plus-circle" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
+                <NavLink href="forum" text="Forum" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
+                <NavLink href="contribute" text="Request" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
                 <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { router.push('/profile'); setMobileMenuVisible(false); }}>
                   <FontAwesome name="user" size={16} style={styles.mobileMenuIcon} />
                   <Text style={styles.mobileMenuText}>Profile</Text>
@@ -184,10 +205,10 @@ const Navbar = () => {
       {/* Links for mobile drawer */}
       {Platform.OS !== 'web' && (
         <View style={styles.mobileNavLinks}>
-          <NavLink href="home" text="Home" iconName="home" pathname={pathname} />
-          <NavLink href="forum" text="Forum" iconName="comments" pathname={pathname} />
-          <NavLink href="news" text="News" iconName="newspaper-o" pathname={pathname} />
-          <NavLink href="about" text="About" iconName="info-circle" pathname={pathname} />
+          <NavLink href="home" text="Home" pathname={pathname} />
+          <NavLink href="forum" text="Forum" pathname={pathname} />
+          <NavLink href="news" text="News" pathname={pathname} />
+          <NavLink href="about" text="About" pathname={pathname} />
         </View>
       )}
     </View>
@@ -269,7 +290,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 8,
     transition: 'all 0.2s ease-in-out',
     ...Platform.select({
       default: {
@@ -277,26 +297,13 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  navLinkActive: {
-    backgroundColor: 'rgba(0, 123, 255, 0.1)',
-    borderBottomWidth: 2,
-    borderBottomColor: '#007BFF',
-    transform: 'translateY(-1px)',
-    ...Platform.select({
-      web: {
-        borderBottomColor: '#007BFF',
-      },
-      default: {
-        borderBottomColor: '#007BFF',
-      },
-    }),
-  },
-  navIcon: {
-    color: '#555',
-    marginRight: 7,
-  },
-  navIconActive: {
-    color: '#007BFF',
+  underline: {
+    position: 'absolute',
+    bottom: 0,
+    height: 2,
+    backgroundColor: '#007BFF',
+    transformOrigin: 'left',
+    transition: 'transform 0.3s ease-in-out',
   },
   navLinkText: {
     fontSize: 16,
@@ -306,7 +313,6 @@ const styles = StyleSheet.create({
   },
   navLinkTextActive: {
     color: '#007BFF',
-    fontWeight: '700',
   },
   userMenuContainer: {
     position: 'relative',
