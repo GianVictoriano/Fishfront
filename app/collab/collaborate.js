@@ -276,6 +276,21 @@ export default function CollaborateScreen() {
   const [isLoadingRejectionComments, setIsLoadingRejectionComments] = useState(false);
   const [selectedFileForComments, setSelectedFileForComments] = useState(null);
 
+  // System modal state
+  const [isSystemModalVisible, setIsSystemModalVisible] = useState(false);
+  const [isSelectGroupModalVisible, setIsSelectGroupModalVisible] = useState(false);
+
+  // Group management modals state
+  const [isAddMemberModalVisible, setIsAddMemberModalVisible] = useState(false);
+  const [isDeleteMemberModalVisible, setIsDeleteMemberModalVisible] = useState(false);
+  const [isDeleteGroupModalVisible, setIsDeleteGroupModalVisible] = useState(false);
+  const [isReplaceLeadReviewerModalVisible, setIsReplaceLeadReviewerModalVisible] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [selectedUserToAdd, setSelectedUserToAdd] = useState(null);
+  const [selectedMemberToDelete, setSelectedMemberToDelete] = useState(null);
+  const [selectedNewLeadReviewer, setSelectedNewLeadReviewer] = useState(null);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+
   const fetchGroupChats = useCallback(async () => {
     try {
       const response = await apiClient.get('/group-chats');
@@ -516,6 +531,338 @@ export default function CollaborateScreen() {
       setGroupMembers([]);
     }
   }, [selectedGroupId, currentUser]);
+
+  // Function to fetch available users for adding to group
+  const fetchAvailableUsers = useCallback(async () => {
+    setIsLoadingUsers(true);
+    try {
+      console.log('Fetching available users...');
+      let users = [];
+      
+      // Try multiple possible endpoints
+      const endpoints = [
+        '/users', 
+        '/api/users', 
+        '/admin/users', 
+        '/users/all',
+        '/collaborators',
+        '/api/collaborators',
+        '/users/list',
+        '/team-members',
+        '/api/team-members'
+      ];
+      
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying endpoint: ${endpoint}`);
+          const response = await apiClient.get(endpoint);
+          console.log(`Response from ${endpoint}:`, response.data);
+          
+          if (Array.isArray(response.data) && response.data.length > 0) {
+            users = response.data;
+            console.log('Successfully fetched users from:', endpoint);
+            break;
+          } else if (response.data && response.data.users && Array.isArray(response.data.users) && response.data.users.length > 0) {
+            // Handle wrapped response format like { "users": [...] }
+            users = response.data.users;
+            console.log('Successfully fetched users from:', endpoint);
+            break;
+          } else if (response.data && response.data.collaborators && Array.isArray(response.data.collaborators) && response.data.collaborators.length > 0) {
+            // Handle collaborators response format
+            users = response.data.collaborators;
+            console.log('Successfully fetched collaborators from:', endpoint);
+            break;
+          }
+        } catch (endpointError) {
+          console.log(`Endpoint ${endpoint} failed:`, endpointError.response?.status || endpointError.message);
+          continue;
+        }
+      }
+      
+      // If no users found, try to get from other group chats' members
+      if (users.length === 0) {
+        console.log('Trying to get users from other group chats...');
+        try {
+          const allGroupsResponse = await apiClient.get('/group-chats');
+          if (Array.isArray(allGroupsResponse.data)) {
+            // Get all unique users from all group chats
+            const allUsers = new Set();
+            allGroupsResponse.data.forEach(group => {
+              if (group.members && Array.isArray(group.members)) {
+                group.members.forEach(member => {
+                  if (member && member.id) {
+                    allUsers.add(JSON.stringify(member));
+                  }
+                });
+              }
+            });
+            
+            users = Array.from(allUsers).map(userStr => JSON.parse(userStr));
+            console.log('Found users from other groups:', users.length);
+          }
+        } catch (groupsError) {
+          console.log('Failed to get users from other groups:', groupsError.message);
+        }
+      }
+      
+      console.log('Final users array:', users);
+      console.log('Current group members:', groupMembers);
+      
+      // Filter out users who are already members of the group
+      const currentMemberIds = groupMembers.map(member => member.id);
+      console.log('Current member IDs:', currentMemberIds);
+      
+      // Add current user to available users if not already a member and is a collaborator
+      if (currentUser && !currentMemberIds.includes(currentUser.id) && currentUser.profile?.role === 'collaborator') {
+        users.push(currentUser);
+        console.log('Added current user to available users:', currentUser);
+      }
+      
+      // Filter to only show collaborators and exclude current members
+      const available = users.filter(user => 
+        !currentMemberIds.includes(user.id) && 
+        user.profile?.role === 'collaborator'
+      );
+      console.log('Available users after filtering:', available);
+      
+      setAvailableUsers(available);
+      
+      // If no users were found from any endpoint, show a more informative message
+      if (users.length === 0) {
+        console.warn('No users found from any endpoint. This might indicate:');
+        console.warn('1. Backend server is not running');
+        console.warn('2. User endpoints are not implemented');
+        console.warn('3. Authentication/authorization issue');
+      }
+    } catch (error) {
+      console.error('Failed to fetch available users:', error);
+      console.error('Error details:', error.response?.data);
+      setAvailableUsers([]);
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  }, [groupMembers]);
+
+  // State for member search
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [filteredAvailableUsers, setFilteredAvailableUsers] = useState([]);
+
+  // Filter available users based on search
+  useEffect(() => {
+    const filtered = availableUsers.filter(user => 
+      (user.name && user.name.toLowerCase().includes(memberSearchQuery.toLowerCase())) ||
+      (user.email && user.email.toLowerCase().includes(memberSearchQuery.toLowerCase()))
+    );
+    setFilteredAvailableUsers(filtered);
+  }, [availableUsers, memberSearchQuery]);
+
+  // Function to add member to group
+  const handleAddMember = async () => {
+    if (!selectedUserToAdd || !selectedGroupId) return;
+    
+    try {
+      // Focus on INSERT operations to group_chat_members table
+      let success = false;
+      let error = null;
+      
+      const endpoints = [
+        // Try the correct endpoint first
+        { method: 'post', url: `/group-chats/${selectedGroupId}/members`, data: { 
+          member_id: selectedUserToAdd.id 
+        }},
+        // Direct INSERT to group_chat_members table
+        // Direct INSERT to group_chat_members table
+        { method: 'post', url: `/group-chat-members`, data: { group_chat_id: selectedGroupId, user_id: selectedUserToAdd.id } },
+        { method: 'post', url: `/api/group-chat-members`, data: { group_chat_id: selectedGroupId, user_id: selectedUserToAdd.id } },
+        { method: 'post', url: `/group-chat-members/add`, data: { group_chat_id: selectedGroupId, user_id: selectedUserToAdd.id } },
+        { method: 'post', url: `/api/group-chat-members/add`, data: { group_chat_id: selectedGroupId, user_id: selectedUserToAdd.id } },
+        // Alternative field names
+        { method: 'post', url: `/group-chat-members`, data: { group_chat_id: selectedGroupId, member_id: selectedUserToAdd.id } },
+        { method: 'post', url: `/group-chat-members`, data: { group_id: selectedGroupId, user_id: selectedUserToAdd.id } },
+        // Try member-specific endpoints
+        { method: 'post', url: `/members`, data: { group_chat_id: selectedGroupId, user_id: selectedUserToAdd.id } },
+        { method: 'post', url: `/api/members`, data: { group_chat_id: selectedGroupId, user_id: selectedUserToAdd.id } },
+        // Try updating the group chat directly with members array
+        { method: 'put', url: `/group-chats/${selectedGroupId}`, data: { 
+          members: [...groupMembers.map(m => m.id), selectedUserToAdd.id] 
+        }},
+        { method: 'patch', url: `/group-chats/${selectedGroupId}`, data: { 
+          members: [...groupMembers.map(m => m.id), selectedUserToAdd.id] 
+        }},
+        // Try adding member to group via nested route
+        { method: 'post', url: `/group-chats/${selectedGroupId}/members`, data: { 
+          member_id: selectedUserToAdd.id 
+        }},
+        // Try different data structures
+        { method: 'post', url: `/group-chat-members`, data: { 
+          group_chat_id: selectedGroupId, 
+          user_id: selectedUserToAdd.id,
+          role: 'member'
+        }},
+        { method: 'post', url: `/group-chat-members`, data: { 
+          group_id: selectedGroupId, 
+          member_id: selectedUserToAdd.id,
+          role: 'member'
+        }},
+      ];
+      
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying ${endpoint.method.toUpperCase()} to ${endpoint.url} with data:`, endpoint.data);
+          let response;
+          
+          if (endpoint.method === 'put') {
+            response = await apiClient.put(endpoint.url, endpoint.data);
+          } else if (endpoint.method === 'patch') {
+            response = await apiClient.patch(endpoint.url, endpoint.data);
+          } else {
+            response = await apiClient.post(endpoint.url, endpoint.data);
+          }
+          
+          console.log('Success with endpoint:', endpoint.url, 'Response:', response.data);
+          success = true;
+          break;
+        } catch (endpointError) {
+          console.log(`Failed ${endpoint.method.toUpperCase()} ${endpoint.url}:`, endpointError.response?.status || endpointError.message);
+          error = endpointError;
+          continue;
+        }
+      }
+      
+      if (!success) {
+        throw error || new Error('No working endpoint found for adding members to group_chat_members table');
+      }
+      
+      // Refresh group members
+      await fetchGroupMembers();
+      
+      // Close modals and reset state
+      setIsAddMemberModalVisible(false);
+      setSelectedUserToAdd(null);
+      setAvailableUsers([]);
+      setMemberSearchQuery('');
+      
+      // Show success message
+      setFeedbackModalConfig({
+        message: `${selectedUserToAdd.name} has been added to the group chat`,
+        type: 'success'
+      });
+      setFeedbackModalVisible(true);
+    } catch (error) {
+      console.error('Failed to add member:', error);
+      setFeedbackModalConfig({
+        message: `Failed to add member: ${error.response?.data?.message || error.message}`,
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
+  };
+
+  // Function to delete member from group
+  const handleDeleteMember = async () => {
+    if (!selectedMemberToDelete || !selectedGroupId) return;
+    
+    try {
+      await apiClient.delete(`/group-chats/${selectedGroupId}/members/${selectedMemberToDelete.id}`);
+      
+      // Refresh group members
+      await fetchGroupMembers();
+      
+      // Close modals and reset state
+      setIsDeleteMemberModalVisible(false);
+      setSelectedMemberToDelete(null);
+      
+      // Show success message
+      setFeedbackModalConfig({
+        message: `${selectedMemberToDelete.name} has been removed from the group chat`,
+        type: 'success'
+      });
+      setFeedbackModalVisible(true);
+    } catch (error) {
+      console.error('Failed to delete member:', error);
+      setFeedbackModalConfig({
+        message: `Failed to remove member: ${error.response?.data?.message || error.message}`,
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
+  };
+
+  // Function to delete group chat
+  const handleDeleteGroup = async () => {
+    if (!selectedGroupId) return;
+    
+    try {
+      await apiClient.delete(`/group-chats/${selectedGroupId}`);
+      
+      // Refresh group chats
+      await fetchGroupChats();
+      
+      // Close modal and reset state
+      setIsDeleteGroupModalVisible(false);
+      setSelectedGroupId(null);
+      setMessages([]);
+      setGroupMembers([]);
+      
+      // Show success message
+      setFeedbackModalConfig({
+        message: 'Group chat has been deleted successfully',
+        type: 'success'
+      });
+      setFeedbackModalVisible(true);
+    } catch (error) {
+      console.error('Failed to delete group:', error);
+      setFeedbackModalConfig({
+        message: `Failed to delete group: ${error.response?.data?.message || error.message}`,
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
+  };
+
+  // Function to replace lead reviewer
+  const handleReplaceLeadReviewer = async () => {
+    if (!selectedNewLeadReviewer || !selectedGroupId) return;
+    
+    try {
+      // Get the selected group to check if it has a scrum_board
+      const selectedGroup = groupChats.find(g => g.id === selectedGroupId);
+      
+      if (selectedGroup?.scrum_board) {
+        // Update the scrum board's lead reviewer
+        await apiClient.put(`/scrum-boards/${selectedGroup.scrum_board.id}`, {
+          lead_reviewer_id: selectedNewLeadReviewer.id
+        });
+      } else {
+        // Create a scrum board for this group if it doesn't exist
+        await apiClient.post('/scrum-boards', {
+          group_chat_id: selectedGroupId,
+          lead_reviewer_id: selectedNewLeadReviewer.id
+        });
+      }
+      
+      // Refresh group chats to get updated lead reviewer info
+      await fetchGroupChats();
+      
+      // Close modals and reset state
+      setIsReplaceLeadReviewerModalVisible(false);
+      setSelectedNewLeadReviewer(null);
+      
+      // Show success message
+      setFeedbackModalConfig({
+        message: `${selectedNewLeadReviewer.name} has been set as the lead reviewer`,
+        type: 'success'
+      });
+      setFeedbackModalVisible(true);
+    } catch (error) {
+      console.error('Failed to replace lead reviewer:', error);
+      setFeedbackModalConfig({
+        message: `Failed to replace lead reviewer: ${error.response?.data?.message || error.message}`,
+        type: 'error'
+      });
+      setFeedbackModalVisible(true);
+    }
+  };
 
   const fetchImportantNotes = useCallback(async () => {
     if (!selectedGroupId) {
@@ -1613,6 +1960,17 @@ export default function CollaborateScreen() {
           style={[styles.filterButton, groupChatFilter === 'finished' && { backgroundColor: colors.primary || '#374151' }]}
           onPress={() => setGroupChatFilter('finished')}>
           <Text style={[styles.filterButtonText, groupChatFilter === 'finished' && styles.activeFilterText]}>Finished</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.filterButton, { marginLeft: 8 }]}
+          onPress={() => {
+            if (!selectedGroupId) {
+              setIsSelectGroupModalVisible(true);
+            } else {
+              setIsSystemModalVisible(true);
+            }
+          }}>
+          <Feather name="settings" size={16} color="#666" />
         </TouchableOpacity>
       </View>
       <SearchSection />
@@ -2882,6 +3240,680 @@ export default function CollaborateScreen() {
                       setRejectionComments([]);
                       setSelectedFileForComments(null);
                     }}
+                  >
+                    <Text style={{color: '#374151', fontWeight: '600', fontSize: 15}}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Add Member Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={isAddMemberModalVisible}
+            onRequestClose={() => {
+              setIsAddMemberModalVisible(false);
+              setSelectedUserToAdd(null);
+              setAvailableUsers([]);
+              setMemberSearchQuery('');
+            }}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 500, maxWidth: 700, width: '95%'}]}>
+                <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 20}}>
+                  <Feather name="user-plus" size={28} color="#10B981" />
+                  <Text style={[modalStyles.modalTitle, {fontSize: 22, marginLeft: 12, marginBottom: 0}]}>
+                    Add Member to Group Chat
+                  </Text>
+                </View>
+
+                <Text style={{fontSize: 14, color: '#6B7280', marginBottom: 20}}>
+                  {groupChats.find(g => g.id === selectedGroupId)?.name || 'Group Chat'}
+                </Text>
+
+                {/* Two-column layout */}
+                <View style={{flexDirection: 'row', flex: 1, gap: 20}}>
+                  {/* Left column - Available users with search */}
+                  <View style={{flex: 1}}>
+                    <Text style={{fontSize: 16, fontWeight: '600', color: '#1F2937', marginBottom: 12}}>
+                      Available Collaborators
+                    </Text>
+                    
+                    {/* Search bar */}
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: '#F9FAFB',
+                      borderRadius: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      marginBottom: 12,
+                      borderWidth: 1,
+                      borderColor: '#E5E7EB'
+                    }}>
+                      <Feather name="search" size={16} color="#6B7280" />
+                      <TextInput
+                        style={{flex: 1, marginLeft: 8, fontSize: 14, color: '#374151'}}
+                        placeholder="Search by name or email..."
+                        value={memberSearchQuery}
+                        onChangeText={setMemberSearchQuery}
+                      />
+                    </View>
+
+                    {isLoadingUsers ? (
+                      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+                        <ActivityIndicator size="large" color="#10B981" />
+                        <Text style={{marginTop: 10, color: '#6B7280'}}>Loading collaborators...</Text>
+                      </View>
+                    ) : filteredAvailableUsers.length === 0 ? (
+                      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40}}>
+                        <Feather name="users" size={48} color="#D1D5DB" />
+                        <Text style={{marginTop: 10, color: '#6B7280', fontSize: 14, textAlign: 'center'}}>
+                          {memberSearchQuery ? 'No collaborators found' : 'No available collaborators'}
+                        </Text>
+                        <Text style={{marginTop: 5, color: '#9CA3AF', fontSize: 12, textAlign: 'center'}}>
+                          {availableUsers.length === 0 ? 'User endpoints not available' : 'Try a different search term'}
+                        </Text>
+                      </View>
+                    ) : (
+                      <ScrollView style={{flex: 1}} showsVerticalScrollIndicator={false}>
+                        {filteredAvailableUsers.map((user) => (
+                          <TouchableOpacity
+                            key={user.id}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              padding: 10,
+                              backgroundColor: selectedUserToAdd?.id === user.id ? '#D1FAE5' : '#F9FAFB',
+                              borderRadius: 8,
+                              marginBottom: 6,
+                              borderWidth: 1,
+                              borderColor: selectedUserToAdd?.id === user.id ? '#10B981' : '#E5E7EB'
+                            }}
+                            onPress={() => setSelectedUserToAdd(user)}
+                          >
+                            <View style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 16,
+                              backgroundColor: '#10B981',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              marginRight: 10
+                            }}>
+                              <Text style={{color: '#fff', fontWeight: 'bold', fontSize: 12}}>
+                                {user.name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase() || 'U'}
+                              </Text>
+                            </View>
+                            <View style={{flex: 1}}>
+                              <Text style={{fontWeight: '600', fontSize: 13, color: '#1F2937'}}>
+                                {user.name || user.email}
+                              </Text>
+                              {user.email && user.name && (
+                                <Text style={{fontSize: 11, color: '#6B7280'}}>{user.email}</Text>
+                              )}
+                            </View>
+                            {selectedUserToAdd?.id === user.id && (
+                              <Feather name="check-circle" size={16} color="#10B981" />
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    )}
+                  </View>
+
+                  {/* Right column - Current members */}
+                  <View style={{flex: 1}}>
+                    <Text style={{fontSize: 16, fontWeight: '600', color: '#1F2937', marginBottom: 12}}>
+                      Current Members ({groupMembers.length})
+                    </Text>
+                    
+                    <View style={{
+                      flex: 1,
+                      backgroundColor: '#F9FAFB',
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: '#E5E7EB'
+                    }}>
+                      {groupMembers.length === 0 ? (
+                        <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40}}>
+                          <Feather name="users" size={48} color="#D1D5DB" />
+                          <Text style={{marginTop: 10, color: '#6B7280', fontSize: 14, textAlign: 'center'}}>
+                            No members yet
+                          </Text>
+                        </View>
+                      ) : (
+                        <ScrollView style={{flex: 1, padding: 8}} showsVerticalScrollIndicator={false}>
+                          {groupMembers.map((member) => (
+                            <View
+                              key={member.id}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                padding: 8,
+                                backgroundColor: '#FFFFFF',
+                                borderRadius: 6,
+                                marginBottom: 4
+                              }}
+                            >
+                              <View style={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: 14,
+                                backgroundColor: '#6B7280',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                marginRight: 8
+                              }}>
+                                <Text style={{color: '#fff', fontWeight: 'bold', fontSize: 11}}>
+                                  {member.name?.charAt(0)?.toUpperCase() || member.email?.charAt(0)?.toUpperCase() || 'U'}
+                                </Text>
+                              </View>
+                              <View style={{flex: 1}}>
+                                <Text style={{fontWeight: '500', fontSize: 12, color: '#1F2937'}}>
+                                  {member.name || member.email}
+                                </Text>
+                                {member.email && member.name && (
+                                  <Text style={{fontSize: 10, color: '#6B7280'}}>{member.email}</Text>
+                                )}
+                              </View>
+                              {member.id === currentUser?.id && (
+                                <Text style={{fontSize: 10, color: '#10B981', fontWeight: '600'}}>You</Text>
+                              )}
+                            </View>
+                          ))}
+                        </ScrollView>
+                      )}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={{flexDirection: 'row', gap: 12, marginTop: 20, paddingHorizontal: 20}}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 14,
+                      paddingHorizontal: 20,
+                      borderRadius: 10,
+                      backgroundColor: '#F3F4F6',
+                      borderWidth: 1,
+                      borderColor: '#D1D5DB',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: 48,
+                    }}
+                    onPress={() => {
+                      setIsAddMemberModalVisible(false);
+                      setSelectedUserToAdd(null);
+                      setAvailableUsers([]);
+                      setMemberSearchQuery('');
+                    }}
+                  >
+                    <Text style={{color: '#374151', fontWeight: '600', fontSize: 16}}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 14,
+                      paddingHorizontal: 20,
+                      borderRadius: 10,
+                      backgroundColor: selectedUserToAdd ? '#10B981' : '#D1D5DB',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: 48,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: selectedUserToAdd ? 0.25 : 0,
+                      shadowRadius: 3.84,
+                      elevation: selectedUserToAdd ? 5 : 0,
+                    }}
+                    onPress={handleAddMember}
+                    disabled={!selectedUserToAdd}
+                  >
+                    <Text style={{color: '#fff', fontWeight: '600', fontSize: 16}}>
+                      {selectedUserToAdd ? 'Add Member' : 'Select a User'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Delete Member Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={isDeleteMemberModalVisible}
+            onRequestClose={() => {
+              setIsDeleteMemberModalVisible(false);
+              setSelectedMemberToDelete(null);
+            }}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 400, maxWidth: 500, width: '90%'}]}>
+                <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 20}}>
+                  <Feather name="user-minus" size={28} color="#EF4444" />
+                  <Text style={[modalStyles.modalTitle, {fontSize: 22, marginLeft: 12, marginBottom: 0}]}>
+                    Delete Member from Group Chat
+                  </Text>
+                </View>
+
+                <Text style={{fontSize: 14, color: '#6B7280', marginBottom: 20}}>
+                  Select a member to remove from {groupChats.find(g => g.id === selectedGroupId)?.name || 'this group chat'}
+                </Text>
+
+                {groupMembers.length === 0 ? (
+                  <View style={{alignItems: 'center', paddingVertical: 40}}>
+                    <Feather name="users" size={48} color="#D1D5DB" />
+                    <Text style={{marginTop: 10, color: '#6B7280', fontSize: 14}}>
+                      No members in this group chat
+                    </Text>
+                  </View>
+                ) : (
+                  <ScrollView style={{maxHeight: 250}}>
+                    {groupMembers.map((member) => (
+                      <TouchableOpacity
+                        key={member.id}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: 12,
+                          backgroundColor: selectedMemberToDelete?.id === member.id ? '#FEE2E2' : '#F9FAFB',
+                          borderRadius: 8,
+                          marginBottom: 8,
+                          borderWidth: 1,
+                          borderColor: selectedMemberToDelete?.id === member.id ? '#EF4444' : '#E5E7EB'
+                        }}
+                        onPress={() => setSelectedMemberToDelete(member)}
+                      >
+                        <View style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          backgroundColor: '#EF4444',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 12
+                        }}>
+                          <Text style={{color: '#fff', fontWeight: 'bold', fontSize: 16}}>
+                            {member.name?.charAt(0)?.toUpperCase() || member.email?.charAt(0)?.toUpperCase() || 'U'}
+                          </Text>
+                        </View>
+                        <View style={{flex: 1}}>
+                          <Text style={{fontWeight: '600', fontSize: 14, color: '#1F2937'}}>
+                            {member.name || member.email}
+                          </Text>
+                          {member.email && member.name && (
+                            <Text style={{fontSize: 12, color: '#6B7280'}}>{member.email}</Text>
+                          )}
+                        </View>
+                        {selectedMemberToDelete?.id === member.id && (
+                          <Feather name="check-circle" size={20} color="#EF4444" />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+
+                <View style={{flexDirection: 'row', gap: 12, marginTop: 20}}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#F3F4F6',
+                      borderWidth: 1,
+                      borderColor: '#D1D5DB',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    onPress={() => {
+                      setIsDeleteMemberModalVisible(false);
+                      setSelectedMemberToDelete(null);
+                    }}
+                  >
+                    <Text style={{color: '#374151', fontWeight: '600', fontSize: 15, textAlign: 'center'}}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: selectedMemberToDelete ? '#DC2626' : '#D1D5DB',
+                      borderWidth: 1,
+                      borderColor: selectedMemberToDelete ? '#DC2626' : '#9CA3AF',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    onPress={handleDeleteMember}
+                    disabled={!selectedMemberToDelete}
+                  >
+                    <Text style={{color: selectedMemberToDelete ? '#FFFFFF' : '#6B7280', fontWeight: '600', fontSize: 14, textAlign: 'center'}}>Remove Member</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Delete Group Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={isDeleteGroupModalVisible}
+            onRequestClose={() => setIsDeleteGroupModalVisible(false)}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 200, maxWidth: 400}]}>
+                <View style={{alignItems: 'center', marginBottom: 20}}>
+                  <Feather name="trash-2" size={48} color="#DC2626" />
+                </View>
+                <Text style={[modalStyles.modalTitle, {fontSize: 20, textAlign: 'center'}]}>
+                  Delete Group Chat
+                </Text>
+                <Text style={[modalStyles.modalText, {textAlign: 'center', marginBottom: 25, fontSize: 15}]}>
+                  Are you sure you want to delete this group chat?
+                </Text>
+
+                <View style={{flexDirection: 'row', gap: 12, width: '100%'}}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#F3F4F6',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setIsDeleteGroupModalVisible(false)}
+                  >
+                    <Text style={{color: '#374151', fontWeight: '600', fontSize: 15}}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#DC2626',
+                      alignItems: 'center',
+                    }}
+                    onPress={handleDeleteGroup}
+                  >
+                    <Text style={{color: '#fff', fontWeight: '600', fontSize: 15}}>Delete Group</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Replace Lead Reviewer Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={isReplaceLeadReviewerModalVisible}
+            onRequestClose={() => {
+              setIsReplaceLeadReviewerModalVisible(false);
+              setSelectedNewLeadReviewer(null);
+            }}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 400, maxWidth: 500, width: '90%'}]}>
+                <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 20}}>
+                  <Feather name="refresh-cw" size={28} color="#8B5CF6" />
+                  <Text style={[modalStyles.modalTitle, {fontSize: 22, marginLeft: 12, marginBottom: 0}]}>
+                    Replace Lead Reviewer
+                  </Text>
+                </View>
+
+                <Text style={{fontSize: 14, color: '#6B7280', marginBottom: 20}}>
+                  Select a new lead reviewer for {groupChats.find(g => g.id === selectedGroupId)?.name || 'this group chat'}
+                </Text>
+
+                {groupMembers.length === 0 ? (
+                  <View style={{alignItems: 'center', paddingVertical: 40}}>
+                    <Feather name="shield" size={48} color="#D1D5DB" />
+                    <Text style={{marginTop: 10, color: '#6B7280', fontSize: 14}}>
+                      No members available to be lead reviewer
+                    </Text>
+                  </View>
+                ) : (
+                  <ScrollView style={{maxHeight: 250}}>
+                    {groupMembers.map((member) => (
+                      <TouchableOpacity
+                        key={member.id}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          padding: 12,
+                          backgroundColor: selectedNewLeadReviewer?.id === member.id ? '#EDE9FE' : '#F9FAFB',
+                          borderRadius: 8,
+                          marginBottom: 8,
+                          borderWidth: 1,
+                          borderColor: selectedNewLeadReviewer?.id === member.id ? '#8B5CF6' : '#E5E7EB'
+                        }}
+                        onPress={() => setSelectedNewLeadReviewer(member)}
+                      >
+                        <View style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          backgroundColor: '#8B5CF6',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          marginRight: 12
+                        }}>
+                          <Text style={{color: '#fff', fontWeight: 'bold', fontSize: 16}}>
+                            {member.name?.charAt(0)?.toUpperCase() || member.email?.charAt(0)?.toUpperCase() || 'U'}
+                          </Text>
+                        </View>
+                        <View style={{flex: 1}}>
+                          <Text style={{fontWeight: '600', fontSize: 14, color: '#1F2937'}}>
+                            {member.name || member.email}
+                          </Text>
+                          {member.email && member.name && (
+                            <Text style={{fontSize: 12, color: '#6B7280'}}>{member.email}</Text>
+                          )}
+                        </View>
+                        {selectedNewLeadReviewer?.id === member.id && (
+                          <Feather name="check-circle" size={20} color="#8B5CF6" />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+
+                <View style={{flexDirection: 'row', gap: 12, marginTop: 20}}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#F3F4F6',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    onPress={() => {
+                      setIsReplaceLeadReviewerModalVisible(false);
+                      setSelectedNewLeadReviewer(null);
+                    }}
+                  >
+                    <Text style={{color: '#374151', fontWeight: '600', fontSize: 15, textAlign: 'center'}}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: selectedNewLeadReviewer ? '#8B5CF6' : '#D1D5DB',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    onPress={handleReplaceLeadReviewer}
+                    disabled={!selectedNewLeadReviewer}
+                  >
+                    <Text style={{color: '#fff', fontWeight: '600', fontSize: 15, textAlign: 'center'}}>Set as Lead Reviewer</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Select Group Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={isSelectGroupModalVisible}
+            onRequestClose={() => setIsSelectGroupModalVisible(false)}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 200, maxWidth: 400}]}>
+                <View style={{alignItems: 'center', marginBottom: 20}}>
+                  <Feather name="users" size={48} color="#F59E0B" />
+                </View>
+                <Text style={[modalStyles.modalTitle, {fontSize: 20, textAlign: 'center'}]}>
+                  Please Select a Group Chat
+                </Text>
+                <Text style={[modalStyles.modalText, {textAlign: 'center', marginBottom: 30, fontSize: 15}]}>
+                  Please select a group chat first to access group chat settings.
+                </Text>
+
+                <View style={{marginTop: 20}}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#F3F4F6',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setIsSelectGroupModalVisible(false)}
+                  >
+                    <Text style={{color: '#374151', fontWeight: '600', fontSize: 15}}>OK</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* System Modal */}
+          <Modal
+            animationType="fade"
+            transparent={true}
+            visible={isSystemModalVisible}
+            onRequestClose={() => setIsSystemModalVisible(false)}
+          >
+            <View style={modalStyles.centeredView}>
+              <View style={[modalStyles.modalView, {minHeight: 200, maxWidth: 400}]}>
+                <View style={{alignItems: 'center', marginBottom: 20}}>
+                  <Feather name="settings" size={48} color="#6B7280" />
+                </View>
+                <Text style={[modalStyles.modalTitle, {fontSize: 20, textAlign: 'center'}]}>
+                  Group Chat Settings
+                </Text>
+                <Text style={[modalStyles.modalText, {textAlign: 'center', marginBottom: 25, fontSize: 15}]}>
+                  Manage group chat settings and members
+                </Text>
+
+                <View style={{width: '100%', gap: 12}}>
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 15,
+                      backgroundColor: '#F3F4F6',
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: '#E5E7EB'
+                    }}
+                    onPress={() => {
+                      setIsSystemModalVisible(false);
+                      setIsAddMemberModalVisible(true);
+                      // Add a small delay to ensure groupMembers state is updated after deletion
+                      setTimeout(() => {
+                        fetchAvailableUsers();
+                      }, 100);
+                    }}
+                  >
+                    <Feather name="user-plus" size={20} color="#10B981" />
+                    <Text style={{marginLeft: 12, fontSize: 15, fontWeight: '500', color: '#374151'}}>
+                      Add Member to Group Chat
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 15,
+                      backgroundColor: '#F3F4F6',
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: '#E5E7EB'
+                    }}
+                    onPress={() => {
+                      setIsSystemModalVisible(false);
+                      setIsDeleteMemberModalVisible(true);
+                    }}
+                  >
+                    <Feather name="user-minus" size={20} color="#EF4444" />
+                    <Text style={{marginLeft: 12, fontSize: 15, fontWeight: '500', color: '#374151'}}>
+                      Delete Member from Group Chat
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 15,
+                      backgroundColor: '#F3F4F6',
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: '#E5E7EB'
+                    }}
+                    onPress={() => {
+                      setIsSystemModalVisible(false);
+                      setIsDeleteGroupModalVisible(true);
+                    }}
+                  >
+                    <Feather name="trash-2" size={20} color="#DC2626" />
+                    <Text style={{marginLeft: 12, fontSize: 15, fontWeight: '500', color: '#374151'}}>
+                      Delete Group Chat
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 15,
+                      backgroundColor: '#F3F4F6',
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: '#E5E7EB'
+                    }}
+                    onPress={() => {
+                      setIsSystemModalVisible(false);
+                      setIsReplaceLeadReviewerModalVisible(true);
+                    }}
+                  >
+                    <Feather name="refresh-cw" size={20} color="#8B5CF6" />
+                    <Text style={{marginLeft: 12, fontSize: 15, fontWeight: '500', color: '#374151'}}>
+                      Replace Lead Reviewer
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={{marginTop: 25}}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      backgroundColor: '#F3F4F6',
+                      alignItems: 'center',
+                    }}
+                    onPress={() => setIsSystemModalVisible(false)}
                   >
                     <Text style={{color: '#374151', fontWeight: '600', fontSize: 15}}>Close</Text>
                   </TouchableOpacity>

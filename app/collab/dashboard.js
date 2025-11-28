@@ -1189,7 +1189,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={[styles.quickActionsGrid, isMobile && styles.mobileQuickActionsGrid]}>
             {hasModule('create-content') && (
-              <QuickAction title="Publish" iconName="send" href="/collab/create-content" isMobile={isMobile} />
+              <QuickAction title="Collaborate" iconName="send" href="/collab/collaborate" isMobile={isMobile} />
             )}
             <QuickAction title="Go to Home" iconName="home" href="/home" isMobile={isMobile} />
           </View>
@@ -1408,7 +1408,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
                       data: graphData.article_publications.map(item => item.count)
                     }]
                   }}
-                  width={isMobile ? width - 48 : Math.floor((width - 370 - 20) / 2)}
+                  width={isMobile ? width - 48 : Math.floor((width - 370 - 20) / 2) - 10}
                   height={200}
                 />
               ) : (
