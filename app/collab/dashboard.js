@@ -27,9 +27,9 @@ const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
   const barPositions = values.map((value, index) => ({
     index,
     x: 30 + index * barWidth,
-    y: 20 + (chartHeight - 40) - (value / maxValue) * (chartHeight - 40),
+    y: maxValue > 0 ? 20 + (chartHeight - 40) - (value / maxValue) * (chartHeight - 40) : 20 + chartHeight - 40,
     width: barWidth - 5,
-    height: (value / maxValue) * (chartHeight - 40)
+    height: maxValue > 0 ? (value / maxValue) * (chartHeight - 40) : 0
   }));
 
   const handleMouseMove = (event) => {
@@ -139,9 +139,9 @@ const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
 
         {/* Bars */}
         {values.map((value, index) => {
-          const barHeight = (value / maxValue) * (chartHeight - 40);
+          const barHeight = maxValue > 0 ? (value / maxValue) * (chartHeight - 40) : 0;
           const x = 30 + index * barWidth;
-          const y = 20 + (chartHeight - 40) - barHeight;
+          const y = maxValue > 0 ? 20 + (chartHeight - 40) - barHeight : 20 + chartHeight - 40;
 
           return (
             <Rect
@@ -452,12 +452,12 @@ const SimpleLineChart = ({ data, width = 300, height = 200 }) => {
   const maxValue = Math.max(...values);
   const chartWidth = width - 40;
   const chartHeight = height - 40;
-  const stepX = chartWidth / (values.length - 1);
+  const stepX = values.length > 1 ? chartWidth / (values.length - 1) : 0;
 
   // Calculate touchable points for positioning
   const points = values.map((value, index) => ({
     x: 20 + index * stepX,
-    y: 20 + (1 - value / maxValue) * (chartHeight - 40),
+    y: maxValue > 0 ? 20 + (1 - value / maxValue) * (chartHeight - 40) : 20 + chartHeight / 2,
     index
   }));
 
@@ -575,7 +575,7 @@ const SimpleLineChart = ({ data, width = 300, height = 200 }) => {
         <Path
           d={`M ${values.map((value, index) => {
             const x = 20 + index * stepX;
-            const y = 20 + (1 - value / maxValue) * (chartHeight - 40);
+            const y = maxValue > 0 ? 20 + (1 - value / maxValue) * (chartHeight - 40) : 20 + chartHeight / 2;
             return `${x},${y}`;
           }).join(' L ')}`}
           stroke="#2196F3"
@@ -586,7 +586,7 @@ const SimpleLineChart = ({ data, width = 300, height = 200 }) => {
         {/* Data points */}
         {values.map((value, index) => {
           const x = 20 + index * stepX;
-          const y = 20 + (1 - value / maxValue) * (chartHeight - 40);
+          const y = maxValue > 0 ? 20 + (1 - value / maxValue) * (chartHeight - 40) : 20 + chartHeight / 2;
           return (
             <Circle
               key={index}
@@ -784,6 +784,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
   const [loadingGraphs, setLoadingGraphs] = useState(false);
   const [groupChatTimeline, setGroupChatTimeline] = useState([]);
   const [userWorkingHours, setUserWorkingHours] = useState({});
+  const [originalWorkingHours, setOriginalWorkingHours] = useState({}); // Track original data for CRUD operations
   const [collaboratorsWorkingHours, setCollaboratorsWorkingHours] = useState([]);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
@@ -926,30 +927,41 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
       const response = await apiClient.get('/working-hours/me');
       const data = response.data.working_hours || [];
       
-      // Convert from API array format to new UI format
-      const uiFormat = {};
-      let counter = 0;
+      console.log('Raw working hours data from backend:', data);
       
-      data.forEach((entry) => {
+      // Convert from API array format to new UI format, preserving database IDs
+      const uiFormat = {};
+      
+      data.forEach((entry, index) => {
+        console.log('Processing entry:', entry);
+        
         if (entry.preferred_start_time && entry.preferred_end_time) {
-          uiFormat[`preferred_${counter++}`] = {
+          const key = `preferred_${entry.id || index}`;
+          console.log('Adding preferred entry with key:', key);
+          uiFormat[key] = {
             type: 'preferred',
             day: entry.day_of_week,
             start_time: entry.preferred_start_time,
-            end_time: entry.preferred_end_time
+            end_time: entry.preferred_end_time,
+            id: entry.id // Preserve original database ID
           };
         }
         if (entry.possible_start_time && entry.possible_end_time) {
-          uiFormat[`possible_${counter++}`] = {
+          const key = `possible_${entry.id || index}`;
+          console.log('Adding possible entry with key:', key);
+          uiFormat[key] = {
             type: 'possible',
             day: entry.day_of_week,
             start_time: entry.possible_start_time,
-            end_time: entry.possible_end_time
+            end_time: entry.possible_end_time,
+            id: entry.id // Preserve original database ID
           };
         }
       });
       
+      console.log('Final UI format:', uiFormat);
       setUserWorkingHours(uiFormat);
+      setOriginalWorkingHours(JSON.parse(JSON.stringify(uiFormat))); // Deep copy for comparison
     } catch (error) {
       console.error('Error fetching user working hours:', error);
     }
@@ -981,7 +993,9 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
         }
       }
       
-      // Convert the new format to the API format
+      // Step 1: Replace all working hours (backend handles deletion automatically)
+      console.log('Replacing all working hours...');
+      
       const formattedData = Object.entries(workingHours)
         .filter(([key, entry]) => key.startsWith('preferred_') || key.startsWith('possible_'))
         .map(([key, entry]) => ({
@@ -1003,8 +1017,12 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
           return false;
         });
 
+      console.log('Sending replacement entries:', formattedData);
       await apiClient.post('/working-hours', { working_hours: formattedData });
+      
+      // Update local state
       setUserWorkingHours(workingHours);
+      setOriginalWorkingHours(JSON.parse(JSON.stringify(workingHours)));
       
       // Refresh team working hours to show updated data
       await fetchCollaboratorsWorkingHours();
@@ -1071,6 +1089,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
     if (!showEditHoursModal) {
       // Clear working hours when edit modal closes
       setUserWorkingHours({});
+      setOriginalWorkingHours({});
     }
   }, [showEditHoursModal]);
 
@@ -1749,73 +1768,6 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
         </View>
       </Modal>
 
-      {/* Time Picker Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={showTimePickerModal}
-        onRequestClose={handleTimeCancel}
-      >
-        <View style={styles.timePickerOverlay}>
-          <View style={styles.timePickerModal}>
-            <View style={styles.timePickerHeader}>
-              <Text style={styles.timePickerTitle}>Select Time</Text>
-              <TouchableOpacity 
-                style={styles.closeButton} 
-                onPress={handleTimeCancel}
-              >
-                <Feather name="x" size={18} color="#6B7280" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.timePickerContent}>
-              <View style={styles.pickerContainer}>
-                <Text style={styles.pickerLabel}>Hour</Text>
-                <Picker
-                  selectedValue={selectedHour}
-                  onValueChange={(itemValue) => setSelectedHour(itemValue)}
-                  style={styles.picker}
-                >
-                  {Array.from({ length: 24 }, (_, i) => (
-                    <Picker.Item
-                      key={i}
-                      label={i.toString().padStart(2, '0')}
-                      value={i.toString().padStart(2, '0')}
-                    />
-                  ))}
-                </Picker>
-              </View>
-
-              <View style={styles.pickerContainer}>
-                <Text style={styles.pickerLabel}>Minute</Text>
-                <Picker
-                  selectedValue={selectedMinute}
-                  onValueChange={(itemValue) => setSelectedMinute(itemValue)}
-                  style={styles.picker}
-                >
-                  {Array.from({ length: 60 }, (_, i) => (
-                    <Picker.Item
-                      key={i}
-                      label={i.toString().padStart(2, '0')}
-                      value={i.toString().padStart(2, '0')}
-                    />
-                  ))}
-                </Picker>
-              </View>
-            </View>
-
-            <View style={styles.timePickerFooter}>
-              <TouchableOpacity style={styles.timePickerButtonCancel} onPress={handleTimeCancel}>
-                <Text style={styles.timePickerButtonTextCancel}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.timePickerButtonConfirm} onPress={handleTimeConfirm}>
-                <Text style={styles.timePickerButtonTextConfirm}>Confirm</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
       {/* Confirmation Modal */}
       <Modal
         animationType="fade"
@@ -1967,6 +1919,73 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
               )}
             </View>
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Time Picker Modal - Rendered last to appear on top */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showTimePickerModal}
+        onRequestClose={handleTimeCancel}
+      >
+        <View style={[styles.timePickerOverlay, { zIndex: 1000 }]}>
+          <View style={[styles.timePickerModal, { zIndex: 1001 }]}>
+            <View style={styles.timePickerHeader}>
+              <Text style={styles.timePickerTitle}>Select Time</Text>
+              <TouchableOpacity 
+                style={styles.closeButton} 
+                onPress={handleTimeCancel}
+              >
+                <Feather name="x" size={18} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.timePickerContent}>
+              <View style={styles.pickerContainer}>
+                <Text style={styles.pickerLabel}>Hour</Text>
+                <Picker
+                  selectedValue={selectedHour}
+                  onValueChange={(itemValue) => setSelectedHour(itemValue)}
+                  style={styles.picker}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <Picker.Item
+                      key={i}
+                      label={i.toString().padStart(2, '0')}
+                      value={i.toString().padStart(2, '0')}
+                    />
+                  ))}
+                </Picker>
+              </View>
+
+              <View style={styles.pickerContainer}>
+                <Text style={styles.pickerLabel}>Minute</Text>
+                <Picker
+                  selectedValue={selectedMinute}
+                  onValueChange={(itemValue) => setSelectedMinute(itemValue)}
+                  style={styles.picker}
+                >
+                  {Array.from({ length: 60 }, (_, i) => (
+                    <Picker.Item
+                      key={i}
+                      label={i.toString().padStart(2, '0')}
+                      value={i.toString().padStart(2, '0')}
+                    />
+                  ))}
+                </Picker>
+              </View>
+            </View>
+
+            <View style={styles.timePickerFooter}>
+              <TouchableOpacity style={styles.timePickerButtonCancel} onPress={handleTimeCancel}>
+                <Text style={styles.timePickerButtonTextCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.timePickerButtonConfirm} onPress={handleTimeConfirm}>
+                <Text style={styles.timePickerButtonTextConfirm}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
     </View>
