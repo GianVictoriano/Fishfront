@@ -25,7 +25,6 @@ export const NotificationProvider = ({ children }) => {
 
       try {
         const params = new URLSearchParams({
-          limit: 1, // We only need the count, not the actual items
           status: 'pending',
         });
         params.append('current_reviewer_id', user.id);
@@ -35,7 +34,15 @@ export const NotificationProvider = ({ children }) => {
           apiClient.get(`/review-images?${params.toString()}`),
         ]);
 
-        const totalPending = (draftsRes.data.last_page || 0) + (imagesRes.data.last_page || 0);
+        // Get actual count of pending items, not last_page
+        const draftsData = draftsRes.data.data || draftsRes.data || [];
+        const imagesData = imagesRes.data.data || imagesRes.data || [];
+        
+        const draftsCount = Array.isArray(draftsData) ? draftsData.length : 0;
+        const imagesCount = Array.isArray(imagesData) ? imagesData.length : 0;
+        
+        const totalPending = draftsCount + imagesCount;
+        console.log('Pending review count:', { draftsCount, imagesCount, totalPending });
         setPendingReviewCount(totalPending);
       } catch (error) {
         console.error('Failed to fetch pending review count:', error);
