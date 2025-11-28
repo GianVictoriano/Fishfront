@@ -166,16 +166,56 @@ const ManageModulesScreen = () => {
                     displayableModules = allModules.filter(module => allowedModuleNames.includes(module.name));
                 }
 
-                return displayableModules.map(module => (
-            
-                <View key={module.id} style={styles.moduleRow}>
-                    <Text style={styles.moduleName}>{module.display_name}</Text>
-                    <Switch
-                        value={selectedModules.has(module.id)}
-                        onValueChange={() => handleToggleModule(module.id)}
-                    />
-                </View>
-            ));
+                // Group modules by category
+                const moduleGroups = {
+                    'Monitoring': [
+                        'dashboard',
+                        'activity-monitor'
+                    ],
+                    'Content Management': [
+                        'create-content',
+                        'review-content',
+                        'collaborate'
+                    ],
+                    'User & Access Management': [
+                        'applicants',
+                        'users',
+                        'requests'
+                    ],
+                    'System Administration': [
+                        'branding',
+                        'forum',
+                        'folio',
+                        'archives',
+                        'manage-media'
+                    ]
+                };
+
+                return Object.entries(moduleGroups).map(([category, moduleNames]) => {
+                    const categoryModules = displayableModules.filter(module => 
+                        moduleNames.includes(module.name)
+                    );
+
+                    // Skip empty categories
+                    if (categoryModules.length === 0) return null;
+
+                    return (
+                        <View key={category} style={styles.categoryContainer}>
+                            <Text style={styles.categoryTitle}>{category}</Text>
+                            <View style={styles.categoryModules}>
+                                {categoryModules.map(module => (
+                                    <View key={module.id} style={styles.moduleRow}>
+                                        <Text style={styles.moduleName}>{module.display_name}</Text>
+                                        <Switch
+                                            value={selectedModules.has(module.id)}
+                                            onValueChange={() => handleToggleModule(module.id)}
+                                        />
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    );
+                }).filter(Boolean); // Remove null entries
             })()}
 
             <Pressable style={styles.saveButton} onPress={handleSaveChanges} disabled={saving}>
@@ -302,17 +342,40 @@ const styles = StyleSheet.create({
         color: '#3B82F6',
         marginBottom: 25,
     },
+    categoryContainer: {
+        marginBottom: 25,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        overflow: 'hidden',
+    },
+    categoryTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#1F2937',
+        padding: 15,
+        backgroundColor: '#F9FAFB',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E7EB',
+    },
+    categoryModules: {
+        paddingHorizontal: 5,
+    },
     moduleRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingVertical: 15,
+        paddingHorizontal: 15,
         borderBottomWidth: 1,
-        borderBottomColor: '#E5E7EB',
+        borderBottomColor: '#F3F4F6',
     },
     moduleName: {
         fontSize: 16,
         color: '#374151',
+        flex: 1,
+        marginRight: 10,
     },
     saveButton: {
         backgroundColor: '#16A34A', // Green for save
