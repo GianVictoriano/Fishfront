@@ -8,7 +8,6 @@ import NewsNavbar from '../../../../components/newsnavbar';
 import RecommendedContent from '../../../../components/RecommendedContent';
 import useInteractionTracking from '../../../../hooks/useInteractionTracking';
 import apiClient from '../../../../utils/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import useNewsStore from '../../../../store/newsStore';
 
 const styles = StyleSheet.create({
@@ -605,31 +604,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
   },
-  cacheClearButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f3f4f6',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    marginBottom: 8,
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-  },
-  cacheClearButtonText: {
-    color: '#374151',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  cacheClearDescription: {
-    fontSize: 12,
-    color: '#6b7280',
-    lineHeight: 16,
-    maxWidth: 250,
-  },
-  threeColumnGrid: {
+    threeColumnGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
     gap: 14,
@@ -1250,7 +1225,8 @@ export default function NewsScreen() {
       const genreMapping = {
         'articles': 'Articles',
         'sports': 'Sports', 
-        'opinion': 'Opinion',
+        'opinions': 'Opinion',
+        'opinion': 'Opinion', // Keep for backward compatibility
         'editorial': 'Editorial',
         'creative': 'Creative',
         'literary': 'Literary Works',
@@ -1283,15 +1259,7 @@ export default function NewsScreen() {
       const requestId = `initial-news-${activeGenre}`;
       if (activeRequests.has(requestId)) return;
 
-      // Check cache first (per-genre)
-      const cacheKey = `news-${activeGenre}`;
-      const cachedData = await getCachedData(cacheKey);
-      if (cachedData) {
-        setNewsData(cachedData);
-        // Ensure loading state is cleared when serving from cache
-        setLoading(false);
-        return;
-      }
+      // No cache check - always fetch fresh data
 
       setActiveRequests(prev => new Set(prev).add(requestId));
       setLoading(true);
@@ -1300,15 +1268,26 @@ export default function NewsScreen() {
         let url;
         let isCreativeFetch = activeGenre === 'Creative';
         
+        // Map frontend genre names to database genre values
+        const genreToDatabase = {
+          'Articles': 'articles',
+          'Opinion': 'opinions',
+          'Sports': 'sports',
+          'Editorial': 'editorial',
+          'Creative': 'creative',
+          'Literary Works': 'literary'
+        };
+        
         if (isCreativeFetch) {
           // Fetch creative works
           url = '/creatives-published';
         } else if (activeGenre !== 'News') {
-          // Fetch trending articles by genre for featured tabs
-          url = `/public/trending-articles?genre=${activeGenre.toLowerCase()}`;
+          // For featured tabs: fetch latest articles by genre (Articles, Opinion, Sports, Editorial)
+          const dbGenre = genreToDatabase[activeGenre] || activeGenre.toLowerCase();
+          url = `/public/latest-articles?genre=${dbGenre}`;
         } else {
-          // Fetch general trending articles for News tab
-          url = '/public/trending-articles';
+          // For News tab: fetch latest articles across all genres for main content
+          url = '/public/latest-articles';
         }
 
         const res = await apiClient.get(url);
@@ -1419,11 +1398,7 @@ export default function NewsScreen() {
             }
           });
           
-          if (isCreativeFetch) {
-            await clearAllCache(); // Clear cache for Creative tab
-          } else {
-            await setCachedData(cacheKey, fullMapped);
-          }
+          // No caching for Creative tab
         } else {
           console.log('No data array found in response:', res.data);
         }
@@ -1445,105 +1420,7 @@ export default function NewsScreen() {
     fetchInitialNewsData();
   }, [activeGenre]);
 
-  // Cache management functions with cleanup
-  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
-  const MAX_CACHE_ENTRIES = 20; // Limit cache entries to prevent bloat
-
-  const getCachedData = async (key) => {
-    try {
-      // First, cleanup expired entries
-      await cleanupExpiredCache();
-      
-      const cached = await AsyncStorage.getItem(`news_cache_${key}`);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        const { data, timestamp } = parsed || {};
-        if (data && typeof timestamp === 'number' && Date.now() - timestamp < CACHE_DURATION) {
-          return data;
-        } else {
-          // Remove expired entry
-          await AsyncStorage.removeItem(`news_cache_${key}`);
-        }
-      }
-    } catch (error) {
-      console.log('Cache read error:', error);
-      // If there's an error, try to clear potentially corrupted cache
-      try {
-        await AsyncStorage.removeItem(`news_cache_${key}`);
-      } catch (cleanupError) {
-        console.log('Cache cleanup error:', cleanupError);
-      }
-    }
-    return null;
-  };
-
-  const setCachedData = async (key, data) => {
-    try {
-      // Ensure we don't exceed cache limits
-      await enforceCacheLimits();
-      
-      const cacheData = {
-        data,
-        timestamp: Date.now()
-      };
-      await AsyncStorage.setItem(`news_cache_${key}`, JSON.stringify(cacheData));
-    } catch (error) {
-      console.log('Cache write error:', error);
-    }
-  };
-
-  const cleanupExpiredCache = async () => {
-    try {
-      const keys = await AsyncStorage.getAllKeys();
-      const cacheKeys = keys.filter(key => key.startsWith('news_cache_'));
-      
-      for (const key of cacheKeys) {
-        try {
-          const cached = await AsyncStorage.getItem(key);
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            const { timestamp } = parsed || {};
-            if (!timestamp || Date.now() - timestamp > CACHE_DURATION) {
-              await AsyncStorage.removeItem(key);
-            }
-          }
-        } catch (error) {
-          // Remove corrupted entries
-          await AsyncStorage.removeItem(key);
-        }
-      }
-    } catch (error) {
-      console.log('Cache cleanup error:', error);
-    }
-  };
-
-  const enforceCacheLimits = async () => {
-    try {
-      const keys = await AsyncStorage.getAllKeys();
-      const cacheKeys = keys.filter(key => key.startsWith('news_cache_'));
-      
-      if (cacheKeys.length >= MAX_CACHE_ENTRIES) {
-        // Remove oldest entries (simple FIFO - could be improved to LRU)
-        const entriesToRemove = cacheKeys.slice(0, cacheKeys.length - MAX_CACHE_ENTRIES + 1);
-        await AsyncStorage.multiRemove(entriesToRemove);
-      }
-    } catch (error) {
-      console.log('Cache limit enforcement error:', error);
-    }
-  };
-
-  const clearAllCache = async () => {
-    try {
-      const keys = await AsyncStorage.getAllKeys();
-      const cacheKeys = keys.filter(key => key.startsWith('news_cache_'));
-      if (cacheKeys.length > 0) {
-        await AsyncStorage.multiRemove(cacheKeys);
-        console.log(`Cleared ${cacheKeys.length} cache entries`);
-      }
-    } catch (error) {
-      console.log('Cache clearing error:', error);
-    }
-  };
+  // Cache management functions removed
 
   // fetch trending stories (most visited in last 3 days) - only once on mount
   useEffect(() => {
@@ -1551,12 +1428,7 @@ export default function NewsScreen() {
       const requestId = 'trending-stories';
       if (activeRequests.has(requestId)) return;
 
-      // Check cache first
-      const cachedData = await getCachedData('trending-stories');
-      if (cachedData) {
-        setTrendingStories(cachedData);
-        return;
-      }
+      // No cache for trending stories
 
       setActiveRequests(prev => new Set(prev).add(requestId));
 
@@ -1571,8 +1443,7 @@ export default function NewsScreen() {
             image: getImageUrl(a.image), // Process image URL
           }));
           setTrendingStories(mapped);
-          // Cache the result
-          await setCachedData('trending-stories', mapped);
+          // No caching
         }
       } catch (error) {
         console.log('Error fetching trending stories:', error);
@@ -1767,8 +1638,8 @@ export default function NewsScreen() {
                       <View style={styles.rightCol}>
                         <ScrollView style={styles.rightColScroll} contentContainerStyle={{ paddingBottom: 16 }}>
                           <View style={styles.freshStoriesSection}>
-                            <Text style={styles.freshStoriesHeader}>Trending Stories</Text>
-                            <Text style={styles.freshStoriesSubheader}>Most visited in last 3 days</Text>
+                            <Text style={styles.freshStoriesHeader}>Trending Now</Text>
+                            <Text style={styles.freshStoriesSubheader}>Most visited in the last 3 days</Text>
                             <View style={styles.freshStoryList}>
                               {trendingStories.slice(0, displayedTrendingStories).map((item, index) => (
                                 <TrendingStoryItem key={item.id} item={item} index={index} />
@@ -1823,26 +1694,6 @@ export default function NewsScreen() {
               </View>
               <View style={styles.footerSection}>
                 <Text style={styles.footerHeading}>Performance</Text>
-                <TouchableOpacity
-                  style={styles.cacheClearButton}
-                  onPress={async () => {
-                    try {
-                      await clearAllCache();
-                      alert('Cache cleared successfully! The page will reload to apply changes.');
-                      window.location.reload();
-                    } catch (error) {
-                      console.error('Error clearing cache:', error);
-                      alert('Failed to clear cache. Please try refreshing the page manually.');
-                    }
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name="cleaning-services" size={16} color="#374151" style={{ marginRight: 8 }} />
-                  <Text style={styles.cacheClearButtonText}>Clear Cache & Refresh</Text>
-                </TouchableOpacity>
-                <Text style={styles.cacheClearDescription}>
-                  Use this if the website feels slow. This will clear cached data and refresh the page.
-                </Text>
               </View>
             </View>
             <View style={styles.copyright}>

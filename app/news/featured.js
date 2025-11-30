@@ -257,11 +257,20 @@ const fallbackFeaturedData = [
 const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
 
 const getImageUrl = (url) => {
-  if (!url) return defaultImage;
+  console.log('🔍 getImageUrl input:', url); // Debug: Log input
+  if (!url) {
+    console.log('🔍 getImageUrl: no url, returning default'); // Debug: Log fallback
+    return defaultImage;
+  }
   // Convert to string if it's a number or other type
   const urlStr = String(url);
-  if (urlStr.startsWith('http')) return urlStr;
-  return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
+  if (urlStr.startsWith('http')) {
+    console.log('🔍 getImageUrl: returning full URL:', urlStr); // Debug: Log full URL
+    return urlStr;
+  }
+  const finalUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
+  console.log('🔍 getImageUrl: constructed URL:', finalUrl); // Debug: Log constructed URL
+  return finalUrl;
 };
 
 const NewsCard = ({ item, compact, onInteraction }) => {
@@ -426,24 +435,37 @@ export default function FeaturedScreen() {
       setDisplayedArticles(9);
 
       try {
+        console.log('🔍 Fetching featured articles from: /public/featured-articles'); // Debug: Log fetch
         const res = await apiClient.get('/public/featured-articles');
+        console.log('🔍 Raw API Response:', res); // Debug: Log response
+        console.log('🔍 Response data:', res.data); // Debug: Log data
 
         if (Array.isArray(res.data?.data)) {
+          console.log('✅ API returned', res.data.data.length, 'items for Featured'); // Debug: Log count
+          if (res.data.data.length > 0) {
+            console.log('🔍 First item full structure:', JSON.stringify(res.data.data[0], null, 2)); // Debug: Log first item
+            console.log('🔍 First item image field:', res.data.data[0].image); // Debug: Log image field
+            console.log('🔍 First item image_path field:', res.data.data[0].image_path); // Debug: Log image_path field
+          }
           const limit = 20;
           const mapped = res.data.data.slice(0, limit).map(article => ({
             id: article.id?.toString() || '',
             title: article.title,
             excerpt: article.excerpt || '',
-            image: article.image_path
-              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.image_path.replace('public/', '')}`
-              : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+            image: getImageUrl(article.image || article.image_path), // Use both fields like news.web.js
             date: article.published_at ? new Date(article.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
             category: 'Featured',
           }));
+          console.log('✅ Setting featured data:', mapped); // Debug: Log mapped data
+          console.log('🔍 Sample mapped item image URL:', mapped[0]?.image); // Debug: Log mapped image URL
           setFeaturedData(mapped);
+        } else {
+          console.log('❌ No data array found in response:', res.data); // Debug: Log error
         }
       } catch (error) {
-        console.log('Failed to fetch featured data:', error);
+        console.error('❌ Error fetching featured data:', error); // Debug: Log error
+        console.error('❌ Error response:', error.response); // Debug: Log error response
+        console.log('⚠️ Falling back to dummy data for Featured'); // Debug: Log fallback
         setFeaturedData(fallbackFeaturedData);
       } finally {
         setLoading(false);

@@ -142,15 +142,17 @@ export default function ReviewContentScreen() {
   }, []);
 
   useEffect(() => {
-    // Fetch a single page (used for page 1 and later pages)
+    // Fetch a single page (used for page 1 and later pages) with increased limit
     const fetchPage = async (page) => {
       const params = new URLSearchParams({
-        limit: 12,
+        limit: 50, // Increased from 12 to reduce API calls
         status: statusFilter,
         page,
       });
       if (selectedGroupId !== ALL_GROUPS_ID) params.append('group_id', selectedGroupId);
       if (statusFilter === 'pending' && userCache) params.append('current_reviewer_id', userCache.id);
+      
+      // Use existing endpoints with Promise.all for parallel requests
       const [draftsRes, imagesRes] = await Promise.all([
         apiClient.get(`/review-content?${params.toString()}`),
         apiClient.get(`/review-images?${params.toString()}`),
@@ -170,7 +172,7 @@ export default function ReviewContentScreen() {
         }
         
         const params = new URLSearchParams({
-          limit: 12,
+          limit: 50, // Increased from 12 to reduce API calls
           status: statusFilter,
         });
         
@@ -185,10 +187,7 @@ export default function ReviewContentScreen() {
           params.append('current_reviewer_id', currentUser.id);
         }
         
-        // page 1 already included in fetchPage below
-        const imagesUrl = `/review-images?${params.toString()}`;
-
-        // Fetch first page
+        // Fetch first page with existing endpoints
         const [draftsPage1, imagesPage1] = await fetchPage(1);
 
         // Map groups for quick lookup
@@ -214,7 +213,7 @@ export default function ReviewContentScreen() {
         
         setReviewContent([...drafts, ...images]);
 
-        // Background fetch remaining pages
+        // Background fetch remaining pages (much fewer now with higher limit)
         const totalPages = Math.max(draftsPage1.last_page, imagesPage1.last_page);
         if (totalPages > 1) {
           for (let p = 2; p <= totalPages; p++) {

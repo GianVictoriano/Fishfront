@@ -33,6 +33,25 @@ const fallbackPublications = {
   ],
 };
 
+const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+
+const getImageUrl = (url) => {
+  console.log('🏠 Home getImageUrl input:', url); // Debug: Log input
+  if (!url) {
+    console.log('🏠 Home getImageUrl: no url, returning default'); // Debug: Log fallback
+    return defaultImage;
+  }
+  // Convert to string if it's a number or other type
+  const urlStr = String(url);
+  if (urlStr.startsWith('http')) {
+    console.log('🏠 Home getImageUrl: returning full URL:', urlStr); // Debug: Log full URL
+    return urlStr;
+  }
+  const finalUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
+  console.log('🏠 Home getImageUrl: constructed URL:', finalUrl); // Debug: Log constructed URL
+  return finalUrl;
+};
+
 const CATEGORIES = ['News'];
 const GENRES = ['articles', 'sports', 'opinion', 'editorial', 'creative', 'literary'];
 const GENRE_DISPLAY_NAMES = {
@@ -61,10 +80,12 @@ const HomeScreen = () => {
   const [featuredData, setFeaturedData] = useState([]);
   const [genreData, setGenreData] = useState({});
 
-  // Helper function to strip HTML tags from content
+  // Helper function to strip HTML tags from content and limit to 200 characters
   const stripHtmlTags = (html) => {
     if (!html) return '';
-    return html.replace(/<[^>]*>/g, '').trim();
+    const cleanText = html.replace(/<[^>]*>/g, '').trim();
+    if (cleanText.length <= 200) return cleanText;
+    return cleanText.substring(0, 200) + '... Click the image to read more';
   };
 
   useEffect(() => {
@@ -125,22 +146,36 @@ const HomeScreen = () => {
 
   const fetchFeaturedArticles = async () => {
     try {
+      console.log('🏠 Home: Fetching featured articles from: /public/featured-articles'); // Debug: Log fetch
       const response = await apiClient.get('/public/featured-articles');
+      console.log('🏠 Home: Raw API Response:', response); // Debug: Log response
+      console.log('🏠 Home: Response data:', response.data); // Debug: Log data
+      
       if (response.data?.data) {
+        console.log('🏠 Home: API returned', response.data.data.length, 'items for Featured'); // Debug: Log count
+        if (response.data.data.length > 0) {
+          console.log('🏠 Home: First item full structure:', JSON.stringify(response.data.data[0], null, 2)); // Debug: Log first item
+          console.log('🏠 Home: First item image field:', response.data.data[0].image); // Debug: Log image field
+          console.log('🏠 Home: First item image_path field:', response.data.data[0].image_path); // Debug: Log image_path field
+        }
         const mapped = response.data.data.slice(0, 3).map(article => ({
           id: article.id?.toString() || '',
           title: article.title,
           content: article.content || '',
-          image: article.image_path
-            ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.image_path.replace('public/', '')}` 
-            : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+          image: getImageUrl(article.image || article.image_path), // Use both fields like news.web.js
           published_at: article.published_at,
           genre: article.genre || 'Featured',
         }));
+        console.log('🏠 Home: Setting featured data:', mapped); // Debug: Log mapped data
+        console.log('🏠 Home: Sample mapped item image URL:', mapped[0]?.image); // Debug: Log mapped image URL
         setFeaturedData(mapped);
+      } else {
+        console.log('🏠 Home: No data array found in response:', response.data); // Debug: Log error
       }
     } catch (error) {
-      console.log('Error fetching featured articles:', error);
+      console.error('🏠 Home: Error fetching featured articles:', error); // Debug: Log error
+      console.error('🏠 Home: Error response:', error.response); // Debug: Log error response
+      console.log('🏠 Home: Falling back to empty featured data'); // Debug: Log fallback
     }
   };
 
@@ -1147,7 +1182,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   publicationTitle: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '600',
     color: '#1a1a1a',
     margin: '0 0 6px',
@@ -1347,7 +1382,7 @@ const styles = StyleSheet.create({
     width: '100%',
     padding: '48px 24px',
     marginTop: 32,
-    marginBottom: 32,
+
     borderRadius: '8px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
     boxSizing: 'border-box',
@@ -1390,7 +1425,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#3a505b',
     color: 'white',
     padding: '40px 20px 20px',
-    marginTop: '60px',
+
     flexShrink: 0,
   },
   footerContent: {

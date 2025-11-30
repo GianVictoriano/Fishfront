@@ -183,15 +183,12 @@ const Navbar = () => {
                 <NavLink href="forum" text="Forum" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
                 <NavLink href="contribute" text="Request" pathname={pathname} closeMenu={() => setMobileMenuVisible(false)} />
                 <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { router.push('/profile'); setMobileMenuVisible(false); }}>
-                  <FontAwesome name="user" size={16} style={styles.mobileMenuIcon} />
                   <Text style={styles.mobileMenuText}>Profile</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.mobileMenuItem} onPress={() => { router.push('/my-requests'); setMobileMenuVisible(false); }}>
-                  <FontAwesome name="list" size={16} style={styles.mobileMenuIcon} />
                   <Text style={styles.mobileMenuText}>My Requests</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.mobileMenuItem} onPress={handleLogout}>
-                  <FontAwesome name="sign-out" size={16} style={styles.mobileMenuIcon} />
                   <Text style={styles.mobileMenuText}>Logout</Text>
                 </TouchableOpacity>
               </>
