@@ -58,6 +58,12 @@ export default function CreateContentScreen() {
   const [showActivityAvailabilityModal, setShowActivityAvailabilityModal] = useState(false);
   const [checkingActivityAvailability, setCheckingActivityAvailability] = useState(false);
   
+  // Additional members search state for activity availability
+  const [additionalMembersSearchTerm, setAdditionalMembersSearchTerm] = useState('');
+  const [additionalMembersSearchResults, setAdditionalMembersSearchResults] = useState([]);
+  const [additionalMembersSearchByPosition, setAdditionalMembersSearchByPosition] = useState(false);
+  const [selectedAdditionalMembers, setSelectedAdditionalMembers] = useState([]);
+  
   // Folio form state
   const [showFolioPanel, setShowFolioPanel] = useState(false);
   const [folioTitle, setFolioTitle] = useState('');
@@ -138,7 +144,7 @@ export default function CreateContentScreen() {
   // Fetch collaborators when the panel opens
   useEffect(() => {
     const fetchCollaborators = async () => {
-      if (showScrumPanel || showActivityPanel || showFolioPanel) {
+      if (showScrumPanel || showActivityPanel || showFolioPanel || showActivityAvailabilityModal) {
         try {
           const response = await apiClient.get('/users');
           const users = response.data.users || [];
@@ -151,7 +157,7 @@ export default function CreateContentScreen() {
       }
     };
     fetchCollaborators();
-  }, [showScrumPanel, showActivityPanel, showFolioPanel]);
+  }, [showScrumPanel, showActivityPanel, showFolioPanel, showActivityAvailabilityModal]);
 
   // Handle search filtering
   useEffect(() => {
@@ -182,6 +188,35 @@ export default function CreateContentScreen() {
       setActivitySearchResults([]);
     }
   }, [activitySearchTerm, selectedActivityMembers, allCollaborators, activitySearchByPosition]);
+
+  // Handle additional members search filtering
+  useEffect(() => {
+    if (additionalMembersSearchTerm) {
+      console.log('Searching for:', additionalMembersSearchTerm);
+      console.log('All collaborators count:', allCollaborators.length);
+      console.log('Available people count:', activityAvailablePeople.length);
+      console.log('Selected additional members count:', selectedAdditionalMembers.length);
+      
+      const results = allCollaborators.filter(user => {
+        const matchesSearch = additionalMembersSearchByPosition
+          ? user.profile?.position?.toLowerCase().includes(additionalMembersSearchTerm.toLowerCase())
+          : user.name.toLowerCase().includes(additionalMembersSearchTerm.toLowerCase());
+        // Only exclude already selected additional members (allow available people to be added too)
+        const isSelected = selectedAdditionalMembers.some(sm => sm.id === user.id);
+        const shouldInclude = matchesSearch && !isSelected;
+        
+        if (matchesSearch) {
+          console.log(`User ${user.name} matches search, selected: ${isSelected}, include: ${shouldInclude}`);
+        }
+        
+        return shouldInclude;
+      });
+      console.log('Search results:', results.length);
+      setAdditionalMembersSearchResults(results);
+    } else {
+      setAdditionalMembersSearchResults([]);
+    }
+  }, [additionalMembersSearchTerm, selectedAdditionalMembers, allCollaborators, additionalMembersSearchByPosition]);
 
   // Handle folio search filtering
   useEffect(() => {
@@ -216,6 +251,16 @@ export default function CreateContentScreen() {
 
   const handleRemoveActivityMember = (userId) => {
     setSelectedActivityMembers(prev => prev.filter(u => u.id !== userId));
+  };
+
+  const handleAddAdditionalMember = (user) => {
+    setSelectedAdditionalMembers(prev => [...prev, user]);
+    setAdditionalMembersSearchTerm('');
+    setAdditionalMembersSearchResults([]);
+  };
+
+  const handleRemoveAdditionalMember = (userId) => {
+    setSelectedAdditionalMembers(prev => prev.filter(u => u.id !== userId));
   };
 
   const handleAddFolioMember = (user) => {
@@ -617,9 +662,11 @@ export default function CreateContentScreen() {
   };
 
   const handleBroadcastActivity = async () => {
-    if (!activityDate || activityAvailablePeople.length === 0) {
+    const totalRecipients = selectedAdditionalMembers.length;
+    
+    if (!activityDate || totalRecipients === 0) {
       setFeedbackModalConfig({
-        message: 'No available collaborators to broadcast to.',
+        message: 'No recipients selected for broadcast.',
         type: 'notice'
       });
       setFeedbackModalVisible(true);
@@ -634,13 +681,14 @@ export default function CreateContentScreen() {
         activity_location: activityLocation,
         required_writers: parseInt(activityRequiredWriters) || 0,
         required_photographers: parseInt(activityRequiredPhotographers) || 0,
-        available_collaborators: activityAvailablePeople.map(person => person.id)
+        available_collaborators: selectedAdditionalMembers.map(person => person.id), // Send selected members as available_collaborators to satisfy backend
+        additional_collaborators: [] // Send empty array since we're not using additional_collaborators
       };
 
       const response = await apiClient.post('/broadcasts', payload);
       
       setFeedbackModalConfig({
-        message: `Broadcast sent to ${activityAvailablePeople.length} collaborators!`,
+        message: `Broadcast sent to ${totalRecipients} collaborators!`,
         type: 'success'
       });
       setFeedbackModalVisible(true);
@@ -656,6 +704,26 @@ export default function CreateContentScreen() {
       });
       setFeedbackModalVisible(true);
     }
+  };
+
+  const handleAddAllAvailable = () => {
+    // Filter available people who aren't already selected
+    const availableToAdd = activityAvailablePeople.filter(person => 
+      !selectedAdditionalMembers.some(sm => sm.id === person.id)
+    );
+    
+    if (availableToAdd.length > 0) {
+      setSelectedAdditionalMembers(prev => [...prev, ...availableToAdd]);
+    }
+  };
+
+  const handleCloseActivityAvailabilityModal = () => {
+    setShowActivityAvailabilityModal(false);
+    setActivityAvailablePeople([]);
+    setSelectedAdditionalMembers([]);
+    setAdditionalMembersSearchTerm('');
+    setAdditionalMembersSearchResults([]);
+    setAdditionalMembersSearchByPosition(false);
   };
 
   const checkActivityAvailability = async (dateTimeString) => {
@@ -1644,13 +1712,14 @@ export default function CreateContentScreen() {
               <TouchableOpacity
                 style={styles.datePickerConfirmButton}
                 onPress={() => {
-                  // Format date in local timezone to avoid UTC conversion issues
+                  // Send local time directly to avoid timezone conversion issues
                   const year = selectedActivityDate.getFullYear();
                   const month = String(selectedActivityDate.getMonth() + 1).padStart(2, '0');
                   const day = String(selectedActivityDate.getDate()).padStart(2, '0');
                   const hours = String(selectedActivityDate.getHours()).padStart(2, '0');
                   const minutes = String(selectedActivityDate.getMinutes()).padStart(2, '0');
-                  const formatted = `${year}-${month}-${day} ${hours}:${minutes}`;
+                  // Send in YYYY-MM-DD HH:MM:SS format (local time)
+                  const formatted = `${year}-${month}-${day} ${hours}:${minutes}:00`;
                   setActivityDate(formatted);
                   setShowActivityDatePicker(false);
                 }}
@@ -2050,7 +2119,7 @@ export default function CreateContentScreen() {
                 <Text style={styles.scrumPanelTitle}>Available Collaborators</Text>
                 <Text style={styles.scrumPanelSubtitle}>Team members available for this activity time</Text>
               </View>
-              <TouchableOpacity style={styles.closeButton} onPress={() => setShowActivityAvailabilityModal(false)}>
+              <TouchableOpacity style={styles.closeButton} onPress={handleCloseActivityAvailabilityModal}>
                 <Feather name="x" size={24} color="#6c757d" />
               </TouchableOpacity>
             </View>
@@ -2060,44 +2129,143 @@ export default function CreateContentScreen() {
                   <Text style={{ color: '#6B7280' }}>Checking availability...</Text>
                 </View>
               ) : (
-                <ScrollView showsVerticalScrollIndicator={false}>
-                  {activityAvailablePeople.length > 0 ? (
-                    activityAvailablePeople.map((person, index) => (
-                      <View key={index} style={styles.collaboratorTag}>
-                        <View style={styles.collaboratorTagAvatar}>
-                          <Text style={styles.collaboratorTagAvatarText}>{person.name.charAt(0).toUpperCase()}</Text>
-                        </View>
-                        <View style={{flex: 1}}>
-                          <Text style={styles.collaboratorTagText}>{person.name}</Text>
-                          {person.profile?.position && (
-                            <Text style={styles.searchResultPosition}>{person.profile.position}</Text>
-                          )}
-                          <View style={[
-                            styles.leadBadge, 
-                            {backgroundColor: '#D4EDDA', marginTop: 4}
-                          ]}>
-                            <Text style={[
-                              styles.leadBadgeText, 
-                              {color: '#155724'}
-                            ]}>
-                              Available • {person.availability_times}
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-                    ))
-                  ) : (
-                    <View style={{ alignItems: 'center', padding: 40 }}>
-                      <Text style={{ color: '#6B7280' }}>No collaborators available for this time</Text>
+                <View style={styles.twoColumnLayout}>
+                  {/* Left Column - Available People */}
+                  <View style={styles.leftColumn}>
+                    <View style={styles.columnHeader}>
+                      <Feather name="users" size={16} color="#1a237e" />
+                      <Text style={styles.columnTitle}>Available ({activityAvailablePeople.length})</Text>
+                      {activityAvailablePeople.length > 0 && (
+                        <TouchableOpacity 
+                          style={styles.addAllButton} 
+                          onPress={handleAddAllAvailable}
+                        >
+                          <Feather name="plus-circle" size={16} color="#fff" />
+                          <Text style={styles.addAllButtonText}>Add All</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
-                  )}
-                </ScrollView>
+                    <ScrollView style={styles.columnScroll} showsVerticalScrollIndicator={false}>
+                      {activityAvailablePeople.length > 0 ? (
+                        activityAvailablePeople.map((person, index) => (
+                          <View key={index} style={styles.collaboratorTag}>
+                            <View style={styles.collaboratorTagAvatar}>
+                              <Text style={styles.collaboratorTagAvatarText}>{person.name.charAt(0).toUpperCase()}</Text>
+                            </View>
+                            <View style={{flex: 1}}>
+                              <Text style={styles.collaboratorTagText}>{person.name}</Text>
+                              {person.profile?.position && (
+                                <Text style={styles.searchResultPosition}>{person.profile.position}</Text>
+                              )}
+                              <View style={[
+                                styles.leadBadge, 
+                                {backgroundColor: '#D4EDDA', marginTop: 4}
+                              ]}>
+                                <Text style={[
+                                  styles.leadBadgeText, 
+                                  {color: '#155724'}
+                                ]}>
+                                  Available • {person.availability_times}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                        ))
+                      ) : (
+                        <View style={{ alignItems: 'center', padding: 20 }}>
+                          <Text style={{ color: '#6B7280' }}>No collaborators available for this time</Text>
+                        </View>
+                      )}
+                    </ScrollView>
+                  </View>
+
+                  {/* Right Column - Additional Members Search */}
+                  <View style={styles.rightColumn}>
+                    <View style={styles.columnHeader}>
+                      <Feather name="user-plus" size={16} color="#1a237e" />
+                      <Text style={styles.columnTitle}>Add Others ({selectedAdditionalMembers.length})</Text>
+                    </View>
+                    <View style={styles.searchInputContainer}>
+                      <Feather name="search" size={18} color="#9CA3AF" style={styles.searchIcon} />
+                      <TextInput
+                        style={styles.searchInput}
+                        placeholder={additionalMembersSearchByPosition ? "Search by position..." : "Search by name..."}
+                        value={additionalMembersSearchTerm}
+                        onChangeText={setAdditionalMembersSearchTerm}
+                        placeholderTextColor="#9CA3AF"
+                      />
+                    </View>
+                    <View style={styles.searchToggleContainer}>
+                      <TouchableOpacity
+                        style={[styles.searchToggleButton, !additionalMembersSearchByPosition && styles.searchToggleButtonActive]}
+                        onPress={() => setAdditionalMembersSearchByPosition(false)}
+                      >
+                        <Feather name="user" size={14} color={!additionalMembersSearchByPosition ? "#fff" : "#6B7280"} />
+                        <Text style={[styles.searchToggleText, !additionalMembersSearchByPosition && styles.searchToggleTextActive]}>Name</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.searchToggleButton, additionalMembersSearchByPosition && styles.searchToggleButtonActive]}
+                        onPress={() => setAdditionalMembersSearchByPosition(true)}
+                      >
+                        <Feather name="briefcase" size={14} color={additionalMembersSearchByPosition ? "#fff" : "#6B7280"} />
+                        <Text style={[styles.searchToggleText, additionalMembersSearchByPosition && styles.searchToggleTextActive]}>Position</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {additionalMembersSearchResults.length > 0 && (
+                      <FlatList
+                        style={styles.searchResultsContainer}
+                        data={additionalMembersSearchResults}
+                        keyExtractor={item => item.id}
+                        renderItem={({ item }) => (
+                          <TouchableOpacity style={styles.searchResultItem} onPress={() => handleAddAdditionalMember(item)}>
+                            <View style={styles.searchResultContent}>
+                              <View style={styles.avatarPlaceholder}>
+                                <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                              </View>
+                              <View style={styles.searchResultInfo}>
+                                <Text style={styles.searchResultName}>{item.name}</Text>
+                                {item.profile?.position && <Text style={styles.searchResultPosition}>{item.profile.position}</Text>}
+                              </View>
+                            </View>
+                            <Feather name="plus-circle" size={20} color="#1a237e" />
+                          </TouchableOpacity>
+                        )}
+                      />
+                    )}
+                    <View style={styles.selectedCollaboratorsHeader}>
+                      <Text style={styles.selectedLabel}>Selected</Text>
+                    </View>
+                    <ScrollView style={styles.collaboratorsContainer} showsVerticalScrollIndicator={false}>
+                      {selectedAdditionalMembers.length === 0 ? (
+                        <View style={styles.emptyState}>
+                          <Feather name="user-plus" size={32} color="#D1D5DB" />
+                          <Text style={styles.emptyStateText}>No additional members added</Text>
+                        </View>
+                      ) : (
+                        selectedAdditionalMembers.map(user => (
+                          <View key={user.id} style={styles.collaboratorTag}>
+                            <View style={styles.collaboratorTagAvatar}>
+                              <Text style={styles.collaboratorTagAvatarText}>{user.name.charAt(0).toUpperCase()}</Text>
+                            </View>
+                            <View style={{flex: 1}}>
+                              <Text style={styles.collaboratorTagText}>{user.name}</Text>
+                              {user.profile?.position && <Text style={styles.searchResultPosition}>{user.profile.position}</Text>}
+                            </View>
+                            <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveAdditionalMember(user.id)}>
+                              <Feather name="x" size={16} color="#fff" />
+                            </TouchableOpacity>
+                          </View>
+                        ))
+                      )}
+                    </ScrollView>
+                  </View>
+                </View>
               )}
             </View>
             <View style={styles.datePickerFooter}>
               <TouchableOpacity
                 style={styles.datePickerCancelButton}
-                onPress={() => setShowActivityAvailabilityModal(false)}
+                onPress={handleCloseActivityAvailabilityModal}
               >
                 <Text style={styles.datePickerCancelText}>Close</Text>
               </TouchableOpacity>
@@ -2128,7 +2296,9 @@ const styles = StyleSheet.create({
     padding: 0,
     width: '85%',
     maxWidth: 900,
-    maxHeight: '90%',
+    height: '80%',
+    maxHeight: '80%',
+    minHeight: 600,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
@@ -2169,6 +2339,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flex: 1,
     padding: 24,
+  },
+  twoColumnLayout: {
+    flexDirection: 'row',
+    flex: 1,
+  },
+  columnHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  columnTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginLeft: 8,
+  },
+  columnScroll: {
+    flex: 1,
+  },
+  addAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a237e',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginLeft: 'auto',
+  },
+  addAllButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   leftColumn: {
     flex: 2,
@@ -2493,12 +2699,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   removeButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EF4444',
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: 8,
   },
   input: {
     height: 48,

@@ -836,6 +836,22 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
     fetchGraphData();
   }, []);
 
+  // Listen for broadcast acceptance events to refresh dashboard
+  useEffect(() => {
+    const handleBroadcastAccepted = () => {
+      console.log('Broadcast accepted, refreshing dashboard stats...');
+      fetchDashboardStats(true); // Refresh with isRefresh=true
+    };
+
+    // Add event listener
+    window.addEventListener('broadcastAccepted', handleBroadcastAccepted);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('broadcastAccepted', handleBroadcastAccepted);
+    };
+  }, []);
+
   useEffect(() => {
     fetchDashboardStats();
   }, []);

@@ -31,6 +31,13 @@ export default function ManageForumScreen() {
   ];
 
   useEffect(() => {
+    // Ensure topics is an array before processing
+    if (!Array.isArray(topics)) {
+      console.log('Topics is not an array, setting filteredTopics to empty array');
+      setFilteredTopics([]);
+      return;
+    }
+    
     let filtered = [...topics];
     
     // Apply category filter
@@ -85,11 +92,21 @@ export default function ManageForumScreen() {
       console.log('Topics response:', response);
       
       if (response && response.data) {
-        console.log('Fetched topics:', response.data);
-        setTopics(response.data);
+        // Handle paginated response - get the data array
+        const topicsData = response.data.data || response.data;
+        console.log('Fetched topics:', topicsData);
+        
+        // Ensure it's an array before setting state
+        if (Array.isArray(topicsData)) {
+          setTopics(topicsData);
+        } else {
+          console.error('Topics data is not an array:', topicsData);
+          setTopics([]);
+        }
       } else {
         console.error('Unexpected response format:', response);
         Alert.alert('Error', 'Received unexpected response format from server');
+        setTopics([]);
       }
     } catch (error) {
       console.error('Error fetching topics:', error);
@@ -104,6 +121,7 @@ export default function ManageForumScreen() {
         console.error('Error setting up request:', error.message);
         Alert.alert('Error', `Failed to load forum topics: ${error.message}`);
       }
+      setTopics([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -194,7 +212,7 @@ export default function ManageForumScreen() {
       
       console.log('All valid comments:', allComments);
       const commentCount = allComments.length;
-      const showComments = allComments.slice(0, 2);
+      const showComments = allComments; // Show all comments instead of just 2
       console.log('Showing comments:', showComments);
       
       return (
@@ -232,13 +250,14 @@ export default function ManageForumScreen() {
                       </Text>
                     )}
                   </View>
+                  <TouchableOpacity 
+                    onPress={() => confirmDeleteComment(comment)}
+                    style={styles.deleteCommentButton}
+                  >
+                    <Feather name="trash-2" size={14} color="#e74c3c" />
+                  </TouchableOpacity>
                 </View>
               ))}
-              {commentCount > 2 && (
-                <Text style={styles.viewMoreComments}>
-                  + {commentCount - 2} more {commentCount - 2 === 1 ? 'comment' : 'comments'}
-                </Text>
-              )}
             </View>
           )}
           
@@ -397,8 +416,29 @@ export default function ManageForumScreen() {
   const renderCommentsList = () => {
     const commentItems = [];
     
+    // Ensure filteredTopics is an array before iterating
+    if (!Array.isArray(filteredTopics)) {
+      console.error('filteredTopics is not an array:', filteredTopics);
+      return (
+        <View style={styles.centered}>
+          <Feather name="message-square" size={48} color="#ddd" />
+          <Text style={styles.emptyText}>
+            Error loading comments
+          </Text>
+        </View>
+      );
+    }
+    
     filteredTopics.forEach(topic => {
-      const topicComments = topic.comments?.filter(comment => comment.status === statusFilter) || [];
+      // Ensure topic exists and has comments
+      if (!topic || !Array.isArray(topic.comments)) {
+        return;
+      }
+      
+      const topicComments = topic.comments.filter(comment => 
+        comment && comment.status === statusFilter
+      ) || [];
+      
       topicComments.forEach(comment => {
         commentItems.push({
           ...comment,

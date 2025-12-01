@@ -5,11 +5,10 @@ import apiClient from '../../utils/api';
 import { useBranding } from '../../context/BrandingContext';
 import { useAuth } from '../../context/AuthContext';
 
-const BroadcastNotification = ({ visible, onDismiss, broadcasts }) => {
+const BroadcastNotification = ({ visible, onDismiss, broadcasts, onAcceptSuccess }) => {
   const { colors } = useBranding();
   const { user } = useAuth();
   const [selectedBroadcast, setSelectedBroadcast] = useState(null);
-  const [responseMessage, setResponseMessage] = useState('');
   const [submittingResponse, setSubmittingResponse] = useState(false);
   const [confirmingAction, setConfirmingAction] = useState(null); // 'accept' or 'decline'
   const [selectedActionBroadcast, setSelectedActionBroadcast] = useState(null);
@@ -23,12 +22,21 @@ const BroadcastNotification = ({ visible, onDismiss, broadcasts }) => {
         message: message || null
       });
 
+      // If this was an acceptance, call the success callback and dispatch event
+      if (response === 'accepted') {
+        if (onAcceptSuccess) {
+          onAcceptSuccess();
+        }
+        // Dispatch custom event to refresh dashboard
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('broadcastAccepted'));
+        }
+      }
+
       // Remove the responded broadcast from the list
       onDismiss(broadcastId);
       
       // Reset form
-      setSelectedBroadcast(null);
-      setResponseMessage('');
       setConfirmingAction(null);
       setSelectedActionBroadcast(null);
       
@@ -44,19 +52,19 @@ const BroadcastNotification = ({ visible, onDismiss, broadcasts }) => {
     setConfirmingAction(action);
   };
 
-  const confirmAction = () => {
+  const confirmAction = async () => {
     if (confirmingAction && selectedActionBroadcast) {
-      if (confirmingAction === 'accepted') {
-        // Close confirmation modal immediately
-        setConfirmingAction(null);
-        setSelectedActionBroadcast(null);
-        // Then handle the response
-        handleRespond(selectedActionBroadcast.id, 'accepted');
-      } else {
-        // For decline, show the reason modal first
-        setSelectedBroadcast(selectedActionBroadcast);
-        setConfirmingAction(null);
-        setSelectedActionBroadcast(null);
+      // Set submitting to true to show loading state
+      setSubmittingResponse(true);
+      
+      try {
+        // Handle the response directly
+        const broadcastId = selectedActionBroadcast.id;
+        const action = confirmingAction;
+        await handleRespond(broadcastId, action);
+      } catch (error) {
+        console.error('Failed to respond:', error);
+        setSubmittingResponse(false);
       }
     }
   };
@@ -66,7 +74,34 @@ const BroadcastNotification = ({ visible, onDismiss, broadcasts }) => {
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
+    console.log('Parsing date:', dateString);
+    
+    let date;
+    
+    // Handle different date formats
+    if (dateString.includes('T') && dateString.includes('Z')) {
+      // ISO format with timezone (from Laravel): 2025-12-01T10:00:00.000000Z
+      // Remove the Z and treat as local time to match the description
+      const localDateString = dateString.replace('Z', '');
+      date = new Date(localDateString);
+    } else if (dateString.includes('T') && !dateString.includes('Z')) {
+      // ISO format without timezone: 2025-12-01T10:00:00
+      date = new Date(dateString);
+    } else if (dateString.includes(' ')) {
+      // Space format: 2025-12-01 10:00:00 (local time)
+      date = new Date(dateString.replace(' ', 'T'));
+    } else {
+      // Try as is
+      date = new Date(dateString);
+    }
+    
+    console.log('Parsed date:', date);
+    console.log('Is valid:', !isNaN(date.getTime()));
+    
+    if (isNaN(date.getTime())) {
+      return 'Invalid Date';
+    }
+    
     return date.toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -102,7 +137,7 @@ const BroadcastNotification = ({ visible, onDismiss, broadcasts }) => {
           </View>
 
           <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-            {broadcasts.map((broadcast) => (
+            {!submittingResponse && broadcasts.map((broadcast) => (
               <View key={broadcast.id} style={styles.broadcastCard}>
                 <View style={styles.broadcastHeader}>
                   <View style={styles.broadcastIcon}>
@@ -169,7 +204,7 @@ const BroadcastNotification = ({ visible, onDismiss, broadcasts }) => {
                     onPress={() => handleActionPress(broadcast, 'declined')}
                     disabled={submittingResponse}
                   >
-                    <MaterialCommunityIcons name="x-circle" size={16} color="#fff" />
+                    <Feather name="x-circle" size={16} color="#fff" />
                     <Text style={styles.declineButtonText}>Decline</Text>
                   </TouchableOpacity>
                 </View>
@@ -181,10 +216,10 @@ const BroadcastNotification = ({ visible, onDismiss, broadcasts }) => {
 
       {/* Confirmation Modal */}
       <Modal
-        visible={!!confirmingAction}
+        visible={!!confirmingAction || submittingResponse}
         transparent
         animationType="fade"
-        onRequestClose={() => setConfirmingAction(null)}
+        onRequestClose={() => !submittingResponse && setConfirmingAction(null)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.confirmationModal}>
@@ -226,12 +261,18 @@ const BroadcastNotification = ({ visible, onDismiss, broadcasts }) => {
               <TouchableOpacity
                 style={styles.cancelConfirmationButton}
                 onPress={() => {
-                  setConfirmingAction(null);
-                  setSelectedActionBroadcast(null);
+                  setSubmittingResponse(true);
+                  setTimeout(() => {
+                    setConfirmingAction(null);
+                    setSelectedActionBroadcast(null);
+                    setSubmittingResponse(false);
+                  }, 100); // Small delay to prevent flash
                 }}
                 disabled={submittingResponse}
               >
-                <Text style={styles.cancelConfirmationText}>Cancel</Text>
+                <Text style={styles.cancelConfirmationText}>
+                  {submittingResponse ? 'Canceling...' : 'Cancel'}
+                </Text>
               </TouchableOpacity>
               
               <TouchableOpacity
@@ -242,64 +283,6 @@ const BroadcastNotification = ({ visible, onDismiss, broadcasts }) => {
                 <Text style={[styles.confirmActionText, confirmingAction === 'accepted' ? styles.confirmAcceptText : styles.confirmDeclineText]}>
                   {submittingResponse ? 'Processing...' : `Yes, ${confirmingAction === 'accepted' ? 'Accept' : 'Decline'}`}
                 </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Decline Reason Modal */}
-      <Modal
-        visible={!!selectedBroadcast}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedBroadcast(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.declineModal}>
-            <View style={styles.declineHeader}>
-              <Text style={styles.declineTitle}>Decline Invitation</Text>
-              <TouchableOpacity onPress={() => setSelectedBroadcast(null)}>
-                <Feather name="x" size={24} color="#6c757d" />
-              </TouchableOpacity>
-            </View>
-            
-            <Text style={styles.declineSubtitle}>
-              Why can't you attend this activity?
-            </Text>
-            
-            <ScrollView style={styles.messageInputContainer}>
-              <TextInput
-                style={styles.messageInput}
-                multiline
-                placeholder="Optional: Add a reason for declining..."
-                value={responseMessage}
-                onChangeText={setResponseMessage}
-                placeholderTextColor="#9CA3AF"
-              />
-            </ScrollView>
-
-            <View style={styles.declineActions}>
-              <TouchableOpacity
-                style={styles.cancelDeclineButton}
-                onPress={() => {
-                  setSelectedBroadcast(null);
-                  setResponseMessage('');
-                }}
-              >
-                <Text style={styles.cancelDeclineText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.confirmDeclineButton}
-                onPress={() => {
-                  if (selectedBroadcast) {
-                    handleRespond(selectedBroadcast.id, 'declined');
-                  }
-                }}
-                disabled={submittingResponse}
-              >
-                <Text style={styles.confirmDeclineText}>Confirm Decline</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -472,72 +455,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-  },
-  declineModal: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    width: '85%',
-    maxWidth: 400,
-  },
-  declineHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  declineTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  declineSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 16,
-  },
-  messageInputContainer: {
-    maxHeight: 100,
-    marginBottom: 16,
-  },
-  messageInput: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    color: '#111827',
-    textAlignVertical: 'top',
-    minHeight: 80,
-  },
-  declineActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  cancelDeclineButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-  },
-  cancelDeclineText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  confirmDeclineButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#EF4444',
-    alignItems: 'center',
-  },
-  confirmDeclineText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
   },
   // Confirmation Modal Styles
   confirmationModal: {
