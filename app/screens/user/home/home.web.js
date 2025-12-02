@@ -76,6 +76,7 @@ const HomeScreen = () => {
   const [isJoinUsHovered, setIsJoinUsHovered] = useState(false);
   const [isSubmitWorkHovered, setIsSubmitWorkHovered] = useState(false);
   const [applicationPeriod, setApplicationPeriod] = useState(null);
+  const [folioPeriod, setFolioPeriod] = useState(null);
   const [isCheckingPeriod, setIsCheckingPeriod] = useState(true);
   const [featuredData, setFeaturedData] = useState([]);
   const [genreData, setGenreData] = useState({});
@@ -91,6 +92,7 @@ const HomeScreen = () => {
   useEffect(() => {
     fetchArticlesByCategory();
     fetchApplicationPeriod();
+    fetchFolioPeriod();
     fetchFeaturedArticles();
   }, []);
 
@@ -105,6 +107,23 @@ const HomeScreen = () => {
       // If no period is set, keep applicationPeriod as null
     } finally {
       setIsCheckingPeriod(false);
+    }
+  };
+
+  const fetchFolioPeriod = async () => {
+    try {
+      console.log('🏠 Home: Fetching folio period from /api/folio-period');
+      const response = await apiClient.get('/api/folio-period');
+      console.log('🏠 Home: Folio period response:', response.data);
+      if (response.data) {
+        setFolioPeriod(response.data);
+        console.log('🏠 Home: Folio period set:', response.data);
+      }
+    } catch (error) {
+      console.log('🏠 Home: No folio submission period or error fetching:', error.message);
+      console.log('🏠 Home: Error response status:', error.response?.status);
+      console.log('🏠 Home: Error response data:', error.response?.data);
+      // If no period is set, keep folioPeriod as null
     }
   };
 
@@ -683,41 +702,45 @@ const HomeScreen = () => {
           </React.Fragment>
         )}
         
-        {/* Submit Section */}
-        <section style={{...styles.section, ...styles.submitSection}}>
-          <div style={{...styles.submitContent, flexDirection: isMobile ? 'column' : 'row'}}>
-            <img
-              src="https://images.unsplash.com/photo-1455390582262-044cdead277a?q=80&w=2070&auto=format&fit=crop"
-              alt="Submit your work"
-              style={styles.submitImage}
-            />
-            <div style={styles.submitText}>
-              <h2 style={{...styles.sectionTitle, color: '#059669', textAlign: 'left' }}>Submit Your Work</h2>
-              <p style={styles.aboutText}>
-                Share your creative writing, poetry, essays, or visual art with our community. Get your work published and inspire others with your talent.
-              </p>
-              <button
-                style={{
-                  ...styles.ctaButton2,
-                  ...(isSubmitWorkHovered ? styles.ctaButtonHover : {}),
-                  alignSelf: 'flex-start'
-                }}
-                onMouseEnter={() => setIsSubmitWorkHovered(true)}
-                onMouseLeave={() => setIsSubmitWorkHovered(false)}
-                onClick={() => {
-                  console.log('Submit Work clicked');
-                  router.push('/submit');
-                }}
-                onPress={() => {
-                  console.log('Submit Work pressed');
-                  router.push('/submit');
-                }}
-              >
-                Submit Work
-              </button>
-            </div>
-          </div>
-        </section>
+        {/* Submit Section - Only show if folio submission period is set */}
+        {folioPeriod && (
+          <React.Fragment>
+            <section style={{...styles.section, ...styles.submitSection}}>
+              <div style={{...styles.submitContent, flexDirection: isMobile ? 'column' : 'row'}}>
+                <img
+                  src="https://images.unsplash.com/photo-1455390582262-044cdead277a?q=80&w=2070&auto=format&fit=crop"
+                  alt="Submit your work"
+                  style={styles.submitImage}
+                />
+                <div style={styles.submitText}>
+                  <h2 style={{...styles.sectionTitle, color: '#059669', textAlign: 'left' }}>Submit Your Work</h2>
+                  <p style={styles.aboutText}>
+                    Share your creative writing, poetry, essays, or visual art with our community. Get your work published and inspire others with your talent.
+                  </p>
+                  <button
+                    style={{
+                      ...styles.ctaButton2,
+                      ...(isSubmitWorkHovered ? styles.ctaButtonHover : {}),
+                      alignSelf: 'flex-start'
+                    }}
+                    onMouseEnter={() => setIsSubmitWorkHovered(true)}
+                    onMouseLeave={() => setIsSubmitWorkHovered(false)}
+                    onClick={() => {
+                      console.log('Submit Work clicked');
+                      router.push('/submit');
+                    }}
+                    onPress={() => {
+                      console.log('Submit Work pressed');
+                      router.push('/submit');
+                    }}
+                  >
+                    Submit Work
+                  </button>
+                </div>
+              </div>
+            </section>
+          </React.Fragment>
+        )}
 
         {/* Recruitment Section - Only show if application period is set */}
         {applicationPeriod && (

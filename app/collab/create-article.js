@@ -150,6 +150,48 @@ const SimpleWebEditor = ({ value, onChange, onImageInsert, onEditorRef }) => {
     node.addEventListener('input', handleInput);
     document.addEventListener('selectionchange', updateActiveStyles);
 
+    // Handle paste to strip unwanted formatting (background colors, etc.)
+    const handlePaste = (e) => {
+      e.preventDefault();
+      
+      // Get pasted content
+      const text = e.clipboardData?.getData('text/html') || e.clipboardData?.getData('text/plain');
+      if (!text) return;
+      
+      // Create a temporary container to parse HTML
+      const temp = document.createElement('div');
+      temp.innerHTML = text;
+      
+      // Remove all style attributes that contain background colors
+      const allElements = temp.querySelectorAll('*');
+      allElements.forEach(el => {
+        const style = el.getAttribute('style') || '';
+        // Remove background-related styles
+        const cleanedStyle = style
+          .replace(/background[^;]*;?/gi, '')
+          .replace(/color[^;]*;?/gi, '')
+          .trim();
+        
+        if (cleanedStyle) {
+          el.setAttribute('style', cleanedStyle);
+        } else {
+          el.removeAttribute('style');
+        }
+      });
+      
+      // Get the cleaned text content
+      const cleanedHtml = temp.innerHTML;
+      
+      // Insert the cleaned content
+      document.execCommand('insertHTML', false, cleanedHtml);
+      
+      // Trigger change event
+      if (onChange) onChange(node.innerHTML);
+      updateActiveStyles();
+    };
+    
+    node.addEventListener('paste', handlePaste);
+
     // Apply H1 format on mount
     const applyH1 = () => {
       if (!node) return;
@@ -177,6 +219,7 @@ const SimpleWebEditor = ({ value, onChange, onImageInsert, onEditorRef }) => {
     return () => {
       node.removeEventListener('input', handleInput);
       document.removeEventListener('selectionchange', updateActiveStyles);
+      node.removeEventListener('paste', handlePaste);
     };
   }, [onChange]);
 
@@ -1062,7 +1105,7 @@ export default function CreateArticleScreen() {
         <View style={styles.genreContainer}>
           <Text style={styles.genreLabel}>Genre: </Text>
           <View style={styles.genreOptions}>
-            {['articles', 'opinions', 'sports', 'editorial', 'creative'].map((g) => (
+            {['articles', 'opinions', 'sports', 'editorial'].map((g) => (
               <TouchableOpacity key={g} style={[styles.genreButton, genre === g && { backgroundColor: colors.primary || '#1a237e' }]} onPress={() => setGenre(g)}>
                 <Text style={[styles.genreButtonText, genre === g && styles.genreButtonTextSelected]}>
                   {g.charAt(0).toUpperCase() + g.slice(1)}
@@ -1095,7 +1138,7 @@ export default function CreateArticleScreen() {
 
         <View style={styles.mediaContainer}>
           {images.length > 0 && (
-            <Text style={styles.mediaLabel}>Main Images (displayed at bottom of article)</Text>
+            <Text style={styles.mediaLabel}>Cover Image</Text>
           )}
           {images.map((media, index) => (
             <View key={index} style={styles.mediaItem}>

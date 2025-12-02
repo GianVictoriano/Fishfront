@@ -404,6 +404,23 @@ const Forum = () => {
     </View>
   );
 
+  const handleHashtagChange = (text) => {
+    // If text ends with space, add a hashtag after the space
+    if (text.endsWith(' ')) {
+      const trimmedText = text.trimEnd();
+      setNewTopic({ ...newTopic, category: trimmedText + ' #' });
+    } else {
+      setNewTopic({ ...newTopic, category: text });
+    }
+  };
+
+  const handleHashtagClick = () => {
+    // Add hashtag when field is clicked if it's empty
+    if (!newTopic.category.trim()) {
+      setNewTopic({ ...newTopic, category: '#' });
+    }
+  };
+
   const renderNewTopicForm = () => (
     <View style={styles.newTopicForm}>
       <TextInput
@@ -425,7 +442,8 @@ const Forum = () => {
           style={styles.input}
           placeholder="#hashtag"
           value={newTopic.category}
-          onChangeText={text => setNewTopic({ ...newTopic, category: text })}
+          onChangeText={handleHashtagChange}
+          onFocus={handleHashtagClick}
         />
         <View style={styles.anonymousToggle}>
           <Text style={styles.anonymousLabel}>Post Anonymously</Text>

@@ -54,7 +54,7 @@ const ReaderBehaviorHeatmap = ({ data, width = 400, height = 250 }) => {
     console.log(`📍 Grid entry: ${key} = ${item.visits}`);
   });
 
-  const cellWidth = (width - 60) / 24;
+  const cellWidth = (width - 80) / 24;
   const cellHeight = (height - 40) / 7;
 
   const getColor = (value) => {
@@ -76,7 +76,7 @@ const ReaderBehaviorHeatmap = ({ data, width = 400, height = 250 }) => {
         {days.map((day, dayIndex) => (
           <SvgText
             key={`day-${dayIndex}`}
-            x={15}
+            x={25}
             y={40 + dayIndex * cellHeight + cellHeight / 2 + 4}
             fontSize="12"
             fill="#666"
@@ -90,13 +90,13 @@ const ReaderBehaviorHeatmap = ({ data, width = 400, height = 250 }) => {
         {hours.map((hour, hourIndex) => (
           <SvgText
             key={`hour-${hourIndex}`}
-            x={60 + hourIndex * cellWidth + cellWidth / 2}
+            x={80 + hourIndex * cellWidth + cellWidth / 2}
             y={30}
             fontSize="10"
             fill="#666"
             textAnchor="middle"
           >
-            {hour}h
+            {String(hour).padStart(2, '0')}:00
           </SvgText>
         ))}
 
@@ -110,7 +110,7 @@ const ReaderBehaviorHeatmap = ({ data, width = 400, height = 250 }) => {
             return (
               <Rect
                 key={`cell-${dayIndex}-${hourIndex}`}
-                x={60 + hourIndex * cellWidth}
+                x={80 + hourIndex * cellWidth}
                 y={40 + dayIndex * cellHeight}
                 width={cellWidth - 1}
                 height={cellHeight - 1}
