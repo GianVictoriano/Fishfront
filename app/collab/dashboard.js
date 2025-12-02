@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../utils/api';
 import Svg, { Rect, Circle, Text as SvgText, Line, Path } from 'react-native-svg';
 import { Picker } from '@react-native-picker/picker';
+import EngagementAnalytics from './EngagementAnalytics';
 
 // Simple Bar Chart Component with Tooltips
 const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
@@ -1520,6 +1521,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
             </View>
           </View>
         </View>
+        <EngagementAnalytics isMobile={isMobile} width={width} />
 
       </ScrollView>
 

@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: '#031d523b',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
   reactBtn: {
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: 'black',
     borderRadius: 8,
     minWidth: 50,
     alignItems: 'center',
