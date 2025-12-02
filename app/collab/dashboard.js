@@ -20,7 +20,10 @@ const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
 
   const values = data.datasets[0].data;
   const maxValue = Math.max(...values);
-  const barWidth = (width - 40) / values.length;
+  
+  // Adjust the available width to account for left margin (30px) and right margin (20px)
+  const availableWidth = width - 50; // 30px left margin + 20px right margin
+  const barWidth = availableWidth / values.length;
   const chartHeight = height - 40;
 
   // Calculate bar positions for mouse tracking
@@ -28,7 +31,7 @@ const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
     index,
     x: 30 + index * barWidth,
     y: maxValue > 0 ? 20 + (chartHeight - 40) - (value / maxValue) * (chartHeight - 40) : 20 + chartHeight - 40,
-    width: barWidth - 5,
+    width: barWidth - 5, // Reduce width for spacing between bars
     height: maxValue > 0 ? (value / maxValue) * (chartHeight - 40) : 0
   }));
 
@@ -69,7 +72,8 @@ const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
             y: tooltipY,
             genre: genre,
             count: count,
-            label: `${genre}: ${count} views`
+            label: `${genre}: ${count} views`,
+            barWidth: barWidth - 5 // Store actual bar width for tooltip
           });
           setHoveredBarIndex(hoveredIndex);
         }, 0);
@@ -178,12 +182,12 @@ const SimpleBarChart = ({ data, width = 300, height = 200 }) => {
       {tooltip && (
         <View style={{
           position: 'absolute',
-          left: tooltip.x - 60,
+          left: tooltip.x - tooltip.barWidth / 2, // Center on bar
           top: tooltip.y - 40,
           backgroundColor: 'rgba(0,0,0,0.8)',
           padding: 8,
           borderRadius: 4,
-          minWidth: 120,
+          width: tooltip.barWidth, // Match exact bar width
           zIndex: 20,
         }}>
           <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
@@ -269,10 +273,21 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
     setHoveredSlice(null);
   };
 
+  const handleSlicePress = (index) => {
+    const item = filteredData[index];
+    
+    setTooltip({
+      name: item.name,
+      count: item.count,
+      percentage: ((item.count / total) * 100).toFixed(1),
+      groups: item.groups || []
+    });
+  };
+
   let currentAngle = -Math.PI / 2; // Start from top
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative' }}>
+    <View style={{ flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
       <TouchableOpacity
         onPress={() => setTooltip(null)}
         style={{
@@ -290,6 +305,26 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
           const angle = percentage * 2 * Math.PI;
           const startAngle = currentAngle;
           const endAngle = currentAngle + angle;
+
+          // Special handling for single data point (100%)
+          if (filteredData.length === 1) {
+            // Create a full circle for single data point
+            return (
+              <Circle
+                key={index}
+                cx={centerX}
+                cy={centerY}
+                r={radius}
+                fill={getStatusColor(item.name)}
+                stroke="#fff"
+                strokeWidth="1"
+                onPress={() => handleSlicePress(index)}
+                onMouseEnter={() => handleSliceHover(index)}
+                onMouseLeave={handleSliceLeave}
+                style={{ cursor: 'pointer' }}
+              />
+            );
+          }
 
           const x1 = centerX + radius * Math.cos(startAngle);
           const y1 = centerY + radius * Math.sin(startAngle);
@@ -323,14 +358,14 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
       </Svg>
 
       {/* Legend with tooltips */}
-      <View style={{ marginLeft: 20 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginTop: 10 }}>
         {filteredData.map((item, index) => (
           <TouchableOpacity
             key={index}
             onPress={() => handleSlicePress(index)}
             onMouseEnter={() => handleSliceHover(index)}
             onMouseLeave={handleSliceLeave}
-            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, cursor: 'pointer' }}
+            style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: 8, marginBottom: 8, cursor: 'pointer' }}
           >
             <View
               style={{
@@ -361,6 +396,7 @@ const SimplePieChart = ({ data, width = 300, height = 200 }) => {
           minWidth: 200,
           maxWidth: 300,
           zIndex: 3,
+          pointerEvents: 'none', // Prevent tooltip from being hoverable
         }}>
           <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>
             {(hoveredSlice || tooltip).name} Projects
@@ -1372,6 +1408,35 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
               </View>
             )}
           </View>
+
+          {/* Published Content Over Time */}
+          <View style={styles.chartContainer}>
+            <Text style={styles.chartTitle}>Published Content (Last 20 Days)</Text>
+            {loadingGraphs ? (
+              <View style={styles.loadingContainer}>
+                <Text>Loading chart data...</Text>
+              </View>
+            ) : graphData && graphData.published_content && graphData.published_content.length > 0 ? (
+              <SimpleLineChart
+                data={{
+                  labels: graphData.published_content.map(item => {
+                    const date = new Date(item.date);
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  }),
+                  datasets: [{
+                    data: graphData.published_content.map(item => item.count),
+                    group_names: graphData.published_content.map(item => item.group_names || [])
+                  }]
+                }}
+                width={isMobile ? width - 48 : width - 370} // Use full screen width without 800px limit
+                height={220}
+              />
+            ) : (
+              <View style={styles.noDataContainer}>
+                <Text style={styles.noDataText}>No published content data available</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         <View style={styles.sectionContainer}>
@@ -1379,7 +1444,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
           <View style={[styles.chartsGrid, isMobile && styles.mobileChartsGrid, { flexDirection: isMobile ? 'column' : 'row', marginHorizontal: 0 }]}>
             {/* Project Status */}
             <View style={[styles.chartContainer, { 
-              width: isMobile ? width - 48 : Math.floor((width - 370 - 20) / 2),
+              flex: isMobile ? 1 : 0.45,
               marginRight: isMobile ? 0 : 10
             }]}>
               <Text style={styles.chartTitle}>Project Status</Text>
@@ -1413,7 +1478,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
                   return (
                     <SimplePieChart
                       data={pieData}
-                      width={isMobile ? width - 48 : Math.floor((width - 370 - 20) / 2)}
+                      width={isMobile ? width - 48 : Math.floor((width - 370) * 0.45) - 32}
                       height={200}
                     />
                   );
@@ -1425,10 +1490,11 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
               )}
             </View>
 
+
             {/* Most Viewed Articles by Genre */}
             <View style={[styles.chartContainer, { 
-              width: isMobile ? width - 48 : Math.floor((width - 370 - 20) / 2),
-              marginLeft: isMobile ? 0 : 10
+              flex: isMobile ? 1 : 0.55,
+              marginLeft: isMobile ? 0 : 0
             }]}>
               <Text style={styles.chartTitle}>Most Viewed by Genre</Text>
               {loadingGraphs ? (
@@ -1443,7 +1509,7 @@ const UpcomingActivityItem = ({ title, date, time, location, creator, isMobile }
                       data: graphData.article_publications.map(item => item.count)
                     }]
                   }}
-                  width={isMobile ? width - 48 : Math.floor((width - 370 - 20) / 2)}
+                  width={isMobile ? width - 48 : Math.floor((width - 370) * 0.55) - 32}
                   height={200}
                 />
               ) : (

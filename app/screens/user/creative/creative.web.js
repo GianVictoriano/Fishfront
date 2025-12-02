@@ -1,7 +1,7 @@
 // app/screens/user/creative/creative.web.js
 import { useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView, Modal, Dimensions } from 'react-native';
+import { Text, View, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, Image, ScrollView, Modal, Dimensions, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AppNavbar from '../../../../components/AppNavbar';
 import NewsNavbar from '../../../../components/newsnavbar';
@@ -235,6 +235,39 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
   },
+  metricsContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  metricsText: {
+    fontSize: 14,
+    color: '#4b5563',
+    marginRight: 20,
+  },
+  reactionButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reactBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  reactLabel: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
 });
 
 const CreativeCard = ({ item, onImageClick }) => {
@@ -359,6 +392,8 @@ export default function CreativeScreen() {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedArtwork, setSelectedArtwork] = useState(null);
+  const [selectedArtworkMetrics, setSelectedArtworkMetrics] = useState(null);
+  const [reactingType, setReactingType] = useState(null);
   const { setActiveGenre } = newsStore();
 
   // Set active genre to Creative when component mounts
@@ -368,14 +403,63 @@ export default function CreativeScreen() {
 
   const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
 
-  const handleImageClick = (artwork) => {
+  const handleImageClick = async (artwork) => {
     setSelectedArtwork(artwork);
     setModalVisible(true);
+    
+    // Fetch metrics and track visit
+    try {
+      // Track the visit
+      await apiClient.post(`/public/creatives/${artwork.id}/visit`);
+      
+      // Fetch metrics for this creative
+      const response = await apiClient.get(`/public/creatives/${artwork.id}`);
+      if (response.data?.data?.metrics) {
+        setSelectedArtworkMetrics(response.data.data.metrics);
+      } else if (response.data?.metrics) {
+        setSelectedArtworkMetrics(response.data.metrics);
+      }
+    } catch (error) {
+      console.error('Error fetching creative metrics or tracking visit:', error);
+      // Initialize with default metrics if fetch fails
+      setSelectedArtworkMetrics({
+        visits: 0,
+        like_count: 0,
+        heart_count: 0,
+        sad_count: 0,
+        wow_count: 0
+      });
+    }
   };
 
   const closeModal = () => {
     setModalVisible(false);
     setSelectedArtwork(null);
+    setSelectedArtworkMetrics(null);
+    setReactingType(null);
+  };
+
+  const react = async (type) => {
+    if (!selectedArtwork || reactingType) return; // Prevent multiple clicks
+    
+    try {
+      setReactingType(type);
+      console.log('Sending reaction:', type);
+      const response = await apiClient.post(`/public/creatives/${selectedArtwork.id}/react`, { type });
+      
+      // Update UI with server response
+      if (response.data && response.data.metrics) {
+        setSelectedArtworkMetrics(prev => ({
+          ...prev,
+          ...response.data.metrics,
+          visits: prev?.visits || 0, // Preserve visits count
+        }));
+      }
+    } catch (e) {
+      console.error('Error reacting:', e);
+    } finally {
+      setReactingType(null);
+    }
   };
 
   const getImageUrl = (url) => {
@@ -586,6 +670,36 @@ export default function CreativeScreen() {
                   {selectedArtwork?.date || ''}
                 </Text>
               </View>
+
+              {/* Metrics & Reactions */}
+              {selectedArtworkMetrics && (
+                <View style={styles.metricsContainer}>
+                  <Text style={styles.metricsText}>Total Visitors: {selectedArtworkMetrics?.visits || 0}</Text>
+                  <View style={styles.reactionButtonsRow}>
+                    {[
+                      { type: 'like', emoji: '👍' },
+                      { type: 'heart', emoji: '❤️' },
+                      { type: 'sad', emoji: '😢' },
+                      { type: 'wow', emoji: '😲' }
+                    ].map(({ type, emoji }) => (
+                      <TouchableOpacity 
+                        key={type} 
+                        style={[styles.reactBtn, reactingType === type && { opacity: 0.7 }]} 
+                        onPress={() => react(type)} 
+                        disabled={!!reactingType}
+                      >
+                        {reactingType === type ? (
+                          <ActivityIndicator size="small" color="#000" />
+                        ) : (
+                          <Text style={styles.reactLabel}>
+                            {emoji} {selectedArtworkMetrics?.[`${type}_count`] || 0}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
             </View>
           </View>
         </View>

@@ -8,6 +8,7 @@ import { useBranding } from '~/context/BrandingContext';
 import Navbar from '../../components/Navbar';
 import NewsNavbar from '../../components/newsnavbar';
 import useNewsStore from '../../store/newsStore';
+import useInteractionTracking from '../../hooks/useInteractionTracking';
 
 export default function LiteraryWorksScreen() {
   const router = useRouter();
@@ -18,6 +19,11 @@ export default function LiteraryWorksScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [selectedWork, setSelectedWork] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [reactingType, setReactingType] = useState(null);
+  const [showReactionModal, setShowReactionModal] = useState(false);
+  const [flipbookOpenTime, setFlipbookOpenTime] = useState(null);
+  const { recordView } = useInteractionTracking(currentUser?.id);
 
   const fetchLiteraryWorks = async () => {
     try {
@@ -61,6 +67,29 @@ export default function LiteraryWorksScreen() {
       setRefreshing(false);
     }
   };
+
+  // Get current user for tracking
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const token = await AsyncStorage.getItem('auth_token');
+        if (token) {
+          const userData = await AsyncStorage.getItem('user_data');
+          if (userData) {
+            const user = JSON.parse(userData);
+            setCurrentUser(user);
+          } else {
+            // Fallback: fetch from API
+            const response = await apiClient.get('/user');
+            setCurrentUser(response.data);
+          }
+        }
+      } catch (error) {
+        console.error('Error getting user:', error);
+      }
+    };
+    getCurrentUser();
+  }, []);
 
   useEffect(() => {
     // Set the active genre to Literary Works when component mounts
@@ -124,6 +153,76 @@ export default function LiteraryWorksScreen() {
     fetchLiteraryWorks();
   };
 
+  const react = async (type) => {
+    if (!selectedWork || reactingType) return; // Prevent multiple clicks
+    
+    try {
+      setReactingType(type);
+      console.log('Sending reaction:', type);
+      const response = await apiClient.post(`/literary-works/${selectedWork.id}/react`, { type });
+      
+      // Update UI with server response
+      if (response.data && response.data.metrics) {
+        setSelectedWork(prev => ({
+          ...prev,
+          metrics: {
+            ...prev.metrics,
+            ...response.data.metrics,
+            visits: prev.metrics?.visits || 0, // Preserve visits count
+          },
+          userReaction: response.data.metrics.userReaction || type,
+        }));
+      }
+      
+      // Close modals after reacting
+      setTimeout(() => {
+        setShowReactionModal(false);
+        setPreviewModalVisible(false);
+        setFlipbookOpenTime(null);
+      }, 500);
+    } catch (e) {
+      console.error('Error reacting:', e);
+    } finally {
+      setReactingType(null);
+    }
+  };
+
+  const trackTimeSpent = async () => {
+    if (!selectedWork || !flipbookOpenTime) return;
+    
+    try {
+      const timeSpent = Math.round((Date.now() - flipbookOpenTime) / 1000); // in seconds
+      console.log('⏱️ Time spent on flipbook:', timeSpent, 'seconds');
+      
+      // Send time spent to backend
+      const response = await apiClient.post(`/literary-works/${selectedWork.id}/interaction`, {
+        interaction_type: 'time_spent',
+        time_spent: timeSpent,
+      });
+      
+      console.log('✅ Time spent tracked:', response.data);
+    } catch (error) {
+      console.error('Error tracking time spent:', error);
+    }
+  };
+
+  const handleCloseFlipbook = async () => {
+    // Track time spent before closing
+    await trackTimeSpent();
+    
+    // Check if user has already reacted
+    const hasReacted = selectedWork?.userReaction !== null && selectedWork?.userReaction !== undefined;
+    
+    if (hasReacted) {
+      // User already reacted, just close without showing modal
+      setPreviewModalVisible(false);
+      setFlipbookOpenTime(null);
+    } else {
+      // User hasn't reacted yet, show reaction modal
+      setShowReactionModal(true);
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'published':
@@ -142,15 +241,62 @@ export default function LiteraryWorksScreen() {
     }
   };
 
+  const handleOpenWork = async (item) => {
+    if (item.heyzine_url) {
+      let workWithMetrics = { ...item };
+      
+      // Track the visit and fetch updated metrics
+      if (currentUser?.id) {
+        try {
+          const visitResponse = await apiClient.post(`/literary-works/${item.id}/visit`);
+          console.log('✅ Literary work visit tracked:', visitResponse.data);
+          console.log('📊 Full response:', JSON.stringify(visitResponse.data, null, 2));
+          
+          // Check if this is a new visit or repeat
+          if (visitResponse.data?.is_new_visit) {
+            console.log('🆕 New unique visitor - visit count incremented');
+          } else {
+            console.log('🔄 Repeat visitor today - visit count not incremented');
+          }
+          
+          // Update work with metrics and user reaction from response
+          if (visitResponse.data?.metrics) {
+            workWithMetrics.metrics = visitResponse.data.metrics;
+            console.log('📈 Metrics updated from visit response:', workWithMetrics.metrics);
+          }
+          if (visitResponse.data?.userReaction) {
+            workWithMetrics.userReaction = visitResponse.data.userReaction;
+            console.log('👤 User reaction:', workWithMetrics.userReaction);
+          }
+        } catch (error) {
+          console.error('Error tracking visit:', error);
+          console.error('Error details:', error.response?.data);
+          
+          // Fallback: try to fetch metrics separately
+          try {
+            const metricsResponse = await apiClient.get(`/literary-works/${item.id}/metrics`);
+            console.log('📊 Metrics response:', metricsResponse.data);
+            if (metricsResponse.data?.data) {
+              workWithMetrics.metrics = metricsResponse.data.data;
+              console.log('📈 Metrics updated from fallback:', workWithMetrics.metrics);
+            }
+          } catch (metricsError) {
+            console.error('Error fetching metrics:', metricsError);
+          }
+        }
+      }
+      
+      console.log('🎬 Opening work with metrics:', workWithMetrics);
+      setSelectedWork(workWithMetrics);
+      setFlipbookOpenTime(Date.now()); // Record when flipbook opened
+      setPreviewModalVisible(true);
+    }
+  };
+
   const renderLiteraryWork = ({ item }) => (
     <TouchableOpacity 
       style={styles.workCard}
-      onPress={() => {
-        if (item.heyzine_url) {
-          setSelectedWork(item);
-          setPreviewModalVisible(true);
-        }
-      }}
+      onPress={() => handleOpenWork(item)}
     >
       <View style={styles.workHeader}>
         <View style={styles.workInfo}>
@@ -275,13 +421,23 @@ export default function LiteraryWorksScreen() {
         onRequestClose={() => setPreviewModalVisible(false)}
       >
         <View style={styles.fullScreenContainer}>
-          {/* Floating X Button */}
-          <TouchableOpacity
-            style={styles.floatingXButton}
-            onPress={() => setPreviewModalVisible(false)}
-          >
-            <Feather name="x" size={24} color="#fff" />
-          </TouchableOpacity>
+          {/* Header with Metrics and Close Button */}
+          <View style={styles.modalHeader}>
+            <View style={styles.metricsBar}>
+              <View style={styles.metricItem}>
+                <MaterialCommunityIcons name="eye" size={16} color="#6B7280" />
+                <Text style={styles.metricText}>
+                  {selectedWork?.metrics?.visits || 0} visitors
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.floatingXButton}
+              onPress={handleCloseFlipbook}
+            >
+              <Feather name="x" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
           
           <View style={styles.fullScreenContent}>
             {Platform.OS === 'web' ? (
@@ -335,6 +491,92 @@ export default function LiteraryWorksScreen() {
                 </TouchableOpacity>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Reaction Modal - appears when user tries to close */}
+      <Modal
+        visible={showReactionModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReactionModal(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          <View style={{
+            backgroundColor: '#fff',
+            borderRadius: 16,
+            padding: 24,
+            width: '90%',
+            maxWidth: 400,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.3,
+            shadowRadius: 20,
+            elevation: 10,
+          }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 8 }}>
+              What did you feel about "{selectedWork?.title}"?
+            </Text>
+            <Text style={{ fontSize: 14, color: '#6B7280', marginBottom: 24 }}>
+              Share your reaction before leaving
+            </Text>
+
+            {/* Emoji Reaction Buttons */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 24, gap: 12 }}>
+              {[
+                { type: 'like', emoji: '👍', label: 'Like' },
+                { type: 'heart', emoji: '❤️', label: 'Love' },
+                { type: 'sad', emoji: '😢', label: 'Sad' },
+                { type: 'wow', emoji: '😲', label: 'Wow' }
+              ].map(({ type, emoji, label }) => (
+                <TouchableOpacity
+                  key={type}
+                  onPress={() => react(type)}
+                  disabled={!!reactingType}
+                  style={{
+                    flex: 1,
+                    alignItems: 'center',
+                    opacity: reactingType === type ? 0.7 : 1,
+                  }}
+                >
+                  {reactingType === type ? (
+                    <ActivityIndicator size="small" color="#000" />
+                  ) : (
+                    <>
+                      <Text style={{ fontSize: 32, marginBottom: 4 }}>{emoji}</Text>
+                      <Text style={{ fontSize: 12, color: '#6B7280' }}>{label}</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Skip and Exit Buttons */}
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowReactionModal(false);
+                  setPreviewModalVisible(false);
+                }}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 8,
+                  backgroundColor: '#F3F4F6',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#374151', fontWeight: '600', fontSize: 15 }}>
+                  Skip
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -500,16 +742,60 @@ const styles = StyleSheet.create({
   },
   fullScreenContainer: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#fff',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    zIndex: 10,
+  },
+  metricsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+    flex: 1,
+  },
+  metricItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metricText: {
+    color: '#333',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  reactionButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+  },
+  reactBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  reactLabel: {
+    fontSize: 14,
+    textAlign: 'center',
   },
   floatingXButton: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 20,
-    right: 20,
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: '#333',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 9999999,
@@ -527,6 +813,7 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
     touchAction: 'none',
+    backgroundColor: '#fff', // White background
   },
   fullScreenIframe: {
     width: '100%',
