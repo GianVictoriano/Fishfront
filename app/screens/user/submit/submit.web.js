@@ -36,6 +36,7 @@ export default function SubmitScreen() {
     try {
       // Fetch all open folios with is_journalists_only = false
       const response = await apiClient.get('/api/folios?status=open&is_journalists_only=false');
+      console.log('Folios response:', response.data);
       if (response.data && Array.isArray(response.data)) {
         setFolios(response.data);
       }
@@ -62,6 +63,7 @@ export default function SubmitScreen() {
       submitData.append('title', formData.title);
       submitData.append('caption', formData.caption);
       submitData.append('file', formData.file);
+      console.log('Submitting with folio_id:', formData.folio_id);
 
       // Make API call to submit the work
       const response = await apiClient.post('/submissions', submitData);
@@ -127,6 +129,7 @@ export default function SubmitScreen() {
   };
 
   const selectFolio = (folio) => {
+    console.log('Selected folio:', folio);
     setSelectedFolio(folio);
     setFormData(prev => ({
       ...prev,
