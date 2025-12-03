@@ -1038,7 +1038,7 @@ export default function FeaturedScreen() {
   const [displayedNewsItems, setDisplayedNewsItems] = useState(6);
   const [loading, setLoading] = useState(false);
   const [activeRequests, setActiveRequests] = useState(new Set());
-  const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
+  const [screenWidth, setScreenWidth] = useState(1000); // Default width for SSR
   const router = useRouter();
   const { recordView, recordReaction, recordTimeSpent } = useInteractionTracking(currentUser?.id);
 
@@ -1047,6 +1047,9 @@ export default function FeaturedScreen() {
 
   // Listen for screen size changes
   useEffect(() => {
+    // Set actual screen width on mount
+    setScreenWidth(Dimensions.get('window').width);
+    
     const onChange = (result) => {
       setScreenWidth(result.window.width);
     };

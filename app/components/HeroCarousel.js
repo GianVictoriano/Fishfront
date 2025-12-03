@@ -1,13 +1,19 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Platform } from 'react-native';
 
 let WebCarousel = null;
 if (Platform.OS === 'web') {
   WebCarousel = require('react-responsive-carousel').Carousel;
-  require('react-responsive-carousel/lib/styles/carousel.min.css');
 }
 
 const HeroCarousel = () => {
+  useEffect(() => {
+    // Import CSS only on client-side
+    if (Platform.OS === 'web') {
+      require('react-responsive-carousel/lib/styles/carousel.min.css');
+    }
+  }, []);
+
   if (Platform.OS !== 'web' || !WebCarousel) {
     return null;
   }

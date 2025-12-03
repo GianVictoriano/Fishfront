@@ -1153,7 +1153,7 @@ const TrendingModal = ({ visible, onClose, trendingStories, displayedTrendingSto
             </Text>
             
             <View style={styles.freshStoryList}>
-              {trendingStories.slice(0, displayedTrendingStories).map((item, index) => (
+              {(Array.isArray(trendingStories) ? trendingStories.slice(0, displayedTrendingStories) : []).map((item, index) => (
                 <TrendingStoryItem key={item.id} item={item} index={index} />
               ))}
             </View>
@@ -1184,7 +1184,7 @@ export default function NewsScreen() {
   const [displayedNewsItems, setDisplayedNewsItems] = useState(6); // For pagination of news items on News tab
   const [loading, setLoading] = useState(false);
   const [activeRequests, setActiveRequests] = useState(new Set()); // Track active requests to prevent duplicates
-  const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
+  const [screenWidth, setScreenWidth] = useState(1000); // Default width for SSR
   const router = useRouter();
   const { recordView, recordReaction, recordTimeSpent } = useInteractionTracking(currentUser?.id);
 
@@ -1196,6 +1196,9 @@ export default function NewsScreen() {
 
   // Listen for screen size changes
   useEffect(() => {
+    // Set actual screen width on mount
+    setScreenWidth(Dimensions.get('window').width);
+    
     const onChange = (result) => {
       setScreenWidth(result.window.width);
     };
@@ -1592,11 +1595,11 @@ export default function NewsScreen() {
   // Determine if we're on a featured tab (Articles, Opinion, Sports, Editorial, Creative)
   const isFeaturedTab = activeGenre !== 'News';
   
-  const featuredStory = newsData[0];
-  const gridStories = isFeaturedTab 
+  const featuredStory = Array.isArray(newsData) && newsData.length > 0 ? newsData[0] : null;
+  const gridStories = Array.isArray(newsData) ? (isFeaturedTab 
     ? newsData.slice(1, displayedArticles) // For featured tabs: show limited articles
-    : newsData.slice(1, displayedNewsItems + 1); // For News tab: show up to displayedNewsItems + 1 (including the featured story)
-  const headlineStories = newsData.slice(9);
+    : newsData.slice(1, displayedNewsItems + 1)) : []; // For News tab: show up to displayedNewsItems + 1 (including the featured story)
+  const headlineStories = Array.isArray(newsData) ? newsData.slice(9) : [];
   
   const hasMoreArticles = isFeaturedTab && newsData.length > displayedArticles;
   const hasMoreNewsItems = !isFeaturedTab && newsData.length > displayedNewsItems + 1; // +1 because we exclude the featured story
@@ -1770,7 +1773,7 @@ export default function NewsScreen() {
                             <Text style={styles.freshStoriesHeader}>Trending Stories</Text>
                             <Text style={styles.freshStoriesSubheader}>Most visited in last 3 days</Text>
                             <View style={styles.freshStoryList}>
-                              {trendingStories.slice(0, displayedTrendingStories).map((item, index) => (
+                              {(Array.isArray(trendingStories) ? trendingStories.slice(0, displayedTrendingStories) : []).map((item, index) => (
                                 <TrendingStoryItem key={item.id} item={item} index={index} />
                               ))}
                             </View>

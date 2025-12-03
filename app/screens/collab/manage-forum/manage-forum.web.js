@@ -31,7 +31,7 @@ export default function ManageForumScreen() {
   ];
 
   useEffect(() => {
-    let filtered = [...topics];
+    let filtered = Array.isArray(topics) ? [...topics] : [];
     
     // Apply category filter
     if (selectedCategory !== 'All') {
@@ -39,20 +39,20 @@ export default function ManageForumScreen() {
     }
     
     // Apply status and view mode filters
-  if (statusFilter === 'active') {
-    // For active view, show all non-deleted topics
-    filtered = filtered.filter(t => t.status !== 'deleted');
-  } else if (statusFilter === 'reported' || statusFilter === 'deleted') {
-    // For reported/deleted views, filter based on view mode
-    if (viewMode === 'topics') {
-      filtered = filtered.filter(t => t.status === statusFilter);
-    } else {
-      // For comments view, show topics that have comments matching the status
-      filtered = filtered.filter(topic => 
-        topic.comments?.some(comment => comment.status === statusFilter)
-      );
+    if (statusFilter === 'active') {
+      // For active view, show all non-deleted topics
+      filtered = filtered.filter(t => t.status !== 'deleted');
+    } else if (statusFilter === 'reported' || statusFilter === 'deleted') {
+      // For reported/deleted views, filter based on view mode
+      if (viewMode === 'topics') {
+        filtered = filtered.filter(t => t.status === statusFilter);
+      } else {
+        // For comments view, show topics that have comments matching the status
+        filtered = filtered.filter(topic => 
+          Array.isArray(topic.comments) && topic.comments.some(comment => comment.status === statusFilter)
+        );
+      }
     }
-  }
     
     // Apply search
     if (searchQuery.trim()) {
@@ -64,7 +64,7 @@ export default function ManageForumScreen() {
     }
     
     // Apply sorting
-    const sorted = [...filtered];
+    const sorted = Array.isArray(filtered) ? [...filtered] : [];
     if (sortOption === 'date_desc') {
       sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     } else if (sortOption === 'date_asc') {
@@ -194,7 +194,7 @@ export default function ManageForumScreen() {
       
       console.log('All valid comments:', allComments);
       const commentCount = allComments.length;
-      const showComments = allComments.slice(0, 2);
+      const showComments = Array.isArray(allComments) ? allComments.slice(0, 2) : [];
       console.log('Showing comments:', showComments);
       
       return (
@@ -398,7 +398,9 @@ export default function ManageForumScreen() {
     const commentItems = [];
     
     filteredTopics.forEach(topic => {
-      const topicComments = topic.comments?.filter(comment => comment.status === statusFilter) || [];
+      const topicComments = Array.isArray(topic.comments) 
+        ? topic.comments.filter(comment => comment.status === statusFilter) 
+        : [];
       topicComments.forEach(comment => {
         commentItems.push({
           ...comment,

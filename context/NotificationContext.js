@@ -61,7 +61,7 @@ export const NotificationProvider = ({ children }) => {
       if (!user) return;
 
       try {
-        const response = await apiClient.get('/api/applications?status=pending&limit=1');
+        const response = await apiClient.get('/applications?status=pending&limit=1');
         // Count the pending applicants from the data
         const applicants = response.data.data || response.data;
         const pendingCount = Array.isArray(applicants) ? applicants.filter(a => a.status === 'pending').length : 0;
@@ -83,7 +83,7 @@ export const NotificationProvider = ({ children }) => {
       if (!user) return;
 
       try {
-        const response = await apiClient.get('/api/contributions');
+        const response = await apiClient.get('/contributions');
         const list = response.data.data || response.data;
         const validList = Array.isArray(list) ? list.filter(item => item != null) : [];
 

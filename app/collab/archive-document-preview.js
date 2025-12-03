@@ -25,6 +25,11 @@ export default function ArchiveDocumentPreview() {
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState('');
   const [showWorkflow, setShowWorkflow] = useState(false);
+  const [isWeb, setIsWeb] = useState(false);
+
+  useEffect(() => {
+    setIsWeb(typeof window !== 'undefined' && typeof window.document !== 'undefined');
+  }, []);
 
   useEffect(() => {
     fetchDocument();
@@ -48,13 +53,8 @@ export default function ArchiveDocumentPreview() {
 
   const handleDownload = async () => {
     try {
-      // More reliable web detection for Expo
-      const isWeb = typeof window !== 'undefined' && typeof window.document !== 'undefined';
-      console.log('Web detection:', { isWeb, hasWindow: typeof window !== 'undefined', hasDocument: typeof window?.document !== 'undefined' });
-
       if (isWeb) {
         // Web platform - create and download RTF document (opens in Word)
-        console.log('Using web download path');
         const wordContent = await createWordDocument(content || 'Document content not available');
         
         // Create download link for RTF document
@@ -78,9 +78,7 @@ export default function ArchiveDocumentPreview() {
         Alert.alert('Download Complete', `Document converted and downloaded as ${filename}`);
       } else {
         // Mobile platform - download original file
-        console.log('Using mobile download path');
         const fileUrl = `${API_URL}/storage/${document.file}`;
-        console.log('Opening URL:', fileUrl);
         await Linking.openURL(fileUrl);
         Alert.alert('Download Started', 'Opening original file for download...');
       }

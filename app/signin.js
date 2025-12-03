@@ -118,47 +118,222 @@ export default function SignInScreen() {
 
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: clientId,
-    androidClientId: WEB_CLIENT_ID,
+    redirectUri: 'https://draftdrop.site/auth-callback', // Direct redirect, no proxy
     responseType: 'code',
     scopes: ['openid', 'profile', 'email', 'https://www.googleapis.com/auth/documents', 'https://www.googleapis.com/auth/drive.file'],
-    redirectUri: makeRedirectUri({ useProxy: true }),
     usePKCE: true,
     shouldAutoExchangeCode: false, // Prevent auto token exchange
     codeChallengeMethod: 'S256', // Explicitly set PKCE method
   });
 
+  // Test API connectivity
+  const testApiConnection = async () => {
+    try {
+      console.log('Testing API connection to:', apiClient.defaults.baseURL);
+      const response = await apiClient.get('/ping?t=' + Date.now()); // Add cache-buster
+      console.log('API connection successful:', response.data);
+      alert('API connection successful! Check console for details.');
+    } catch (error) {
+      console.error('API connection failed:', error);
+      alert(`API connection failed: ${error.message}`);
+    }
+  };
+
+  // Log Google OAuth configuration to backend
+  const logToBackend = async (message, data) => {
+    try {
+      // Simple fetch call that doesn't depend on window detection
+      const response = await fetch(`${apiClient.defaults.baseURL}/debug-log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: message,
+          data: data,
+          source: 'signin_frontend',
+          timestamp: new Date().toISOString(),
+        }),
+      });
+      
+      if (!response.ok) {
+        console.log('Debug log failed:', response.status);
+      }
+    } catch (error) {
+      // Don't log errors from logging to avoid infinite loops
+      console.log('Failed to log to backend:', error.message);
+    }
+  };
+
+  // Log Google OAuth configuration
+  const redirectUri = 'https://draftdrop.site/auth-callback'; // Use direct redirect
+  console.log('CURRENT REDIRECT URI:', redirectUri); 
+  console.log('FULL REDIRECT URI OBJECT:', { 
+    redirectUri, 
+    useProxy: false, 
+    expected: 'https://draftdrop.site/auth-callback'
+  });
+  logToBackend('=== GOOGLE OAUTH CONFIGURATION DEBUG ===', {
+    clientId: clientId,
+    androidClientId: WEB_CLIENT_ID,
+    responseType: 'code',
+    scopes: ['openid', 'profile', 'email', 'https://www.googleapis.com/auth/documents', 'https://www.googleapis.com/auth/drive.file'],
+    redirectUri: redirectUri, // This will show the actual URI being used
+    usePKCE: true,
+    shouldAutoExchangeCode: false,
+    codeChallengeMethod: 'S256',
+    requestConfig: request ? {
+      clientId: request.clientId,
+      redirectUri: request.redirectUri,
+      scopes: request.scopes,
+      usePKCE: request.usePKCE,
+    } : 'request_not_ready',
+  });
+
+  // Log expected OAuth URLs
+  logToBackend('Expected OAuth URLs:', {
+    googleAuthUrl: `https://accounts.google.com/o/oauth2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20profile%20email`,
+    redirectUri: redirectUri,
+    backendCallbackUrl: `${apiClient.defaults.baseURL}/google/access-token`,
+  });
+
   useEffect(() => {
     const handleAuthResponse = async () => {
+      await logToBackend('=== FRONTEND GOOGLE AUTH DEBUG START ===', {
+        type: response?.type,
+        hasParams: !!response?.params,
+        paramsKeys: response?.params ? Object.keys(response.params) : [],
+        fullResponse: response,
+      });
+
       if (response?.type === 'success') {
         const { code } = response.params;
-        console.log('Redirect URI used:', makeRedirectUri({ useProxy: true }));
+        await logToBackend('Google Auth Success - Code extracted', {
+          hasCode: !!code,
+          codeLength: code ? code.length : 0,
+          codePreview: code ? code.substring(0, 20) + '...' : 'null',
+        });
+
+        const redirectUri = makeRedirectUri({ useProxy: true });
+        await logToBackend('Redirect URI configuration', {
+          redirectUri,
+          hasCodeVerifier: !!request?.codeVerifier,
+          codeVerifierLength: request?.codeVerifier ? request.codeVerifier.length : 0,
+          codeVerifierPreview: request?.codeVerifier ? request.codeVerifier.substring(0, 20) + '...' : 'null',
+        });
+
         if (code && request?.codeVerifier) {
-          console.log('Sending to backend:', { code, codeVerifier: request.codeVerifier });
-          await loginWithGoogleAuthCode(code, request.codeVerifier);
+          await logToBackend('Sending to backend', { 
+            code: code.substring(0, 20) + '...', 
+            codeVerifier: request.codeVerifier.substring(0, 20) + '...' 
+          });
+          
+          try {
+            await loginWithGoogleAuthCode(code, request.codeVerifier);
+            await logToBackend('Backend authentication successful', {});
+          } catch (error) {
+            await logToBackend('Backend authentication failed', {
+              error: error.message,
+              stack: error.stack,
+              response: error.response?.data,
+            });
+          }
         } else {
-          console.error('Missing code or codeVerifier:', { code, codeVerifier: request?.codeVerifier });
+          await logToBackend('Missing code or codeVerifier', { 
+            hasCode: !!code, 
+            hasCodeVerifier: !!request?.codeVerifier,
+            codeLength: code ? code.length : 0,
+            verifierLength: request?.codeVerifier ? request.codeVerifier.length : 0,
+          });
         }
       } else if (response?.type === 'error') {
-        console.error('[AUTH] Google Sign-In Error:', response.error);
+        await logToBackend('=== GOOGLE AUTH ERROR ===', {
+          error: response.error,
+          errorType: typeof response.error,
+          errorDescription: response.error?.description,
+          fullParams: response.params,
+        });
         Alert.alert('Google Sign-In Error', response.error?.message || 'An unknown error occurred.');
+      } else if (response?.type === 'cancel') {
+        await logToBackend('Google Auth was cancelled by user', {});
+      } else {
+        await logToBackend('Google Auth - Unknown response type', { type: response?.type });
       }
+      
+      await logToBackend('=== FRONTEND GOOGLE AUTH DEBUG END ===');
     };
 
     handleAuthResponse();
   }, [response]);
 
   useEffect(() => {
-    if (user) {
-      // Check user role and redirect accordingly
-      if (user.profile?.role === 'collaborator') {
-        // Collaborator -> redirect to collab/dashboard
-        router.replace('/collab/dashboard');
-      } else {
-        // Regular user -> redirect to home
-        router.replace('/home');
+    const handleMessage = (event) => {
+      // Verify origin for security
+      if (event.origin !== window.location.origin) return;
+      
+      const { type, code, state, error } = event.data;
+      
+      if (type === 'GOOGLE_AUTH_SUCCESS') {
+        console.log('Received auth success from popup');
+        handleOAuthCallback(code, state);
+      } else if (type === 'GOOGLE_AUTH_ERROR') {
+        console.error('Received auth error from popup:', error);
       }
+    };
+    
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  useEffect(() => {
+    // Check if we have auth data from localStorage (OAuth callback)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('auth') === '1') {
+      const code = localStorage.getItem('google_auth_code');
+      const state = localStorage.getItem('google_auth_state');
+      
+      if (code && state) {
+        console.log('Found auth data in localStorage:', { code: code.substring(0, 20) + '...', state });
+        localStorage.removeItem('google_auth_code');
+        localStorage.removeItem('google_auth_state');
+        
+        // Process the auth code
+        handleOAuthCallback(code, state);
+      }
+      
+      // Clean up the URL
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [user]);
+  }, []);
+
+  const handleOAuthCallback = async (code, state) => {
+    try {
+      console.log('Processing OAuth callback with code:', code.substring(0, 20) + '...');
+      
+      // Retrieve codeVerifier from sessionStorage
+      const codeVerifier = sessionStorage.getItem('pkce_code_verifier');
+      
+      if (!codeVerifier) {
+        console.error('No code verifier found in sessionStorage');
+        throw new Error('PKCE code verifier not found');
+      }
+      
+      console.log('Found code verifier in sessionStorage');
+      
+      // Call your backend to exchange the code
+      await loginWithGoogleAuthCode(code, codeVerifier);
+      
+      // Clean up sessionStorage
+      sessionStorage.removeItem('pkce_code_verifier');
+      
+      console.log('OAuth authentication successful, redirecting to home...');
+      
+      // Redirect to home page after successful authentication
+      router.replace('/home');
+    } catch (error) {
+      console.error('OAuth callback failed:', error);
+    }
+  };
 
   return (
     <ImageBackground 
@@ -174,12 +349,24 @@ export default function SignInScreen() {
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to continue to Fisherman</Text>
           
-          <TouchableOpacity style={styles.googleButton} onPress={() => promptAsync()} disabled={!request}>
+          <TouchableOpacity style={styles.googleButton} onPress={() => {
+            // Store codeVerifier in sessionStorage before OAuth redirect
+            if (request?.codeVerifier) {
+              sessionStorage.setItem('pkce_code_verifier', request.codeVerifier);
+              console.log('Stored code verifier in sessionStorage');
+            }
+            promptAsync();
+          }} disabled={!request}>
             <Image
               source={require('../assets/g-logo.png')}
               style={styles.googleIcon}
             />
             <Text style={styles.googleButtonText}>Sign in with Google</Text>
+          </TouchableOpacity>
+
+          {/* Test API Connection Button */}
+          <TouchableOpacity style={styles.testButton} onPress={testApiConnection}>
+            <Text style={styles.testButtonText}>Test API Connection</Text>
           </TouchableOpacity>
 
           <Text style={styles.footerText}>
@@ -292,9 +479,23 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   googleButtonText: {
+    color: '#333',
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    marginLeft: 12,
+  },
+  testButton: {
+    backgroundColor: '#28a745',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  testButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   footerText: {
     marginTop: 24,

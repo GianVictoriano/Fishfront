@@ -14,11 +14,10 @@ const apiClient = axios.create({
 // Add /api prefix only if the URL doesn't already have it and it's not an external URL
 apiClient.interceptors.request.use(config => {
   if (!config.url.startsWith('http') && !config.url.startsWith('/api/')) {
-    config.url = `/api${config.url.startsWith('/') ? '' : '/'}${config.url}`;
+    config.url = `/api/api${config.url.startsWith('/') ? '' : '/'}${config.url}`;
   }
   return config;
 });
-
 // Helper to check if the data is FormData
 const isFormData = (data) => {
   return (typeof FormData !== 'undefined' && data instanceof FormData) ||
@@ -67,7 +66,7 @@ apiClient.interceptors.response.use(
         const refreshToken = await AsyncStorage.getItem('refresh_token');
         if (refreshToken) {
           const response = await axios.post(
-            `${process.env.EXPO_PUBLIC_API_URL}/api/auth/refresh`,
+            `${process.env.EXPO_PUBLIC_API_URL}/api/api/auth/refresh`,
             { refresh_token: refreshToken }
           );
           

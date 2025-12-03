@@ -127,7 +127,7 @@ const HomeScreen = () => {
     try {
       const response = await apiClient.get('/public/featured-articles');
       if (response.data?.data) {
-        const mapped = response.data.data.slice(0, 3).map(article => ({
+        const mapped = Array.isArray(response.data.data) ? response.data.data.slice(0, 3).map(article => ({
           id: article.id?.toString() || '',
           title: article.title,
           content: article.content || '',
@@ -136,7 +136,7 @@ const HomeScreen = () => {
             : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
           published_at: article.published_at,
           genre: article.genre || 'Featured',
-        }));
+        })) : [];
         setFeaturedData(mapped);
       }
     } catch (error) {

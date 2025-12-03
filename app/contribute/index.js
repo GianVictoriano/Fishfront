@@ -74,7 +74,7 @@ const Contribute = () => {
   const [department, setDepartment] = useState('');
   const [requestType, setRequestType] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(null);
   const [showDateErrorModal, setShowDateErrorModal] = useState(false);
   const [showTimeErrorModal, setShowTimeErrorModal] = useState(false);
   const [dateErrorMessage, setDateErrorMessage] = useState('');

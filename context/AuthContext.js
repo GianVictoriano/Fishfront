@@ -28,16 +28,65 @@ export const AuthProvider = ({ children }) => {
     };
     loadUser();
   }, []);
+  // Log Google OAuth configuration to backend
+  const logToBackend = async (message, data) => {
+    // Only log if we're in a browser environment (not during build)
+    if (typeof window !== 'undefined') {
+      try {
+        await apiClient.post('/debug-log', {
+          message: message,
+          data: data,
+          source: 'auth_context',
+          timestamp: new Date().toISOString(),
+        });
+      } catch (error) {
+        // Don't log errors from logging to avoid infinite loops
+        console.log('Failed to log to backend:', error.message);
+      }
+    }
+  };
+
   const loginWithGoogleAuthCode = async (authCode, codeVerifier) => {
     setLoading(true);
+    await logToBackend('=== AUTH CONTEXT GOOGLE AUTH DEBUG START ===', {
+      hasAuthCode: !!authCode,
+      authCodeLength: authCode ? authCode.length : 0,
+      authCodePreview: authCode ? authCode.substring(0, 20) + '...' : 'null',
+      hasCodeVerifier: !!codeVerifier,
+      codeVerifierLength: codeVerifier ? codeVerifier.length : 0,
+      codeVerifierPreview: codeVerifier ? codeVerifier.substring(0, 20) + '...' : 'null',
+      apiBaseUrl: apiClient.defaults.baseURL,
+      endpoint: '/google/access-token',
+    });
+
     try {
+      await logToBackend('Making API call to /google/access-token', {});
       const response = await apiClient.post('/google/access-token', { auth_code: authCode, code_verifier: codeVerifier });
+      
+      await logToBackend('API response received', {
+        status: response.status,
+        statusText: response.statusText,
+        hasData: !!response.data,
+        dataKeys: response.data ? Object.keys(response.data) : [],
+        responseData: response.data,
+      });
+
       const {
         api_token,
         user,
         google_access_token,
         google_refresh_token,
       } = response.data;
+
+      await logToBackend('Extracted data from response', {
+        hasApiToken: !!api_token,
+        apiTokenLength: api_token ? api_token.length : 0,
+        hasUser: !!user,
+        userEmail: user?.email,
+        userId: user?.id,
+        hasGoogleAccessToken: !!google_access_token,
+        hasGoogleRefreshToken: !!google_refresh_token,
+      });
 
       // Store all relevant data
       await AsyncStorage.setItem('auth_token', api_token);
@@ -47,18 +96,38 @@ export const AuthProvider = ({ children }) => {
         await AsyncStorage.setItem('google_refresh_token', google_refresh_token);
       }
 
+      await logToBackend('Data stored in AsyncStorage', {});
+
       // Configure API client and update auth state
       apiClient.defaults.headers.common['Authorization'] = `Bearer ${api_token}`;
       setAuth(user);
 
-      console.log('[AuthContext] Google login successful. API and Google tokens stored.');
+      await logToBackend('Auth state updated', {
+        userId: user?.id,
+        userEmail: user?.email,
+        tokenSet: !!api_token,
+      });
+
+      await logToBackend('=== AUTH CONTEXT GOOGLE AUTH DEBUG END ===');
 
     } catch (error) {
-      console.error('[AuthContext] Error during Google auth code exchange:', error.response?.data || error.message);
+      await logToBackend('=== AUTH CONTEXT GOOGLE AUTH ERROR START ===', {
+        errorMessage: error.message,
+        errorStack: error.stack,
+        errorResponse: error.response?.data,
+        errorStatus: error.response?.status,
+        errorStatusText: error.response?.statusText,
+        errorConfig: {
+          url: error.config?.url,
+          method: error.config?.method,
+          data: error.config?.data,
+        },
+      });
+      await logToBackend('=== AUTH CONTEXT GOOGLE AUTH ERROR END ===');
+      
       // Clear all potentially stored tokens on failure
       await AsyncStorage.multiRemove(['auth_token', 'user_data', 'google_access_token', 'google_refresh_token']);
-      delete apiClient.defaults.headers.common['Authorization'];
-      setAuth(null);
+      throw error;
     } finally {
       setLoading(false);
     }

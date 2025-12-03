@@ -90,7 +90,7 @@ const Forum = () => {
 
   const detectSuspiciousActivity = (topic) => {
     const commentCount = topic.comments?.length || 0;
-    const uniqueUsers = new Set(topic.comments?.map(c => c.user_id || c.user?.id).filter(Boolean));
+    const uniqueUsers = new Set(Array.isArray(topic.comments) ? topic.comments.map(c => c.user_id || c.user?.id).filter(Boolean) : []);
     const topicAge = Date.now() - new Date(topic.created_at).getTime();
     const hoursOld = topicAge / (1000 * 60 * 60);
     
@@ -107,7 +107,7 @@ const Forum = () => {
 
   const calculateTopicScore = (topic) => {
     const commentCount = topic.comments?.length || 0;
-    const uniqueUsers = new Set(topic.comments?.map(c => c.user_id || c.user?.id).filter(Boolean));
+    const uniqueUsers = new Set(Array.isArray(topic.comments) ? topic.comments.map(c => c.user_id || c.user?.id).filter(Boolean) : []);
     const topicAge = Date.now() - new Date(topic.created_at).getTime();
     const hoursOld = topicAge / (1000 * 60 * 60);
     
@@ -125,16 +125,22 @@ const Forum = () => {
   };
 
   useEffect(() => {
+    if (!Array.isArray(topics)) {
+      setFilteredTopics([]);
+      return;
+    }
+    
     let filtered = topics;
     if (selectedCategory !== 'All') {
-      filtered = filtered.filter(t => t.category === selectedCategory);
+      filtered = filtered.filter(t => t && t.category === selectedCategory);
     }
     if (searchQuery.trim()) {
       const lower = searchQuery.trim().toLowerCase();
-      filtered = filtered.filter(t => t.title.toLowerCase().includes(lower));
+      filtered = filtered.filter(t => t && t.title && t.title.toLowerCase().includes(lower));
     }
     if (dateFilterEnabled && (startDate || endDate)) {
       filtered = filtered.filter(t => {
+        if (!t || !t.created_at) return false;
         const topicDate = new Date(t.created_at).toISOString().split('T')[0];
         const start = startDate ? new Date(startDate).toISOString().split('T')[0] : null;
         const end = endDate ? new Date(endDate).toISOString().split('T')[0] : null;
@@ -150,25 +156,42 @@ const Forum = () => {
       });
     }
     
-    const sorted = [...filtered];
+    const sorted = Array.isArray(filtered) ? [...filtered] : [];
     if (sortOption === 'date_desc') {
-      sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      sorted.sort((a, b) => {
+        const dateA = a && a.created_at ? new Date(a.created_at) : new Date(0);
+        const dateB = b && b.created_at ? new Date(b.created_at) : new Date(0);
+        return dateB - dateA;
+      });
     } else if (sortOption === 'date_asc') {
-      sorted.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      sorted.sort((a, b) => {
+        const dateA = a && a.created_at ? new Date(a.created_at) : new Date(0);
+        const dateB = b && b.created_at ? new Date(b.created_at) : new Date(0);
+        return dateA - dateB;
+      });
     } else if (sortOption === 'alpha_asc') {
-      sorted.sort((a, b) => a.title.localeCompare(b.title));
+      sorted.sort((a, b) => {
+        const titleA = a && a.title ? a.title : '';
+        const titleB = b && b.title ? b.title : '';
+        return titleA.localeCompare(titleB);
+      });
     } else if (sortOption === 'alpha_desc') {
-      sorted.sort((a, b) => b.title.localeCompare(a.title));
+      sorted.sort((a, b) => {
+        const titleA = a && a.title ? a.title : '';
+        const titleB = b && b.title ? b.title : '';
+        return titleB.localeCompare(titleA);
+      });
     }
-    setFilteredTopics(sorted);
+    setFilteredTopics(Array.isArray(sorted) ? sorted : []);
   }, [topics, searchQuery, selectedCategory, sortOption, dateFilterEnabled, startDate, endDate]);
 
   const fetchTopics = async () => {
     try {
       const response = await apiClient.get('/topics');
-      setTopics(response.data);
+      setTopics(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching topics:', error);
+      setTopics([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -182,19 +205,26 @@ const Forum = () => {
       
       if (type === 'topic') {
         await apiClient.post(`/topics/${id}/report`);
-        setTopics(topics.map(topic => 
+        setTopics(Array.isArray(topics) ? topics.map(topic => 
           topic.id === id ? { ...topic, status: 'reported' } : topic
-        ));
+        ) : []);
         if (selectedTopic?.id === id) {
-          setSelectedTopic({ ...selectedTopic, status: 'reported' });
+          setSelectedTopic({ 
+            ...selectedTopic, 
+            status: 'reported',
+            comments: Array.isArray(selectedTopic.comments) ? selectedTopic.comments : []
+          });
         }
       } else if (type === 'comment') {
         await apiClient.post(`/comments/${id}/report`);
         if (selectedTopic) {
-          const updatedComments = selectedTopic.comments.map(comment => 
+          const updatedComments = Array.isArray(selectedTopic.comments) ? selectedTopic.comments.map(comment => 
             comment.id === id ? { ...comment, status: 'reported' } : comment
-          );
-          setSelectedTopic({ ...selectedTopic, comments: updatedComments });
+          ) : [];
+          setSelectedTopic({ 
+            ...selectedTopic, 
+            comments: updatedComments 
+          });
         }
       }
       
@@ -413,14 +443,14 @@ const Forum = () => {
                           >
                             {selectedTopic.user?.name || 'Anonymous'}
                           </Text>
-                        )} • {new Date(selectedTopic.created_at).toLocaleDateString()}
+                        )} • {selectedTopic.created_at ? new Date(selectedTopic.created_at).toLocaleDateString() : 'Unknown date'}
                       </Text>
                     </View>
-                    <Text style={styles.topicDetailsBody}>{selectedTopic.body}</Text>
+                    <Text style={styles.topicDetailsBody}>{selectedTopic.body || 'No content'}</Text>
                     <Text style={styles.commentCount}>{selectedTopic.comments?.length || 0} comments</Text>
                     <View style={styles.commentsSection}>
                       <ScrollView style={styles.commentsScrollView} contentContainerStyle={styles.commentsScrollViewContent}>
-                        {selectedTopic.comments && selectedTopic.comments.length > 0 ? (
+                        {Array.isArray(selectedTopic.comments) && selectedTopic.comments.length > 0 ? (
                           selectedTopic.comments.map((comment, idx) => (
                             <View key={comment.id || idx} style={styles.commentCard}>
                               <View style={styles.commentHeader}>
@@ -450,7 +480,7 @@ const Forum = () => {
                                       </TouchableOpacity>
                                     )}
                                     <Text style={styles.commentDate}>
-                                      {new Date(comment.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                      {comment.created_at ? new Date(comment.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Unknown date'}
                                     </Text>
                                   </View>
                                 </View>
@@ -502,9 +532,9 @@ const Forum = () => {
                               return;
                             }
                             
-                            const recentComments = selectedTopic.comments?.slice(-5) || [];
+                            const recentComments = Array.isArray(selectedTopic.comments) ? selectedTopic.comments.slice(-5) : [];
                             const isDuplicate = recentComments.some(comment => 
-                              comment.body.toLowerCase().trim() === commentText.toLowerCase().trim()
+                              comment && comment.body && comment.body.toLowerCase().trim() === commentText.toLowerCase().trim()
                             );
                             
                             if (isDuplicate) {
@@ -537,7 +567,10 @@ const Forum = () => {
                                   : topic
                               ));
                               const response = await apiClient.get(`/topics/${selectedTopic.id}`);
-                              setSelectedTopic(response.data);
+                              setSelectedTopic({
+                              ...response.data,
+                              comments: Array.isArray(response.data?.comments) ? response.data.comments : []
+                            });
                               setCommentText("");
                             } catch (error) {
                               console.error('Failed to post comment:', error);
@@ -559,11 +592,14 @@ const Forum = () => {
               ) : (
                 <FlatList
                   data={filteredTopics}
-                  keyExtractor={(item) => item.id.toString()}
+                  keyExtractor={(item, index) => (item.id || index).toString()}
                   renderItem={({ item }) => (
                     <TouchableOpacity 
                       style={styles.topicCard}
-                      onPress={() => setSelectedTopic(item)}
+                      onPress={() => setSelectedTopic({
+                      ...item,
+                      comments: Array.isArray(item.comments) ? item.comments : []
+                    })}
                     >
                       <Text style={styles.topicTitle}>{item.title}</Text>
                       <View style={styles.topicMetaContainer}>
@@ -582,7 +618,7 @@ const Forum = () => {
                             >
                               {item.user?.name || 'Anonymous'}
                             </Text>
-                          )} • {new Date(item.created_at).toLocaleDateString()}
+                          )} • {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown date'}
                         </Text>
                       </View>
                       {item.body && (
@@ -654,14 +690,14 @@ const Forum = () => {
                           >
                             {selectedTopic.user?.name || 'Anonymous'}
                           </Text>
-                        )} • {new Date(selectedTopic.created_at).toLocaleDateString()}
+                        )} • {selectedTopic.created_at ? new Date(selectedTopic.created_at).toLocaleDateString() : 'Unknown date'}
                       </Text>
                     </View>
-                    <Text style={styles.topicDetailsBody}>{selectedTopic.body}</Text>
+                    <Text style={styles.topicDetailsBody}>{selectedTopic.body || 'No content'}</Text>
                     <Text style={styles.commentCount}>{selectedTopic.comments?.length || 0} comments</Text>
                     <View style={styles.commentsSection}>
                       <ScrollView style={styles.commentsScrollView} contentContainerStyle={styles.commentsScrollViewContent}>
-                        {selectedTopic.comments && selectedTopic.comments.length > 0 ? (
+                        {Array.isArray(selectedTopic.comments) && selectedTopic.comments.length > 0 ? (
                           selectedTopic.comments.map((comment, idx) => (
                             <View key={comment.id || idx} style={styles.commentCard}>
                               <View style={styles.commentHeader}>
@@ -691,7 +727,7 @@ const Forum = () => {
                                       </TouchableOpacity>
                                     )}
                                     <Text style={styles.commentDate}>
-                                      {new Date(comment.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                      {comment.created_at ? new Date(comment.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Unknown date'}
                                     </Text>
                                   </View>
                                 </View>
@@ -743,9 +779,9 @@ const Forum = () => {
                               return;
                             }
                             
-                            const recentComments = selectedTopic.comments?.slice(-5) || [];
+                            const recentComments = Array.isArray(selectedTopic.comments) ? selectedTopic.comments.slice(-5) : [];
                             const isDuplicate = recentComments.some(comment => 
-                              comment.body.toLowerCase().trim() === commentText.toLowerCase().trim()
+                              comment && comment.body && comment.body.toLowerCase().trim() === commentText.toLowerCase().trim()
                             );
                             
                             if (isDuplicate) {
@@ -778,7 +814,10 @@ const Forum = () => {
                                   : topic
                               ));
                               const response = await apiClient.get(`/topics/${selectedTopic.id}`);
-                              setSelectedTopic(response.data);
+                              setSelectedTopic({
+                              ...response.data,
+                              comments: Array.isArray(response.data?.comments) ? response.data.comments : []
+                            });
                               setCommentText("");
                             } catch (error) {
                               console.error('Failed to post comment:', error);
@@ -800,11 +839,14 @@ const Forum = () => {
               ) : (
                 <FlatList
                   data={filteredTopics}
-                  keyExtractor={(item) => item.id.toString()}
+                  keyExtractor={(item, index) => (item.id || index).toString()}
                   renderItem={({ item }) => (
                     <TouchableOpacity 
                       style={styles.topicCard}
-                      onPress={() => setSelectedTopic(item)}
+                      onPress={() => setSelectedTopic({
+                      ...item,
+                      comments: Array.isArray(item.comments) ? item.comments : []
+                    })}
                     >
                       <Text style={styles.topicTitle}>{item.title}</Text>
                       <View style={styles.topicMetaContainer}>
@@ -823,7 +865,7 @@ const Forum = () => {
                             >
                               {item.user?.name || 'Anonymous'}
                             </Text>
-                          )} • {new Date(item.created_at).toLocaleDateString()}
+                          )} • {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown date'}
                         </Text>
                       </View>
                       {item.body && (
@@ -856,14 +898,14 @@ const Forum = () => {
         {!isMobile && (
           <View style={styles.rightPanel}>
             <Text style={styles.rightPanelTitle}>Popular Topics</Text>
-            {topics
+            {Array.isArray(topics) && topics
               .slice()
               .sort((a, b) => calculateTopicScore(b) - calculateTopicScore(a))
               .slice(0, 5)
               .map(topic => {
                 const isSuspicious = detectSuspiciousActivity(topic);
                 const score = calculateTopicScore(topic);
-                const uniqueUsers = new Set(topic.comments?.map(c => c.user_id || c.user?.id).filter(Boolean));
+                const uniqueUsers = new Set(Array.isArray(topic.comments) ? topic.comments.map(c => c.user_id || c.user?.id).filter(Boolean) : []);
                 return (
                   <TouchableOpacity
                     key={topic.id}
@@ -872,7 +914,10 @@ const Forum = () => {
                       selectedTopic && selectedTopic.id === topic.id ? styles.activePopularTopic : null,
                       isSuspicious ? styles.suspiciousTopic : null
                     ]}
-                    onPress={() => setSelectedTopic(topic)}
+                    onPress={() => setSelectedTopic({
+                      ...topic,
+                      comments: Array.isArray(topic.comments) ? topic.comments : []
+                    })}
                   >
                     <View style={styles.recentTopicRow}>
                       <View style={{ flex: 1 }}>

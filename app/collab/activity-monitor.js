@@ -210,6 +210,11 @@ const DeadlineGraph = ({ data, width = 400, height = 250 }) => {
 
 // PDF Generation
 const generatePDFReport = async (activities, filter, activityGenres = {}) => {
+  // Ensure activities is an array
+  if (!Array.isArray(activities)) {
+    activities = [];
+  }
+  
   // For web platform, use printable HTML
   if (Platform.OS === 'web') {
     try {
@@ -464,6 +469,10 @@ export default function ActivityMonitorScreen() {
   const [deadlineData, setDeadlineData] = useState(null);
 
   const fetchGenresForActivities = async (activities) => {
+    if (!Array.isArray(activities)) {
+      return {};
+    }
+    
     const articleActivities = activities.filter(activity => activity.id.startsWith('article_'));
     const genrePromises = articleActivities.map(async (activity) => {
       if (!activityGenres[activity.id]) {

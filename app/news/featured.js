@@ -341,7 +341,7 @@ export default function FeaturedScreen() {
   const [displayedArticles, setDisplayedArticles] = useState(9);
   const [loading, setLoading] = useState(false);
   const [activeRequests, setActiveRequests] = useState(new Set());
-  const [screenWidth, setScreenWidth] = useState(Dimensions.get('window').width);
+  const [screenWidth, setScreenWidth] = useState(1000); // Default width for SSR
   const router = useRouter();
   const { recordView } = useInteractionTracking(currentUser?.id);
   const { setActiveGenre } = useNewsStore();
@@ -351,6 +351,9 @@ export default function FeaturedScreen() {
 
   // Listen for screen size changes
   useEffect(() => {
+    // Set actual screen width on mount
+    setScreenWidth(Dimensions.get('window').width);
+    
     const onChange = (result) => {
       setScreenWidth(result.window.width);
     };
@@ -458,9 +461,9 @@ export default function FeaturedScreen() {
     fetchFeaturedData();
   }, []);
 
-  const featuredStory = featuredData[0];
-  const gridStories = featuredData.slice(1, displayedArticles);
-  const currentArticles = featuredData.slice(0, displayedArticles);
+  const featuredStory = Array.isArray(featuredData) && featuredData.length > 0 ? featuredData[0] : null;
+  const gridStories = Array.isArray(featuredData) ? featuredData.slice(1, displayedArticles) : [];
+  const currentArticles = Array.isArray(featuredData) ? featuredData.slice(0, displayedArticles) : [];
   const hasMoreArticles = featuredData.length > displayedArticles;
   
   const handleLoadMore = () => {

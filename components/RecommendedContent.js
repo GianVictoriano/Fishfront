@@ -108,7 +108,7 @@ const RecommendedContent = ({ userId, onInteraction }) => {
         }
       }
       
-      setRecommendations(recommendations.slice(0, 6)); // Ensure we don't exceed 6
+      setRecommendations(Array.isArray(recommendations) ? recommendations.slice(0, 6) : []); // Ensure we don't exceed 6
     } catch (err) {
       console.error('Error fetching recommendations:', err);
       

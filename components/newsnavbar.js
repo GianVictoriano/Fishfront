@@ -52,7 +52,7 @@ export default function NewsNavbar() {
       if (response.data?.data) {
         const allArticles = response.data.data;
         // Filter articles by title, excerpt, or category containing the query
-        const filteredResults = allArticles.filter(article => {
+        const filteredResults = Array.isArray(allArticles) ? allArticles.filter(article => {
           const searchText = query.toLowerCase();
           const title = (article.title || '').toLowerCase();
           const excerpt = (article.excerpt || '').toLowerCase();
@@ -61,7 +61,7 @@ export default function NewsNavbar() {
           return title.includes(searchText) || 
                  excerpt.includes(searchText) || 
                  category.includes(searchText);
-        }).slice(0, 8); // Limit to 8 results
+        }).slice(0, 8) : []; // Limit to 8 results
         
         console.log('🔍 Filtered results:', filteredResults.length);
         setSearchResults(filteredResults);

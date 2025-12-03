@@ -1,15 +1,20 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
 import apiClient from '../utils/api';
 
 const useInteractionTracking = (userId) => {
-  const sessionId = useRef(Date.now().toString());
+  const [sessionId, setSessionId] = useState(null);
   const interactionQueue = useRef([]);
   const flushTimeoutRef = useRef(null);
 
+  // Generate session ID on mount
+  useEffect(() => {
+    setSessionId(Date.now().toString());
+  }, []);
+
   // Flush interactions to server
   const flushInteractions = useCallback(async () => {
-    if (interactionQueue.current.length === 0 || !userId) {
-      console.log('⏭️ Skipping flush:', { queueLength: interactionQueue.current.length, userId });
+    if (interactionQueue.current.length === 0 || !userId || !sessionId) {
+      console.log('⏭️ Skipping flush:', { queueLength: interactionQueue.current.length, userId, sessionId });
       return;
     }
 
@@ -24,11 +29,11 @@ const useInteractionTracking = (userId) => {
         interactions.map(interaction => {
           console.log(`🚀 Sending interaction:`, {
             url: `/articles/${interaction.articleId}/interaction`,
-            data: { ...interaction.data, session_id: sessionId.current }
+            data: { ...interaction.data, session_id: sessionId }
           });
           return apiClient.post(`/articles/${interaction.articleId}/interaction`, {
             ...interaction.data,
-            session_id: sessionId.current,
+            session_id: sessionId,
           });
         })
       );
@@ -39,7 +44,7 @@ const useInteractionTracking = (userId) => {
       // Re-queue failed interactions
       interactionQueue.current.unshift(...interactions);
     }
-  }, [userId]);
+  }, [userId, sessionId]);
 
   // Queue interaction for batch processing
   const queueInteraction = useCallback((articleId, interactionType, additionalData = {}) => {
