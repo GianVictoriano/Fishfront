@@ -762,11 +762,20 @@ const fallbackNewsData = [
 const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
 
 const getImageUrl = (url) => {
-  if (!url) return defaultImage;
+  console.log('getImageUrl input:', url); // Debug: Log input
+  if (!url) {
+    console.log('getImageUrl: no url, returning default'); // Debug: Log fallback
+    return defaultImage;
+  }
   // Convert to string if it's a number or other type
   const urlStr = String(url);
-  if (urlStr.startsWith('http')) return urlStr;
-  return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
+  if (urlStr.startsWith('http')) {
+    console.log('getImageUrl: returning full URL:', urlStr); // Debug: Log full URL
+    return urlStr;
+  }
+  const finalUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
+  console.log('getImageUrl: constructed URL:', finalUrl); // Debug: Log constructed URL
+  return finalUrl;
 };
 
 const NewsCard = ({ item, compact, bigTrending, isFirst, onInteraction }) => {
@@ -1030,6 +1039,7 @@ const TrendingStoryItem = ({ item, index }) => {
 };
 
 export default function FeaturedScreen() {
+  console.log('🚀 FeaturedScreen component mounting!'); // Debug: Check if component mounts
   const [newsData, setNewsData] = useState(fallbackNewsData);
   const [trendingStories, setTrendingStories] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
@@ -1066,41 +1076,56 @@ export default function FeaturedScreen() {
       const requestId = 'featured-news';
       if (activeRequests.has(requestId)) return;
 
-      // Check cache first
-      const cacheKey = `news-featured`;
-      const cachedData = await getCachedData(cacheKey);
-      if (cachedData) {
-        setNewsData(cachedData);
-        return;
-      }
+      // Check cache first - TEMPORARILY DISABLED FOR DEBUGGING
+      // const cacheKey = `news-featured`;
+      // const cachedData = await getCachedData(cacheKey);
+      // if (cachedData) {
+      //   console.log('🔍 Using cached data');
+      //   setNewsData(cachedData);
+      //   return;
+      // }
 
       setActiveRequests(prev => new Set(prev).add(requestId));
       setLoading(true);
 
       try {
-        const url = '/public/trending-articles';
+        const url = '/public/featured-articles';
+        console.log('🔍 Fetching featured articles from:', url);
         const res = await apiClient.get(url);
-        console.log('API Response for Featured:', res);
-
+        console.log('🔍 Raw API Response:', res);
+        console.log('🔍 Response data:', res.data);
+        console.log('🔍 Response status:', res.status);
+        
         if (Array.isArray(res.data?.data)) {
-          console.log('API returned', res.data.data.length, 'items for Featured');
+          console.log('✅ API returned', res.data.data.length, 'items for Featured');
+          if (res.data.data.length > 0) {
+            console.log('🔍 First item full structure:', JSON.stringify(res.data.data[0], null, 2));
+            console.log('🔍 First item image field:', res.data.data[0].image);
+            console.log('🔍 First item image_path field:', res.data.data[0].image_path);
+            console.log('🔍 First item media field:', res.data.data[0].media);
+          }
           const mapped = res.data.data.slice(0, 25).map(item => ({
             id: item.id?.toString() || '',
             title: item.title,
-            excerpt: '',
-            image: item.image || item.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+            excerpt: item.excerpt || item.summary || '',
+            image: getImageUrl(item.image || item.image_path), // Check both like news.web.js
             date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
             category: 'Featured',
           }));
-          console.log('Setting featured data:', mapped);
+          console.log('✅ Setting featured data:', mapped);
+          console.log('🔍 Sample mapped item image URL:', mapped[0]?.image); // Debug: Log mapped image URL
           setNewsData(mapped);
-          await setCachedData(cacheKey, mapped);
+          // await setCachedData('news-featured', mapped); // TEMPORARILY DISABLED FOR DEBUGGING
         } else {
-          console.log('No data array found in response:', res.data);
+          console.log('❌ No data array found in response:', res.data);
+          console.log('❌ Response structure:', Object.keys(res.data || {}));
         }
       } catch (error) {
-        console.error('Error fetching featured data:', error);
-        console.log('Falling back to dummy data for Featured');
+        console.error('❌ Error fetching featured data:', error);
+        console.error('❌ Error response:', error.response);
+        console.error('❌ Error status:', error.response?.status);
+        console.error('❌ Error data:', error.response?.data);
+        console.log('⚠️ Falling back to dummy data for Featured');
         setNewsData(fallbackNewsData);
       } finally {
         setLoading(false);
@@ -1220,7 +1245,7 @@ export default function FeaturedScreen() {
           <>
             <View style={styles.newsMainRow}>
               <View style={{ width: '100%', maxWidth: 1300 }}>
-                <Text style={styles.latestContentTitle}>Latest Featured</Text>
+                <Text style={styles.latestContentTitle}>Featured Articles</Text>
                 <View style={styles.threeColumnGrid}>
                   {featuredStory && (
                     <TouchableOpacity

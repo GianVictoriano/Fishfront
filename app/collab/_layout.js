@@ -7,6 +7,8 @@ import { useWindowDimensions } from 'react-native';
 import { useAuth } from '~/context/AuthContext';
 import { useBranding } from '~/context/BrandingContext';
 import { useNotifications } from '~/context/NotificationContext';
+import { useBroadcastNotifications } from '../../hooks/useBroadcastNotifications';
+import BroadcastNotification from '../components/BroadcastNotification';
 import apiClient from '../../utils/api';
 
 // A single link in the sidebar with hover effects
@@ -172,12 +174,13 @@ const Sidebar = ({ isMinimized }) => {
         >
           {hasModule('dashboard') && <SidebarLink href="/collab/dashboard" text="Dashboard" iconName="grid" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('create-content') && <SidebarLink href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('broadcasts') && <SidebarLink href="/collab/broadcasts" text="Broadcasts" iconName="bell" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} notificationCount={0} />}
           {hasModule('review-content') && <SidebarLink href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} notificationCount={reviewNotifCleared ? 0 : pendingReviewCount} />}
           {hasModule('collaborate') && <SidebarLink href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('activity-monitor') && <SidebarLink href="/collab/activity-monitor" text="Activity Monitor" iconName="activity" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('branding') && <SidebarLink href="/collab/branding" text="Branding" iconName="image" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('forum') && <SidebarLink href="/collab/manage-forum" text="Manage Forum" iconName="message-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
-          {hasModule('folio') && <SidebarLink href="/collab/manage-folio" text="Manage Folio" iconName="book" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
+          {hasModule('folio') && <SidebarLink href="/collab/manage-folio" text="Manage Event" iconName="book" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
           {hasModule('applicants') && <SidebarLink href="/collab/manage-applicants" text="Manage Applicants" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} notificationCount={applicantsNotifCleared ? 0 : pendingApplicantsCount} />}
           {hasModule('requests') && <SidebarLink href="/collab/manage-requests" text="Manage Requests" iconName="file-text" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} notificationCount={requestsNotifCleared ? 0 : pendingRequestsCount} />}
           {hasModule('archives') && <SidebarLink href="/collab/archives" text="Archives" iconName="archive" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />}
@@ -193,6 +196,7 @@ const Sidebar = ({ isMinimized }) => {
             const links = [];
             if (hasModule('dashboard')) links.push(<SidebarLink key="dashboard" href="/collab/dashboard" text="Dashboard" iconName="grid" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('create-content')) links.push(<SidebarLink key="create-content" href="/collab/create-content" text="Create Content" iconName="plus-square" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
+            if (hasModule('broadcasts')) links.push(<SidebarLink key="broadcasts" href="/collab/broadcasts" text="Broadcasts" iconName="bell" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('review-content')) links.push(<SidebarLink key="review-content" href="/collab/review-content" text="Review Content" iconName="eye" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} notificationCount={reviewNotifCleared ? 0 : pendingReviewCount} />);
             if (hasModule('collaborate')) links.push(<SidebarLink key="collaborate" href="/collab/collaborate" text="Collaborate" iconName="users" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
             if (hasModule('activity-monitor')) links.push(<SidebarLink key="activity-monitor" href="/collab/activity-monitor" text="Activity Monitor" iconName="activity" isMinimized={isMinimized} hoverColor={colors.text_secondary} colors={colors} textColor={colors.text_primary} iconColor={colors.text_primary} />);
@@ -220,6 +224,12 @@ export default function CollaboratorLayout() {
   const [isMinimized, setIsMinimized] = useState(false);
   const { user, hasModule } = useAuth();
   const { colors } = useBranding();
+  const {
+    pendingBroadcasts,
+    loading: broadcastLoading,
+    showNotifications,
+    dismissNotification,
+  } = useBroadcastNotifications();
 
   // Web layout with sidebar
   if (Platform.OS === 'web') {
@@ -243,6 +253,13 @@ export default function CollaboratorLayout() {
             </ScrollView>
           </View>
         </View>
+        
+        {/* Broadcast Notification Modal */}
+        <BroadcastNotification
+          visible={showNotifications && !broadcastLoading}
+          broadcasts={pendingBroadcasts}
+          onDismiss={dismissNotification}
+        />
       </SafeAreaView>
     );
   }
@@ -250,7 +267,8 @@ export default function CollaboratorLayout() {
   // Android-specific layout with scrollable tabs
   if (Platform.OS === 'android') {
     return (
-      <Tabs tabBar={(props) => <CustomTabBar {...props} />}>
+      <>
+        <Tabs tabBar={(props) => <CustomTabBar {...props} />}>
         {hasModule('dashboard') && (
           <Tabs.Screen
             name="dashboard"
@@ -324,12 +342,21 @@ export default function CollaboratorLayout() {
           />
         )}
       </Tabs>
-    );
+      
+      {/* Broadcast Notification Modal */}
+      <BroadcastNotification
+        visible={showNotifications && !broadcastLoading}
+        broadcasts={pendingBroadcasts}
+        onDismiss={dismissNotification}
+      />
+    </>
+  );
   }
 
   // Mobile layout (iOS) with bottom tabs
   return (
-    <Tabs
+    <>
+      <Tabs
       tabBar={Platform.OS === 'android' ? (props) => <CustomTabBar {...props} /> : undefined}
       screenOptions={{
         headerShown: false,
@@ -423,6 +450,14 @@ export default function CollaboratorLayout() {
         />
       )}
     </Tabs>
+    
+    {/* Broadcast Notification Modal */}
+    <BroadcastNotification
+      visible={showNotifications && !broadcastLoading}
+      broadcasts={pendingBroadcasts}
+      onDismiss={dismissNotification}
+    />
+    </>
   );
 }
 

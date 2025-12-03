@@ -25,6 +25,8 @@ export default function ManageFolioScreen() {
   const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [folioToDelete, setFolioToDelete] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [imageLoadError, setImageLoadError] = useState(false);
 
   const fetchFolios = async () => {
     try {
@@ -53,8 +55,8 @@ export default function ManageFolioScreen() {
   const fetchSubmissions = async (folioId) => {
     setLoadingSubmissions(true);
     try {
-      const res = await apiClient.get(`/folios/${folioId}/submissions`);
-      setSubmissions(Array.isArray(res.data) ? res.data : []);
+      const res = await apiClient.get(`/submissions?folio_id=${folioId}`);
+      setSubmissions(Array.isArray(res.data) ? res.data : (res.data.data || []));
     } catch (err) {
       console.error('Failed to load submissions:', err);
       alert('Failed to load submissions');
@@ -139,8 +141,8 @@ export default function ManageFolioScreen() {
           <Text style={styles.title}>{item.title}</Text>
           <Text style={styles.theme}>Theme: {item.theme}</Text>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+        <View style={[styles.statusBadge2, { backgroundColor: getStatusColor(item.status) }]}>
+          <Text style={styles.statusText2}>{item.status.toUpperCase()}</Text>
         </View>
       </View>
       
@@ -219,20 +221,32 @@ export default function ManageFolioScreen() {
   );
 
   const renderSubmissionItem = ({ item }) => (
-    <View style={styles.submissionCard}>
+    <TouchableOpacity 
+      style={styles.submissionCard}
+      onPress={() => {
+        if (item.media && item.media.length > 0) {
+          setSelectedFile(item.media[0]);
+          setImageLoadError(false);
+        }
+      }}
+    >
       <View style={styles.submissionHeader}>
         <Text style={styles.submissionTitle}>{item.title}</Text>
         <View style={[styles.submissionStatusBadge, { 
-          backgroundColor: item.status === 'approved' ? '#28a745' : 
-                         item.status === 'rejected' ? '#dc3545' : 
-                         item.status === 'revision_requested' ? '#ffc107' : '#6c757d'
+          borderColor: item.status === 'approved' ? '#28a745' : 
+                   item.status === 'pending' ? '#dc3545' : 
+                   item.status === 'revision_requested' ? '#ffc107' : '#6c757d'
         }]}>
-          <Text style={styles.statusText}>{item.status.replace('_', ' ').toUpperCase()}</Text>
+          <Text style={[styles.statusText, {
+            color: item.status === 'approved' ? '#28a745' : 
+                  item.status === 'pending' ? '#dc3545' : 
+                  item.status === 'revision_requested' ? '#ffc107' : '#6c757d'
+          }]}>{item.status.replace('_', ' ').toUpperCase()}</Text>
         </View>
       </View>
       
       <Text style={styles.submissionMeta}>By: {item.user?.name || 'Unknown'}</Text>
-      <Text style={styles.submissionMeta}>Type: {item.type}</Text>
+      <Text style={styles.submissionMeta}>Genre: {item.genre}</Text>
       <Text style={styles.submissionMeta}>
         Submitted: {new Date(item.submitted_at).toLocaleDateString()}
       </Text>
@@ -269,7 +283,7 @@ export default function ManageFolioScreen() {
           <Text style={styles.feedbackText}>{item.feedback}</Text>
         </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -385,7 +399,7 @@ export default function ManageFolioScreen() {
               <View style={styles.infoSection}>
                 <Text style={styles.infoLabel}>Status:</Text>
                 <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selected.status) }]}>
-                  <Text style={styles.statusText}>{selected.status.toUpperCase()}</Text>
+                  <Text style={styles.statusText2}>{selected.status.toUpperCase()}</Text>
                 </View>
               </View>
 
@@ -427,6 +441,73 @@ export default function ManageFolioScreen() {
             </ScrollView>
           )}
         </SafeAreaView>
+      </Modal>
+
+      {/* File Viewing Modal */}
+      <Modal
+        visible={selectedFile !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedFile(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.fileModalContent}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setSelectedFile(null)}
+              >
+                <MaterialIcons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.fileDisplayArea}>
+              {selectedFile?.file_type?.startsWith('image/') && !imageLoadError ? (
+                (() => {
+                  const imageUrl = `${process.env.EXPO_PUBLIC_API_URL}/storage/submissions/${selectedFile.file_path.replace('submissions/', '')}`;
+                  return (
+                    <img
+                      src={imageUrl}
+                      style={styles.fileImage}
+                      alt={selectedFile.file_name}
+                      onError={() => setImageLoadError(true)}
+                    />
+                  );
+                })()
+              ) : selectedFile ? (
+                <View style={styles.fileDownloadArea}>
+                  <MaterialIcons name="broken-image" size={64} color="#dc3545" />
+                  <Text style={styles.fileTypeText}>
+                    {imageLoadError ? 'Image failed to load' : selectedFile.file_type || 'Unknown file type'}
+                  </Text>
+                  <Text style={styles.fileSizeText}>
+                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            
+            <View style={styles.modalActions}>
+              {selectedFile && (
+                <TouchableOpacity
+                  style={styles.downloadButton}
+                  onPress={() => {
+                    const fileUrl = `${process.env.EXPO_PUBLIC_API_URL}/storage/submissions/${selectedFile.file_path.replace('submissions/', '')}`;
+                    const link = document.createElement('a');
+                    link.href = fileUrl;
+                    link.download = selectedFile.file_name;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                >
+                  <MaterialIcons name="download" size={20} color="#fff" />
+                  <Text style={styles.downloadButtonText}>Download</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -491,14 +572,28 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   statusBadge: {
-    paddingHorizontal: 12,
+
     paddingVertical: 6,
     borderRadius: 12,
+    width: '3.5%',
+  },
+    statusBadge2: {
+
+    paddingVertical: 6,
+    borderRadius: 12,
+    width: '4.3%',
   },
   statusText: {
+    color: '#6c757d',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  statusText2: {
     color: '#fff',
     fontSize: 11,
     fontWeight: 'bold',
+    paddingLeft: '15%',
   },
   detailRow: {
     flexDirection: 'row',
@@ -597,20 +692,26 @@ const styles = StyleSheet.create({
   },
   submissionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'flex-start',
     marginBottom: 8,
+    position: 'relative',
   },
   submissionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
+    marginRight: 80,
     flex: 1,
   },
   submissionStatusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+    alignSelf: 'flex-start',
+    minWidth: 60,
   },
   submissionMeta: {
     fontSize: 13,
@@ -746,5 +847,79 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#fff',
+  },
+  mediaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f9fafb',
+    borderRadius: 6,
+    marginTop: 8,
+    gap: 8,
+  },
+  mediaName: {
+    fontSize: 14,
+    color: '#374151',
+    flex: 1,
+  },
+  // File Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fileModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '90%',
+    maxWidth: 600,
+    maxHeight: '80%',
+  },
+  fileDisplayArea: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    minHeight: 300,
+  },
+  fileImage: {
+    maxWidth: '100%',
+    maxHeight: '100%',
+    borderRadius: 8,
+  },
+  fileDownloadArea: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  fileTypeText: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  fileSizeText: {
+    fontSize: 14,
+    color: '#9ca3af',
+  },
+  modalActions: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  downloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  downloadButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

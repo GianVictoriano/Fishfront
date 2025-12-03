@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Platform, Alert, Modal } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -15,6 +15,7 @@ export default function SubmitScreen() {
   const router = useRouter();
   const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({
+    folio_id: null,
     genre: '',
     title: '',
     caption: '',
@@ -22,10 +23,33 @@ export default function SubmitScreen() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showGenreModal, setShowGenreModal] = useState(false);
+  const [showFolioModal, setShowFolioModal] = useState(false);
+  const [folios, setFolios] = useState([]);
+  const [isLoadingFolios, setIsLoadingFolios] = useState(true);
+  const [selectedFolio, setSelectedFolio] = useState(null);
+
+  useEffect(() => {
+    fetchAvailableFolios();
+  }, []);
+
+  const fetchAvailableFolios = async () => {
+    try {
+      // Fetch all open folios with is_journalists_only = false
+      const response = await apiClient.get('/api/folios?status=open&is_journalists_only=false');
+      console.log('Folios response:', response.data);
+      if (response.data && Array.isArray(response.data)) {
+        setFolios(response.data);
+      }
+    } catch (error) {
+      console.log('Error fetching folios:', error);
+    } finally {
+      setIsLoadingFolios(false);
+    }
+  };
 
   const handleSubmit = async () => {
     // Basic validation
-    if (!formData.genre || !formData.title || !formData.caption || !formData.file) {
+    if (!formData.folio_id || !formData.genre || !formData.title || !formData.caption || !formData.file) {
       Alert.alert('Missing Information', 'Please fill in all required fields and select a file.');
       return;
     }
@@ -34,10 +58,12 @@ export default function SubmitScreen() {
     try {
       // Create FormData for file upload
       const submitData = new FormData();
+      submitData.append('folio_id', formData.folio_id);
       submitData.append('genre', formData.genre);
       submitData.append('title', formData.title);
       submitData.append('caption', formData.caption);
       submitData.append('file', formData.file);
+      console.log('Submitting with folio_id:', formData.folio_id);
 
       // Make API call to submit the work
       const response = await apiClient.post('/submissions', submitData);
@@ -102,6 +128,16 @@ export default function SubmitScreen() {
     setShowGenreModal(false);
   };
 
+  const selectFolio = (folio) => {
+    console.log('Selected folio:', folio);
+    setSelectedFolio(folio);
+    setFormData(prev => ({
+      ...prev,
+      folio_id: folio.id
+    }));
+    setShowFolioModal(false);
+  };
+
   return (
     <View style={styles.container}>
       <AppNavbar />
@@ -121,6 +157,36 @@ export default function SubmitScreen() {
         </View>
 
         <View style={styles.formContainer}>
+          {/* Folio/Event Selection */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Event/Folio *</Text>
+            {isLoadingFolios ? (
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>Loading available events...</Text>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.folioButton}
+                  onPress={() => setShowFolioModal(true)}
+                >
+                  <Text style={selectedFolio ? styles.folioButtonText : styles.folioButtonPlaceholder}>
+                    {selectedFolio ? selectedFolio.title : 'Select an event/folio'}
+                  </Text>
+                  <MaterialIcons name="arrow-drop-down" size={24} color="#6b7280" />
+                </TouchableOpacity>
+                {selectedFolio && (
+                  <View style={styles.themeDisplayContainer}>
+                    <Text style={styles.themeLabel}>Theme:</Text>
+                    <View style={styles.themeBadge}>
+                      <Text style={styles.themeBadgeText}>{selectedFolio.theme}</Text>
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+
           {/* Genre Selection */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Genre *</Text>
@@ -219,6 +285,57 @@ export default function SubmitScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Folio Selection Modal */}
+      <Modal
+        visible={showFolioModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowFolioModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Event/Folio</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowFolioModal(false)}
+              >
+                <MaterialIcons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.folioList}>
+              {folios.length > 0 ? (
+                folios.map((folio) => (
+                  <TouchableOpacity
+                    key={folio.id}
+                    style={[
+                      styles.folioOption,
+                      formData.folio_id === folio.id && styles.folioOptionSelected
+                    ]}
+                    onPress={() => selectFolio(folio)}
+                  >
+                    <View style={styles.folioOptionContent}>
+                      <Text style={[
+                        styles.folioOptionText,
+                        formData.folio_id === folio.id && styles.folioOptionTextSelected
+                      ]}>
+                        {folio.title}
+                      </Text>
+                      <Text style={styles.folioOptionTheme}>Theme: {folio.theme}</Text>
+                    </View>
+                    {formData.folio_id === folio.id && (
+                      <MaterialIcons name="check" size={20} color="#059669" />
+                    )}
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <Text style={styles.noFoliosText}>No active events available</Text>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Genre Selection Modal */}
       <Modal
@@ -347,6 +464,8 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 4,
   },
   submitButtonDisabled: {
     backgroundColor: '#9ca3af',
@@ -364,7 +483,9 @@ const styles = StyleSheet.create({
   },
   genreButtonText: {
     fontSize: 16,
+    fontWeight: '600',
     color: '#374151',
+    marginBottom: 8,
   },
   genreButtonPlaceholder: {
     fontSize: 16,
@@ -439,6 +560,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#374151',
     marginTop: 8,
+    textAlign: 'center',
   },
   uploadSubtext: {
     fontSize: 12,
@@ -477,5 +599,105 @@ const styles = StyleSheet.create({
   },
   removeFileButton: {
     padding: 4,
+  },
+  // Folio styles
+  folioButton: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: '#374151',
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  folioButtonText: {
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  folioButtonPlaceholder: {
+    fontSize: 16,
+    color: '#9ca3af',
+  },
+  themeDisplayContainer: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  themeLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  themeBadge: {
+    borderWidth: 1,
+    borderColor: '#6b7280',
+    borderRadius: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#f9fafb',
+  },
+  themeBadgeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  folioList: {
+    padding: 20,
+  },
+  folioOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#fff',
+  },
+  folioOptionSelected: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#059669',
+    borderWidth: 2,
+  },
+  folioOptionContent: {
+    flex: 1,
+  },
+  folioOptionText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  folioOptionTextSelected: {
+    color: '#059669',
+    fontWeight: '700',
+  },
+  folioOptionTheme: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginTop: 6,
+  },
+  noFoliosText: {
+    fontSize: 16,
+    color: '#9ca3af',
+    textAlign: 'center',
+    paddingVertical: 30,
+  },
+  loadingContainer: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    padding: 16,
+    backgroundColor: '#f9fafb',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#6b7280',
   },
 });
