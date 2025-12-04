@@ -19,6 +19,17 @@ import SvgWave from '../../../components/SvgWave';
 import { useRouter } from 'expo-router';
 import apiClient from '../../../../utils/api';
 
+// Debug function to test image URLs
+const testImageUrl = (url, label) => {
+  console.log(`🔍 ${label} - Image URL:`, url);
+  console.log(`🔍 ${label} - URL type:`, typeof url);
+  console.log(`🔍 ${label} - Is null/undefined:`, url == null);
+  console.log(`🔍 ${label} - Is empty string:`, url === '');
+  console.log(`🔍 ${label} - Starts with http:`, url?.startsWith('http'));
+  console.log(`🔍 ${label} - Contains articles/:`, url?.includes('articles/'));
+  return url;
+};
+
 // Default data in case API call fails
 const fallbackPublications = {
   recent: [
@@ -36,20 +47,26 @@ const fallbackPublications = {
 const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
 
 const getImageUrl = (url) => {
-  console.log('🏠 Home getImageUrl input:', url); // Debug: Log input
-  if (!url) {
-    console.log('🏠 Home getImageUrl: no url, returning default'); // Debug: Log fallback
-    return defaultImage;
-  }
+  if (!url) return defaultImage;
   // Convert to string if it's a number or other type
   const urlStr = String(url);
+  
+  // Handle full URLs from backend - convert storage URLs to API-accessible URLs
   if (urlStr.startsWith('http')) {
-    console.log('🏠 Home getImageUrl: returning full URL:', urlStr); // Debug: Log full URL
+    if (urlStr.includes('/storage/')) {
+      // Convert https://draftdrop.site/storage/articles/6/filename 
+      // to https://draftdrop.site/api/public/storage/articles/6/filename
+      return urlStr.replace('/storage/', '/api/public/storage/');
+    }
     return urlStr;
   }
-  const finalUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
-  console.log('🏠 Home getImageUrl: constructed URL:', finalUrl); // Debug: Log constructed URL
-  return finalUrl;
+  
+  // Handle articles paths - use /api/storage/app/public/ prefix
+  if (urlStr.includes('articles/')) {
+    return `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${urlStr}`;
+  }
+  
+  return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
 };
 
 const CATEGORIES = ['News'];
@@ -98,7 +115,7 @@ const HomeScreen = () => {
 
   const fetchApplicationPeriod = async () => {
     try {
-      const response = await apiClient.get('/api/application-period');
+      const response = await apiClient.get('/application-period');
       if (response.data) {
         setApplicationPeriod(response.data);
       }
@@ -113,7 +130,7 @@ const HomeScreen = () => {
   const fetchFolioPeriod = async () => {
     try {
       console.log('🏠 Home: Fetching folio period from /api/folio-period');
-      const response = await apiClient.get('/api/folio-period');
+      const response = await apiClient.get('/folio-period');
       console.log('🏠 Home: Folio period response:', response.data);
       if (response.data) {
         setFolioPeriod(response.data);
@@ -163,38 +180,57 @@ const HomeScreen = () => {
     if (overlay) overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
   };
 
-  const fetchFeaturedArticles = async () => {
+    const fetchFeaturedArticles = async () => {
     try {
-      console.log('🏠 Home: Fetching featured articles from: /public/featured-articles'); // Debug: Log fetch
+      console.log('🏠 Home: Fetching featured articles from: /public/featured-articles');
       const response = await apiClient.get('/public/featured-articles');
-      console.log('🏠 Home: Raw API Response:', response); // Debug: Log response
-      console.log('🏠 Home: Response data:', response.data); // Debug: Log data
+      console.log('🏠 Home: Raw API Response:', response);
+      console.log('🏠 Home: Response data:', response.data);
       
       if (response.data?.data) {
-        console.log('🏠 Home: API returned', response.data.data.length, 'items for Featured'); // Debug: Log count
+        console.log('🏠 Home: API returned', response.data.data.length, 'items for Featured');
         if (response.data.data.length > 0) {
-          console.log('🏠 Home: First item full structure:', JSON.stringify(response.data.data[0], null, 2)); // Debug: Log first item
-          console.log('🏠 Home: First item image field:', response.data.data[0].image); // Debug: Log image field
-          console.log('🏠 Home: First item image_path field:', response.data.data[0].image_path); // Debug: Log image_path field
+          console.log('🏠 Home: First item full structure:', JSON.stringify(response.data.data[0], null, 2));
+          console.log('🏠 Home: First item image field:', response.data.data[0].image);
+          console.log('🏠 Home: First item media field:', response.data.data[0].media);
+          console.log('🏠 Home: First item media count:', response.data.data[0].media?.length || 0);
+          
+          // Log media details if available
+          if (response.data.data[0].media && response.data.data[0].media.length > 0) {
+            console.log('🏠 Home: First media item:', JSON.stringify(response.data.data[0].media[0], null, 2));
+          }
         }
-        const mapped = response.data.data.slice(0, 3).map(article => ({
-          id: article.id?.toString() || '',
-          title: article.title,
-          content: article.content || '',
-          image: getImageUrl(article.image || article.image_path), // Use both fields like news.web.js
-          published_at: article.published_at,
-          genre: article.genre || 'Featured',
-        }));
-        console.log('🏠 Home: Setting featured data:', mapped); // Debug: Log mapped data
-        console.log('🏠 Home: Sample mapped item image URL:', mapped[0]?.image); // Debug: Log mapped image URL
+        
+        const mapped = response.data.data.slice(0, 3).map((article, index) => {
+          console.log(`🏠 Home: Processing article ${index + 1}:`, {
+            id: article.id,
+            title: article.title,
+            hasImage: !!article.image,
+            imageValue: article.image,
+            hasMedia: !!article.media,
+            mediaCount: article.media?.length || 0
+          });
+          
+          return {
+            id: article.id?.toString() || '',
+            title: article.title,
+            content: article.content || '',
+            image: testImageUrl(getImageUrl(article.image) || defaultImage, `Featured Article ${index + 1}`), // Convert backend URL to accessible URL
+            published_at: article.published_at,
+            genre: article.genre || 'Featured',
+          };
+        });
+        
+        console.log('🏠 Home: Setting featured data:', mapped);
+        console.log('🏠 Home: Sample mapped item image URL:', mapped[0]?.image);
         setFeaturedData(mapped);
       } else {
-        console.log('🏠 Home: No data array found in response:', response.data); // Debug: Log error
+        console.log('🏠 Home: No data array found in response:', response.data);
       }
     } catch (error) {
-      console.error('🏠 Home: Error fetching featured articles:', error); // Debug: Log error
-      console.error('🏠 Home: Error response:', error.response); // Debug: Log error response
-      console.log('🏠 Home: Falling back to empty featured data'); // Debug: Log fallback
+      console.error('🏠 Home: Error fetching featured articles:', error);
+      console.error('🏠 Home: Error response:', error.response);
+      console.log('🏠 Home: Falling back to empty featured data');
     }
   };
 
@@ -202,15 +238,30 @@ const HomeScreen = () => {
     try {
       setIsLoading(true);
       
-      // First, fetch all articles with their genres
+      console.log('🏠 Home: Fetching articles from: /public/articles?sort=published_at:desc');
       const response = await apiClient.get('/public/articles?sort=published_at:desc');
+      console.log('🏠 Home: Raw articles API Response:', response);
       
       if (!response.data?.data) {
+        console.log('🏠 Home: No articles data found');
         setError('No articles found');
         return;
       }
       
       const allArticles = response.data.data;
+      console.log('🏠 Home: Total articles fetched:', allArticles.length);
+      
+      if (allArticles.length > 0) {
+        console.log('🏠 Home: First article structure:', JSON.stringify(allArticles[0], null, 2));
+        console.log('🏠 Home: First article image field:', allArticles[0].image);
+        console.log('🏠 Home: First article media field:', allArticles[0].media);
+        console.log('🏠 Home: First article media count:', allArticles[0].media?.length || 0);
+        
+        if (allArticles[0].media && allArticles[0].media.length > 0) {
+          console.log('🏠 Home: First article media item:', JSON.stringify(allArticles[0].media[0], null, 2));
+        }
+      }
+      
       const categoryData = {};
       
       // Initialize each category with an empty array
@@ -219,17 +270,24 @@ const HomeScreen = () => {
       });
       
       // Categorize articles by their genre (legacy for News category)
-      allArticles.forEach(article => {
+      allArticles.forEach((article, index) => {
         const category = 'News'; // Always put in News category
         
-        if (categoryData[category]?.length < 8) { // Changed from 4 to 8
+        console.log(`🏠 Home: Processing article ${index + 1} for News category:`, {
+          id: article.id,
+          title: article.title,
+          hasImage: !!article.image,
+          imageValue: article.image,
+          hasMedia: !!article.media,
+          mediaCount: article.media?.length || 0
+        });
+        
+        if (categoryData[category]?.length < 8) { 
           categoryData[category].push({
             id: article.id?.toString() || '',
             title: article.title || 'Untitled Article',
             summary: article.excerpt || article.content || 'No summary available',
-            image: article.media && article.media.length > 0 
-              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${article.media[0].file_path.replace('public/', '')}`
-              : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+            image: testImageUrl(getImageUrl(article.image) || defaultImage, `News Article ${index + 1}`), // Convert backend URL to accessible URL
             link: `news/article/${article.slug || article.id}`,
             genre: article.genre,
             published_at: article.published_at
@@ -237,6 +295,7 @@ const HomeScreen = () => {
         }
       });
       
+      console.log('🏠 Home: Final category data:', categoryData);
       setPublications(categoryData);
       
       // Set static genre data - no longer fetched from database
@@ -293,7 +352,7 @@ const HomeScreen = () => {
       
       setGenreData(staticGenreData);
     } catch (err) {
-      console.error('Error fetching articles:', err);
+      console.error('🏠 Home: Error fetching articles:', err);
       setError('Failed to load articles. Please try again later.');
     } finally {
       setIsLoading(false);
@@ -308,11 +367,14 @@ const HomeScreen = () => {
       </div>
 
       {/* Hero Section - Window like view with fixed background */}
-      <div style={styles.heroWindow}>
+      <div style={styles.hero}>
+        {console.log('🏠 Home: backgroundUrl:', backgroundUrl)}
         <div style={{
           ...styles.heroImage,
-          backgroundImage: `url(${backgroundUrl?.uri || backgroundUrl || "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?q=80&w=2070"})`
-        }}></div>
+          backgroundImage: `url(${typeof backgroundUrl === 'string' ? backgroundUrl : "https://draftdrop.site/api/public/storage/branding/1764750194_background.jpeg"})`
+        }}>
+          {console.log('🏠 Home: Final background URL:', typeof backgroundUrl === 'string' ? backgroundUrl : "https://draftdrop.site/api/public/storage/branding/1764750194_background.jpeg")}
+        </div>
         <div style={styles.heroOverlay}>
           <div style={{...styles.heroContent, padding: isMobile ? '120px 20px 20px 20px' : '0 20px', justifyContent: 'center', alignItems: 'center'}}>
             <div style={{...styles.heroText, margin: isMobile ? '0 auto' : '0 auto', textAlign: 'center'}}>
@@ -788,36 +850,36 @@ const HomeScreen = () => {
         <div style={styles.footerContent}>
           <div style={styles.footerSection}>
             <h3 style={styles.footerHeading}>Contact Us</h3>
-            <View style={styles.contactItem}>
+            <div style={styles.contactItem}>
               <MaterialIcons name="facebook" size={20} color="#93c5fd" style={styles.contactIcon} />
-              <Text 
+              <span 
                 style={styles.footerLink} 
-                onPress={() => window.open('https://facebook.com/fishermannetwork', '_blank')}
+                onClick={() => window.open('https://facebook.com/fishermannetwork', '_blank')}
               >
                 fishermannetwork
-              </Text>
-            </View>
-            <View style={styles.contactItem}>
+              </span>
+            </div>
+            <div style={styles.contactItem}>
               <MaterialIcons name="email" size={20} color="#93c5fd" style={styles.contactIcon} />
-              <Text 
+              <span 
                 style={styles.footerLink} 
-                onPress={() => window.open('mailto:info@fisherman.network')}
+                onClick={() => window.open('mailto:info@fisherman.network')}
               >
                 info@fisherman.network
-              </Text>
-            </View>
-            <View style={styles.contactItem}>
+              </span>
+            </div>
+            <div style={styles.contactItem}>
               <MaterialIcons name="phone" size={20} color="#93c5fd" style={styles.contactIcon} />
-              <Text style={styles.contactText}>+63 2 8123 4567</Text>
-            </View>
-            <View style={styles.contactItem}>
+              <span style={styles.contactText}>+63 2 8123 4567</span>
+            </div>
+            <div style={styles.contactItem}>
               <MaterialIcons name="smartphone" size={20} color="#93c5fd" style={styles.contactIcon} />
-              <Text style={styles.contactText}>+63 912 345 6789</Text>
-            </View>
+              <span style={styles.contactText}>+63 912 345 6789</span>
+            </div>
           </div>
         </div>
         <div style={styles.copyright}>
-          &copy; {new Date().getFullYear()} Fisherman's Network. All rights reserved.
+          &copy; {(new Date()?.getFullYear() || new Date().getFullYear())} Fisherman's Network. All rights reserved.
         </div>
       </footer>
     </div>
@@ -855,13 +917,12 @@ const styles = StyleSheet.create({
     marginTop: '30px',
   },
   heroImage: {
-    width: '100%',
-    height: '100%',
+    width: '100vw',
+    height: '100vh',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
-    backgroundAttachment: 'fixed',
     position: 'fixed',
-    top: '30px',
+    top: 0,
     left: 0,
     right: 0,
     zIndex: -1,
@@ -1447,8 +1508,10 @@ const styles = StyleSheet.create({
   footer: {
     backgroundColor: '#3a505b',
     color: 'white',
-    padding: '40px 20px 20px',
-
+    padding: '60px 20px 20px',
+    marginTop: '-60px',
+    position: 'relative',
+    zIndex: 4,
     flexShrink: 0,
   },
   footerContent: {

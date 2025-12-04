@@ -32,7 +32,7 @@ export default function ManageApplicantsScreen() {
 
   const fetchApplicants = async () => {
     try {
-      const res = await apiClient.get('/api/applications');
+      const res = await apiClient.get('/applications');
       // Laravel paginate returns { data: [...], ... } – fall back to res.data if not paginated
       const list = res.data.data ?? res.data;
       setApplicants(list);
@@ -140,7 +140,7 @@ export default function ManageApplicantsScreen() {
 
   const fetchApplicationPeriod = async () => {
     try {
-      const res = await apiClient.get('/api/application-period');
+      const res = await apiClient.get('/application-period');
       if (res.data) {
         setCurrentPeriod(res.data);
         setPeriodData({
@@ -166,7 +166,7 @@ export default function ManageApplicantsScreen() {
 
     setSavingPeriod(true);
     try {
-      const res = await apiClient.post('/api/application-period', periodData);
+      const res = await apiClient.post('/application-period', periodData);
       if (res.data) {
         setCurrentPeriod(res.data);
         Alert.alert('Success', 'Application period has been set successfully');

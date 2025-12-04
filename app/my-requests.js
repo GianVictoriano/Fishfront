@@ -23,7 +23,7 @@ export default function MyRequestsScreen() {
 
   const fetchRequests = async () => {
     try {
-      const res = await apiClient.get('/api/contributions');
+      const res = await apiClient.get('/contributions');
       const list = res.data.data ?? res.data;
       // Ensure list is an array and filter out null items
       const validList = Array.isArray(list) ? list.filter(item => item != null) : [];
@@ -40,7 +40,7 @@ export default function MyRequestsScreen() {
 
   const fetchSubmissions = async () => {
     try {
-      const res = await apiClient.get('/api/my-submissions');
+      const res = await apiClient.get('/my-submissions');
       const list = res.data ?? [];
       setSubmissions(Array.isArray(list) ? list : []);
     } catch (err) {

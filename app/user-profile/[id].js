@@ -12,7 +12,7 @@ export default function UserProfileScreen() {
   const [bookmarks, setBookmarks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('details');
-  const [stats, setStats] = useState({ posts: 0, comments: 0 });
+  const [stats, setStats] = useState({ posts: 0, comments: 0, bookmarks: 0 });
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -29,15 +29,14 @@ export default function UserProfileScreen() {
         setBookmarks(bookmarksRes.data || []);
         
         // Fetch user stats
-        const topicsRes = await apiClient.get('/topics').catch(() => ({ data: [] }));
-        const userTopics = Array.isArray(topicsRes.data) ? topicsRes.data.filter(t => t.user_id === parseInt(userId)) : [];
-        
-        // Fetch user comments count
+        const postsCountRes = await apiClient.get(`/users/${userId}/posts-count`).catch(() => ({ data: { count: 0 } }));
         const commentsRes = await apiClient.get(`/users/${userId}/comments-count`).catch(() => ({ data: { count: 0 } }));
+        const bookmarksCountRes = await apiClient.get(`/users/${userId}/bookmarks-count`).catch(() => ({ data: { count: 0 } }));
         
         setStats({
-          posts: userTopics.length,
-          comments: commentsRes.data.count || 0
+          posts: postsCountRes.data.count || 0,
+          comments: commentsRes.data.count || 0,
+          bookmarks: bookmarksCountRes.data.count || 0
         });
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -117,7 +116,7 @@ export default function UserProfileScreen() {
             {/* Stats Row */}
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>{bookmarks.length}</Text>
+                <Text style={styles.statValue}>{stats.bookmarks}</Text>
                 <Text style={styles.statLabel}>Bookmarks</Text>
               </View>
               <View style={styles.statDivider} />

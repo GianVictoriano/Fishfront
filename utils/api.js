@@ -66,7 +66,7 @@ apiClient.interceptors.response.use(
         const refreshToken = await AsyncStorage.getItem('refresh_token');
         if (refreshToken) {
           const response = await axios.post(
-            `${process.env.EXPO_PUBLIC_API_URL}/api/api/auth/refresh`,
+            `${process.env.EXPO_PUBLIC_API_URL}/api/auth/refresh`,
             { refresh_token: refreshToken }
           );
           

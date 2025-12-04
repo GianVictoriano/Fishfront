@@ -437,7 +437,7 @@ export default function RegistrationScreen() {
 
     const checkApplicationPeriod = async () => {
       try {
-        const response = await apiClient.get('/api/application-period');
+        const response = await apiClient.get('/application-period');
         if (response.data) {
           setApplicationPeriod(response.data);
           
@@ -683,7 +683,7 @@ export default function RegistrationScreen() {
                           console.log('Submitting application:', applicantData);
                           
                           // Send the data to the backend
-                          const response = await apiClient.post('/api/applications', applicantData);
+                          const response = await apiClient.post('/applications', applicantData);
                           
                           console.log('Application submitted successfully:', response.data);
                           

@@ -269,18 +269,14 @@ const Contribute = () => {
         });
       }
 
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/contributions`, {
-        method: 'POST',
+      const response = await apiClient.post('contributions', formData, {
         headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-          // Let browser set Content-Type with boundary
+          'Content-Type': 'multipart/form-data',
         },
-        body: formData,
       });
 
-      const resData = await response.json();
-      if (!response.ok) {
+      const resData = response.data;
+      if (response.status !== 201) {
         throw new Error(resData.message || 'Submission failed');
       }
       
@@ -676,6 +672,7 @@ const Contribute = () => {
                   boxSizing: 'border-box',
                 }}
                 value={(() => {
+                  if (!selectedDate) return '';
                   const year = selectedDate.getFullYear();
                   const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
                   const day = String(selectedDate.getDate()).padStart(2, '0');
@@ -725,6 +722,7 @@ const Contribute = () => {
                   }
                   
                   const formatted = (() => {
+                    if (!selectedDate) return '';
                     const year = selectedDate.getFullYear();
                     const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
                     const day = String(selectedDate.getDate()).padStart(2, '0');

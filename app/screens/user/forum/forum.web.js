@@ -196,7 +196,10 @@ const Forum = () => {
     }
     if (searchQuery.trim()) {
       const lower = searchQuery.trim().toLowerCase();
-      filtered = filtered.filter(t => t && t.title && t.title.toLowerCase().includes(lower));
+      filtered = filtered.filter(t => t && (
+        (t.title && t.title.toLowerCase().includes(lower)) ||
+        (t.category && t.category.toLowerCase().includes(lower))
+      ));
     }
     if (dateFilterEnabled && (startDate || endDate)) {
       filtered = filtered.filter(t => {
@@ -752,29 +755,33 @@ const Forum = () => {
                         </Text>
                       </View>
                     </TouchableOpacity>
-                  ))}
-                  {hasMore && (
-                    <TouchableOpacity 
-                      style={styles.loadMoreButton}
-                      onPress={loadMoreTopics}
-                      disabled={loadingMore}
-                    >
-                      {loadingMore ? (
-                        <View style={styles.loadingMore}>
-                          <ActivityIndicator size="small" color="#007BFF" />
-                          <Text style={styles.loadingMoreText}>Loading more...</Text>
-                        </View>
-                      ) : (
-                        <Text style={styles.loadMoreText}>Load More Topics</Text>
+                  )}
+                  ListFooterComponent={
+                    <>
+                      {hasMore && (
+                        <TouchableOpacity 
+                          style={styles.loadMoreButton}
+                          onPress={loadMoreTopics}
+                          disabled={loadingMore}
+                        >
+                          {loadingMore ? (
+                            <View style={styles.loadingMore}>
+                              <ActivityIndicator size="small" color="#007BFF" />
+                              <Text style={styles.loadingMoreText}>Loading more...</Text>
+                            </View>
+                          ) : (
+                            <Text style={styles.loadMoreText}>Load More Topics</Text>
+                          )}
+                        </TouchableOpacity>
                       )}
-                    </TouchableOpacity>
-                  )}
-                  {filteredTopics.length === 0 && !loading && (
-                    <View style={styles.centered}>
-                      <Text style={styles.noTopics}>No topics match your criteria.</Text>
-                    </View>
-                  )}
-                </View>
+                      {filteredTopics.length === 0 && !loading && (
+                        <View style={styles.centered}>
+                          <Text style={styles.noTopics}>No topics match your criteria.</Text>
+                        </View>
+                      )}
+                    </>
+                  }
+                />
               )}
             </ScrollView>
           ) : (
@@ -852,6 +859,9 @@ const Forum = () => {
                   contentContainerStyle={filteredTopics.length === 0 ? styles.emptyListContent : styles.listContent}
                 />
               )}
+            </>
+        )}
+        </View>
         
         {!isMobile && (
           <View style={styles.rightPanel}>

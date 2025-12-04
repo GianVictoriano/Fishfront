@@ -55,8 +55,8 @@ export const BrandingProvider = ({ children }) => {
         ? { uri: logo_url + '?t=' + timestamp }
         : FALLBACK_LOGO_URL;
       const finalBackgroundUrl = background_url
-        ? { uri: background_url + '?t=' + timestamp }
-        : { uri: FALLBACK_BACKGROUND_URL };
+        ? background_url + '?t=' + timestamp
+        : FALLBACK_BACKGROUND_URL;
 
       console.log('[BrandingContext] Setting final image URLs:', { finalLogoUrl, finalBackgroundUrl });
       setLogoUrl(finalLogoUrl);
@@ -79,7 +79,7 @@ export const BrandingProvider = ({ children }) => {
       }
       console.log('[BrandingContext] Reverting to local fallback assets.');
       setLogoUrl(FALLBACK_LOGO_URL);
-      setBackgroundUrl({ uri: FALLBACK_BACKGROUND_URL });
+      setBackgroundUrl(FALLBACK_BACKGROUND_URL);
     } finally {
       setLoading(false);
     }

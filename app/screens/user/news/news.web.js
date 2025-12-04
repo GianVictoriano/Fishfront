@@ -831,6 +831,17 @@ const getImageUrl = (url) => {
   // Convert to string if it's a number or other type
   const urlStr = String(url);
   if (urlStr.startsWith('http')) return urlStr;
+  
+  // Handle creatives paths - use /api/public/ prefix
+  if (urlStr.includes('creatives/')) {
+    return `${process.env.EXPO_PUBLIC_API_URL}/api/public/${urlStr}`;
+  }
+  
+  // Handle articles paths - use /api/storage/app/public/ prefix
+  if (urlStr.includes('articles/')) {
+    return `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${urlStr}`;
+  }
+  
   return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
 };
 
@@ -1313,7 +1324,7 @@ export default function NewsScreen() {
                 title: item.title,
                 excerpt: item.caption,
                 image: item.media && item.media.length > 0 
-                  ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${item.media[0].file_path.replace('public/', '')}`
+                  ? `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${item.media[0].file_path.replace('public/', '')}`
                   : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
                 date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
                 category: `${item.genre.charAt(0).toUpperCase() + item.genre.slice(1)} Creative`,
@@ -1323,7 +1334,9 @@ export default function NewsScreen() {
                 id: item.id?.toString() || '',
                 title: item.title,
                 excerpt: '',
-                image: item.image || item.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+                image: item.media && item.media.length > 0 
+                  ? `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${item.media[0].file_path.replace('public/', '')}`
+                  : (item.image || item.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070'),
                 date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
                 category: item.genre || 'News',
               };
@@ -1350,7 +1363,7 @@ export default function NewsScreen() {
                     title: item.title,
                     excerpt: item.caption,
                     image: item.media && item.media.length > 0 
-                      ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${item.media[0].file_path.replace('public/', '')}`
+                      ? `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${item.media[0].file_path.replace('public/', '')}`
                       : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
                     date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
                     category: `${item.genre.charAt(0).toUpperCase() + item.genre.slice(1)} Creative`,
@@ -1360,14 +1373,16 @@ export default function NewsScreen() {
                     id: item.id?.toString() || '',
                     title: item.title,
                     excerpt: '',
-                    image: item.image || item.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+                    image: item.media && item.media.length > 0 
+                      ? `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${item.media[0].file_path.replace('public/', '')}`
+                      : (item.image || item.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070'),
                     date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
                     category: item.genre || 'News',
                   };
                 }
               });
               
-              // Append batch to existing data
+              // Update state with new batch to existing data
               finalMapped.push(...batchMapped);
               setNewsData([...finalMapped]);
             }
@@ -1384,7 +1399,7 @@ export default function NewsScreen() {
                 title: item.title,
                 excerpt: item.caption,
                 image: item.media && item.media.length > 0 
-                  ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${item.media[0].file_path.replace('public/', '')}`
+                  ? `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${item.media[0].file_path.replace('public/', '')}`
                   : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
                 date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
                 category: `${item.genre.charAt(0).toUpperCase() + item.genre.slice(1)} Creative`,
@@ -1394,7 +1409,9 @@ export default function NewsScreen() {
                 id: item.id?.toString() || '',
                 title: item.title,
                 excerpt: '',
-                image: item.image || item.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+                image: item.media && item.media.length > 0 
+                  ? `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${item.media[0].file_path.replace('public/', '')}`
+                  : (item.image || item.image_path || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070'),
                 date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
                 category: item.genre || 'News',
               };

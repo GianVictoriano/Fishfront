@@ -827,22 +827,12 @@ export default function CreateArticleScreen() {
             const fileExt = blob.type.split('/')[1] || 'jpg';
             formData.append('media[]', blob, `inline_image_${Date.now()}_${i}.${fileExt}`);
             
-            const apiUrl = process.env.EXPO_PUBLIC_API_URL;
-            const token = await AsyncStorage.getItem('auth_token');
+            const uploadResponse = await apiClient.post('/upload-media', formData);
             
-            const uploadResponse = await fetch(`${apiUrl}/api/upload-media`, {
-              method: 'POST',
-              headers: {
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${token}`,
-              },
-              body: formData,
-            });
-            
-            if (uploadResponse.ok) {
-              const uploadResult = await uploadResponse.json();
+            if (uploadResponse.data) {
+              const uploadResult = uploadResponse.data;
               if (uploadResult.data && uploadResult.data.length > 0) {
-                const serverUrl = `${apiUrl?.replace('/api', '')}/storage/${uploadResult.data[0].file_path.replace('public/', '')}`;
+                const serverUrl = `${process.env.EXPO_PUBLIC_API_URL}/api/public/${uploadResult.data[0].file_path.replace('public/', '')}`;
                 uploadedImages.push({
                   originalSrc: src,
                   serverUrl: serverUrl,
@@ -851,7 +841,7 @@ export default function CreateArticleScreen() {
                 console.log('Inline image uploaded successfully:', serverUrl);
               }
             } else {
-              console.error('Failed to upload inline image:', uploadResponse.status);
+              console.error('Failed to upload inline image:', uploadResponse);
             }
           }
         } catch (error) {
@@ -982,43 +972,14 @@ export default function CreateArticleScreen() {
         throw new Error('Server configuration error. Please try again later.');
       }
 
-      // Log request details (without sensitive data)
-      console.log('Sending request to:', `${apiUrl}/api/articles`);
-      console.log('Request method: POST');
-      console.log('Headers:', { 'Accept': 'application/json', 'Authorization': 'Bearer [token]' });
-      
-      // Make the API request
-      const response = await fetch(`${apiUrl}/api/articles`, {
-        method: 'POST',
-        headers: { 
-          'Accept': 'application/json', 
-          'Authorization': `Bearer ${token}`,
-          // Note: Don't set Content-Type header - let the browser set it with the correct boundary
+      // Make the API request using apiClient to handle CSRF automatically
+      const response = await apiClient.post('/articles', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
         },
-        body: formData,
       });
 
-      console.log('Response status:', response.status);
-      
-      let responseData;
-      try {
-        responseData = await response.json();
-        console.log('Response data:', responseData);
-      } catch (e) {
-        console.error('Failed to parse response as JSON:', e);
-        throw new Error('Invalid response from server');
-      }
-
-      if (!response.ok) {
-        console.error('Server responded with error:', response.status, responseData);
-        throw new Error(
-          responseData?.message || 
-          responseData?.error?.message || 
-          `Server error: ${response.status} ${response.statusText || ''}`.trim()
-        );
-      }
-
-      console.log('Article published successfully:', responseData);
+      console.log('Article published successfully:', response.data);
       
       // If completeGroupChat is enabled and we have a group_id, mark the group chat as published
       if (completeGroupChat && selectedGroupId) {
@@ -1037,7 +998,7 @@ export default function CreateArticleScreen() {
       }
       
       // Show completion modal
-      setPublishedArticleId(responseData.data?.id);
+      setPublishedArticleId(response.data.id);
       setCompletionModalVisible(true);
     } catch (error) {
       console.error('Error in handleSubmit:', error);

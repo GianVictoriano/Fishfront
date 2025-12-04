@@ -276,17 +276,47 @@ const CreativeCard = ({ item, onImageClick }) => {
   
   const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
   
-  const getImageUrl = (url) => {
-    if (!url) return defaultImage;
-    if (url.startsWith('http')) return url;
-    return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${url}`;
+  const getImageUrl = (creative) => {
+    // Check if creative has media files
+    if (creative.media && creative.media.length > 0) {
+      const mediaFile = creative.media[0]; // Get first media file
+      const filePath = mediaFile.file_path;
+      
+      if (filePath) {
+        // If it's a base64 image, return it directly
+        if (filePath.startsWith('data:image/')) {
+          return filePath;
+        }
+        
+        // Convert storage path to web URL for regular files
+        if (filePath.startsWith('http')) {
+          return filePath;
+        }
+        
+        // Handle the creatives path - these are stored in api/public directory
+        if (filePath.includes('creatives/')) {
+          return `${process.env.EXPO_PUBLIC_API_URL}/api/public/${filePath}`;
+        }
+        
+        // Fallback for other paths
+        return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${filePath}`;
+      }
+    }
+    
+    // Fallback to item.image if it exists
+    if (creative.image) {
+      if (creative.image.startsWith('http')) return creative.image;
+      return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${creative.image}`;
+    }
+    
+    return defaultImage;
   };
 
-  const [imageUri, setImageUri] = useState(getImageUrl(item.image));
+  const [imageUri, setImageUri] = useState(getImageUrl(item));
 
   useEffect(() => {
-    setImageUri(getImageUrl(item.image));
-  }, [item.image]);
+    setImageUri(getImageUrl(item));
+  }, [item.media, item.image]);
 
   const handleImageError = () => {
     setImageUri(defaultImage);
@@ -320,14 +350,14 @@ const CreativeCard = ({ item, onImageClick }) => {
           {item.title || 'Untitled'}
         </Text>
         <Text style={styles.creativeExcerpt} numberOfLines={3}>
-          {item.excerpt || ''}
+          {item.caption || ''}
         </Text>
         <View style={styles.creativeMeta}>
           <Text style={styles.creativeAuthor}>
-            By {item.author || 'Anonymous'}
+            By {item.user?.name || 'Anonymous'}
           </Text>
           <Text style={styles.creativeDate}>
-            {item.date || ''}
+            {new Date(item.created_at).toLocaleDateString() || ''}
           </Text>
         </View>
       </View>
@@ -407,29 +437,14 @@ export default function CreativeScreen() {
     setSelectedArtwork(artwork);
     setModalVisible(true);
     
-    // Fetch metrics and track visit
-    try {
-      // Track the visit
-      await apiClient.post(`/public/creatives/${artwork.id}/visit`);
-      
-      // Fetch metrics for this creative
-      const response = await apiClient.get(`/public/creatives/${artwork.id}`);
-      if (response.data?.data?.metrics) {
-        setSelectedArtworkMetrics(response.data.data.metrics);
-      } else if (response.data?.metrics) {
-        setSelectedArtworkMetrics(response.data.metrics);
-      }
-    } catch (error) {
-      console.error('Error fetching creative metrics or tracking visit:', error);
-      // Initialize with default metrics if fetch fails
-      setSelectedArtworkMetrics({
-        visits: 0,
-        like_count: 0,
-        heart_count: 0,
-        sad_count: 0,
-        wow_count: 0
-      });
-    }
+    // Set default metrics since we're using simple controller
+    setSelectedArtworkMetrics({
+      visits: 0,
+      like_count: 0,
+      heart_count: 0,
+      sad_count: 0,
+      wow_count: 0,
+    });
   };
 
   const closeModal = () => {
@@ -440,26 +455,8 @@ export default function CreativeScreen() {
   };
 
   const react = async (type) => {
-    if (!selectedArtwork || reactingType) return; // Prevent multiple clicks
-    
-    try {
-      setReactingType(type);
-      console.log('Sending reaction:', type);
-      const response = await apiClient.post(`/public/creatives/${selectedArtwork.id}/react`, { type });
-      
-      // Update UI with server response
-      if (response.data && response.data.metrics) {
-        setSelectedArtworkMetrics(prev => ({
-          ...prev,
-          ...response.data.metrics,
-          visits: prev?.visits || 0, // Preserve visits count
-        }));
-      }
-    } catch (e) {
-      console.error('Error reacting:', e);
-    } finally {
-      setReactingType(null);
-    }
+    // Disabled for now since we're using simple controller
+    console.log('Reaction tracking disabled');
   };
 
   const getImageUrl = (url) => {
@@ -472,15 +469,25 @@ export default function CreativeScreen() {
     const fetchCreativeContent = async () => {
       try {
         setLoading(true);
-        console.log('Fetching creative works from /creatives-published');
-        const response = await apiClient.get('/creatives-published');
+        console.log('Fetching creative works from /public/creatives');
+        const response = await apiClient.get('/public/creatives');
         console.log('Creative API response:', response);
         
-        if (Array.isArray(response.data?.data) && response.data.data.length > 0) {
-          console.log('Found', response.data.data.length, 'creative works');
+        // Handle different response formats
+        let creatives = [];
+        if (response.data?.data && Array.isArray(response.data.data)) {
+          creatives = response.data.data;
+        } else if (response.data && Array.isArray(response.data)) {
+          creatives = response.data;
+        } else if (Array.isArray(response.data)) {
+          creatives = response.data;
+        }
+        
+        if (creatives.length > 0) {
+          console.log('Found', creatives.length, 'creative works');
           
           // Sequential loading: Load first 5 immediately, then load rest in batches
-          const allWorks = response.data.data;
+          const allWorks = creatives;
           const batchSize = 5;
           const initialBatch = allWorks.slice(0, batchSize);
           const remainingWorks = allWorks.slice(batchSize);
@@ -491,7 +498,7 @@ export default function CreativeScreen() {
             title: creative.title,
             excerpt: creative.caption,
             image: creative.media && creative.media.length > 0 
-              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${creative.media[0].file_path.replace('public/', '')}`
+              ? `${process.env.EXPO_PUBLIC_API_URL}/api/public/${creative.media[0].file_path}`
               : null,
             author: creative.user?.name || 'Anonymous',
             date: creative.created_at 
@@ -521,7 +528,7 @@ export default function CreativeScreen() {
                 title: creative.title,
                 excerpt: creative.caption,
                 image: creative.media && creative.media.length > 0 
-                  ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${creative.media[0].file_path.replace('public/', '')}`
+                  ? `${process.env.EXPO_PUBLIC_API_URL}/api/public/${creative.media[0].file_path}`
                   : null,
                 author: creative.user?.name || 'Anonymous',
                 date: creative.created_at 

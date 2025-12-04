@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import apiClient from '../../utils/api';
 import { useBranding } from '~/context/BrandingContext';
 
@@ -113,77 +114,116 @@ export default function CreateCreativeScreen() {
   };
 
   const createCreativeWork = async () => {
+    console.log('=== CREATIVE WORK SUBMISSION START ===');
+    console.log('Form data:', { genre, title, caption, hasFile: !!selectedFile });
+    
     if (!title.trim()) {
+      console.log('VALIDATION ERROR: Missing title');
       return Alert.alert('Error', 'Please enter a title for your creative work');
     }
 
     if (!caption.trim()) {
+      console.log('VALIDATION ERROR: Missing caption');
       return Alert.alert('Error', 'Please enter a caption for your creative work');
     }
 
     if (!selectedFile) {
+      console.log('VALIDATION ERROR: No file selected');
       return Alert.alert('Error', 'Please select a file to upload');
     }
 
     setIsSubmitting(true);
 
     try {
+      console.log('Getting auth token...');
       // Get auth token
       const token = await AsyncStorage.getItem('auth_token');
       if (!token) {
+        console.log('AUTH ERROR: No token found');
         Alert.alert('Authentication Required', 'Please sign in to create a creative work');
         router.push('/signin');
         return;
       }
+      console.log('Auth token found:', token.substring(0, 20) + '...');
 
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('genre', genre);
-      formData.append('title', title.trim());
-      formData.append('caption', caption.trim());
-
-      // Add file to form data
-      if (Platform.OS === 'web') {
-        // For web, use the actual file object
-        formData.append('file', selectedFile.file, selectedFile.name);
-      } else {
-        // For native platforms, use the URI approach
-        const fileUri = Platform.OS === 'ios' ? selectedFile.uri.replace('file://', '') : selectedFile.uri;
-        formData.append('file', {
-          uri: fileUri,
-          name: selectedFile.name,
-          type: selectedFile.mimeType || 'application/octet-stream',
-        });
+      // Convert file to base64 for database storage
+      let base64Image = null;
+      if (selectedFile) {
+        if (Platform.OS === 'web') {
+          // For web, convert file to base64
+          base64Image = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(selectedFile.file);
+          });
+        } else {
+          // For native platforms, convert URI to base64
+          base64Image = await new Promise((resolve, reject) => {
+            const fileUri = Platform.OS === 'ios' ? selectedFile.uri.replace('file://', '') : selectedFile.uri;
+            FileSystem.readAsStringAsync(fileUri, {
+              encoding: FileSystem.EncodingType.Base64,
+            })
+              .then(base64 => {
+                resolve(`data:${selectedFile.mimeType};base64,${base64}`);
+              })
+              .catch(reject);
+          });
+        }
       }
 
-      // Create creative work
-      const response = await apiClient.post('/creatives', formData, {
+      console.log('Sending creative data with base64 image...');
+      
+      // Create creative work with JSON data (not FormData)
+      const creativeData = {
+        genre: genre,
+        title: title.trim(),
+        caption: caption.trim(),
+        image_base64: base64Image, // Send base64 image instead of file
+        file_name: selectedFile?.name || null,
+        file_type: selectedFile?.mimeType || null,
+      };
+
+      const response = await apiClient.post('/creatives', creativeData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': 'application/json',
         },
       });
 
+      console.log('API RESPONSE SUCCESS:', {
+        status: response.status,
+        data: response.data
+      });
+
       if (response.data.success !== false) {
+        console.log('CREATIVE WORK CREATED SUCCESSFULLY');
         // Store the published work data and show success modal
         setPublishedWork(response.data.creative || response.data);
         setSuccessModalVisible(true);
 
+        console.log('Resetting form...');
         // Reset form
         setGenre('artwork');
         setTitle('');
         setCaption('');
         setSelectedFile(null);
       } else {
+        console.log('API RETURNED SUCCESS=false:', response.data);
         throw new Error(response.data.message || 'Failed to create creative work');
       }
     } catch (error) {
-      console.error('Error creating creative work:', error);
+      console.error('=== CREATIVE WORK CREATION ERROR ===');
+      console.error('Full error:', error);
+      console.error('Error response:', error.response);
+      console.error('Error status:', error.response?.status);
+      console.error('Error data:', error.response?.data);
 
       // Show detailed validation errors if available
       let errorMessage = 'Failed to create creative work. Please try again.';
 
       if (error.response?.status === 422 && error.response?.data?.errors) {
         const errors = error.response.data.errors;
+        console.log('VALIDATION ERRORS:', errors);
         const errorMessages = Object.keys(errors).map(key => {
           const fieldErrors = Array.isArray(errors[key]) ? errors[key] : [errors[key]];
           return `${key}: ${fieldErrors.join(', ')}`;
@@ -195,8 +235,10 @@ export default function CreateCreativeScreen() {
         errorMessage = error.message;
       }
 
+      console.log('Showing error alert:', errorMessage);
       Alert.alert('Error', errorMessage);
     } finally {
+      console.log('=== CREATIVE WORK SUBMISSION END ===');
       setIsSubmitting(false);
     }
   };

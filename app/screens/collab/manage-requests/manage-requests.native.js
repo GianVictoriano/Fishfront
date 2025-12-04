@@ -18,7 +18,7 @@ export default function ManageRequestsScreen() {
 
   const fetchRequests = async () => {
     try {
-      const res = await apiClient.get('/api/contributions');
+      const res = await apiClient.get('/contributions');
       const list = res.data.data ?? res.data;
       // Ensure list is an array and filter out null items
       const validList = Array.isArray(list) ? list.filter(item => item != null) : [];
@@ -37,7 +37,7 @@ export default function ManageRequestsScreen() {
     setProcessing(true);
     try {
       const status = action === 'approve' ? 'approved' : 'rejected';
-      const res = await apiClient.post(`/api/contributions/${request.id}/status`, { status });
+      const res = await apiClient.post(`/contributions/${request.id}/status`, { status });
       
       if (res.data.status === 'success') {
         Alert.alert('Success', `Request ${action}d successfully!`);

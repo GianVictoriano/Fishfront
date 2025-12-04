@@ -35,7 +35,7 @@ export default function SubmitScreen() {
   const fetchAvailableFolios = async () => {
     try {
       // Fetch all open folios with is_journalists_only = false
-      const response = await apiClient.get('/api/folios?status=open&is_journalists_only=false');
+      const response = await apiClient.get('/folios?status=open&is_journalists_only=false');
       console.log('Folios response:', response.data);
       if (response.data && Array.isArray(response.data)) {
         setFolios(response.data);
