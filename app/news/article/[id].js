@@ -793,16 +793,28 @@ export default function ArticleDetail() {
           genre: raw.genre || 'news',
           // Build full image URL if media exists
           image: raw.media && raw.media.length > 0
-            ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${raw.media[0].file_path.replace('public/', '')}` 
+            ? (() => {
+                const filePath = raw.media[0].file_path.replace('public/', '');
+                if (filePath.includes('articles/')) {
+                  return `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${filePath}`;
+                }
+                return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/public_html/api/public/storage/${filePath}`;
+              })()
             : null,
           author: raw.user?.name || null,
           metrics: raw.metrics ?? { visits: 0, like_count: 0, heart_count: 0, sad_count: 0, wow_count: 0 },
         };
         setArticle(mapped);
-        
-        // Track the visit after successfully loading the article
         try {
-          await apiClient.post(`/public/articles/${articleId}/visit`);
+          // Use simple fetch to avoid CSRF issues for public endpoint
+          await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/public/articles/${articleId}/visit`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({}),
+          });
         } catch (visitError) {
           console.error('Error tracking visit:', visitError);
           // Don't fail the whole component if visit tracking fails
@@ -846,9 +858,14 @@ export default function ArticleDetail() {
             .map(otherArticle => ({
               ...otherArticle,
               id: otherArticle.id?.toString() || '',
-              image: otherArticle.image_path
-                ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.image_path.replace('public/', '')}` 
-                : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+              image: (() => {
+                if (!otherArticle.image_path) return 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+                const filePath = otherArticle.image_path.replace('public/', '');
+                if (filePath.includes('articles/')) {
+                  return `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${filePath}`;
+                }
+                return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/public_html/api/public/storage/${filePath}`;
+              })(),
               similarity: calculateSimilarity(article.title || '', otherArticle.title || '')
             }))
             .sort((a, b) => b.similarity - a.similarity)
@@ -866,8 +883,10 @@ export default function ArticleDetail() {
                   ...otherArticle,
                   id: otherArticle.id?.toString() || '',
                   image: otherArticle.media && otherArticle.media.length > 0
-                    ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.media[0].file_path.replace('public/', '')}` 
-                    : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+                    ? `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${otherArticle.media[0].file_path.replace('public/', '')}`
+                    : (otherArticle.image_path
+                      ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/public_html/api/public/storage/${otherArticle.image_path.replace('public/', '')}` 
+                      : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070'),
                   totalReactions: (otherArticle.metrics?.like_count || 0) + 
                                 (otherArticle.metrics?.heart_count || 0) + 
                                 (otherArticle.metrics?.sad_count || 0) + 
@@ -884,9 +903,14 @@ export default function ArticleDetail() {
               .map(otherArticle => ({
                 ...otherArticle,
                 id: otherArticle.id?.toString() || '',
-                image: otherArticle.image_path
-                  ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/storage/${otherArticle.image_path.replace('public/', '')}` 
-                  : 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
+                image: (() => {
+                  if (!otherArticle.image_path) return 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+                  const filePath = otherArticle.image_path.replace('public/', '');
+                  if (filePath.includes('articles/')) {
+                    return `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${filePath}`;
+                  }
+                  return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/public_html/api/public/storage/${filePath}`;
+                })(),
                 totalReactions: (otherArticle.metrics?.like_count || 0) + 
                               (otherArticle.metrics?.heart_count || 0) + 
                               (otherArticle.metrics?.sad_count || 0) + 
@@ -1065,7 +1089,9 @@ export default function ArticleDetail() {
     );
   }
   const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
-  const imageUrl = article.image || defaultImage;
+  const imageUrl = article.media && article.media.length > 0 
+    ? `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${article.media[0].file_path.replace('public/', '')}`
+    : (article.image || defaultImage);
 
 
   // Render floating bookmark button

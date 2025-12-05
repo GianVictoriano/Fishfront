@@ -31,9 +31,16 @@ const useInteractionTracking = (userId) => {
             url: `/articles/${interaction.articleId}/interaction`,
             data: { ...interaction.data, session_id: sessionId }
           });
-          return apiClient.post(`/articles/${interaction.articleId}/interaction`, {
-            ...interaction.data,
-            session_id: sessionId,
+          return fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/articles/${interaction.articleId}/interaction`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({
+              ...interaction.data,
+              session_id: sessionId,
+            }),
           });
         })
       );

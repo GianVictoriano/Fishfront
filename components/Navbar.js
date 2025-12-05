@@ -12,9 +12,11 @@ import { useBranding } from '../context/BrandingContext';
 import { FontAwesome } from '@expo/vector-icons'; // Using FontAwesome for icons
 
 const NavLink = ({ href, text, iconName, pathname, closeMenu, isActive: isActiveProp }) => {
+  const React = require('react');
+  const { useState } = React;
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const isMobile = width < 1061;
+  const isMobile = width < 768;
   const [isHovered, setIsHovered] = useState(false);
   const [buttonWidth, setButtonWidth] = useState(0);
   const [textWidth, setTextWidth] = useState(0);
@@ -78,7 +80,7 @@ const Navbar = () => {
   const buttonRef = useRef(null);
   const [buttonWidth, setButtonWidth] = useState(200);
   const { width } = useWindowDimensions();
-  const isMobile = width < 1061;
+  const isMobile = width < 768;
   const [mobileMenuVisible, setMobileMenuVisible] = useState(false);
 
   const handleLogout = () => {
@@ -137,15 +139,15 @@ const Navbar = () => {
           
               </>
           ) : (
-          // Show for guests
-          <NavLink 
-  href="/signin" 
-  text="Sign In" 
-  iconName="sign-in" 
-  pathname={pathname} 
-  isActive={pathname === '/signin'} 
-/>
-        )}
+            // Show for guests
+            <NavLink 
+              href="/signin" 
+              text="Sign In" 
+              iconName="sign-in" 
+              pathname={pathname} 
+              isActive={pathname === '/signin'} 
+            />
+          )}
           </View>
         )}
         {isMobile && (
@@ -330,6 +332,12 @@ const styles = StyleSheet.create({
   },
   hamburger: {
     padding: 10,
+    backgroundColor: 'transparent',
+    borderRadius: 4,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   mobileMenuOverlay: {
     position: 'fixed',

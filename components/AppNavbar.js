@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import Navbar from './Navbar';
-import GuestNavbar from './GuestNavbar';
+
 
 /**
  * AppNavbar – automatically decides which navbar to render based on the
@@ -26,5 +26,4 @@ export default function AppNavbar(props) {
   if (user) {
     return <Navbar {...props} />;
   }
-  return <GuestNavbar {...props} />;
 }

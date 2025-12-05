@@ -46,27 +46,37 @@ const fallbackPublications = {
 
 const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
 
-const getImageUrl = (url) => {
-  if (!url) return defaultImage;
-  // Convert to string if it's a number or other type
-  const urlStr = String(url);
+const getImageUrl = (url, context = 'unknown') => {
+  console.log(`🖼️ ${context} - Input URL:`, url);
   
-  // Handle full URLs from backend - convert storage URLs to API-accessible URLs
+  if (!url) {
+    console.log(`🖼️ ${context} - No URL provided, using default image`);
+    return defaultImage;
+  }
+  
+  const urlStr = String(url);
+  console.log(`🖼️ ${context} - URL as string:`, urlStr);
+  
   if (urlStr.startsWith('http')) {
-    if (urlStr.includes('/storage/')) {
-      // Convert https://draftdrop.site/storage/articles/6/filename 
-      // to https://draftdrop.site/api/public/storage/articles/6/filename
-      return urlStr.replace('/storage/', '/api/public/storage/');
-    }
+    console.log(`🖼️ ${context} - Already HTTP URL, using as-is`);
     return urlStr;
   }
   
-  // Handle articles paths - use /api/storage/app/public/ prefix
-  if (urlStr.includes('articles/')) {
-    return `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${urlStr}`;
+  if (urlStr.includes('creatives/')) {
+    const finalUrl = `${process.env.EXPO_PUBLIC_API_URL}/api/public/${urlStr}`;
+    console.log(`🖼️ ${context} - Creatives path, final URL:`, finalUrl);
+    return finalUrl;
   }
   
-  return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
+  if (urlStr.includes('articles/')) {
+    const finalUrl = `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public${urlStr}`;
+    console.log(`🖼️ ${context} - Articles path, final URL:`, finalUrl);
+    return finalUrl;
+  }
+  
+  const finalUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
+  console.log(`🖼️ ${context} - Fallback path, final URL:`, finalUrl);
+  return finalUrl;
 };
 
 const CATEGORIES = ['News'];
@@ -215,7 +225,9 @@ const HomeScreen = () => {
             id: article.id?.toString() || '',
             title: article.title,
             content: article.content || '',
-            image: testImageUrl(getImageUrl(article.image) || defaultImage, `Featured Article ${index + 1}`), // Convert backend URL to accessible URL
+            image: article.media && article.media.length > 0 
+              ? `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${article.media[0].file_path.replace('public/', '')}`
+              : (article.image || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070'),
             published_at: article.published_at,
             genre: article.genre || 'Featured',
           };
@@ -287,7 +299,9 @@ const HomeScreen = () => {
             id: article.id?.toString() || '',
             title: article.title || 'Untitled Article',
             summary: article.excerpt || article.content || 'No summary available',
-            image: testImageUrl(getImageUrl(article.image) || defaultImage, `News Article ${index + 1}`), // Convert backend URL to accessible URL
+            image: article.media && article.media.length > 0 
+  ? `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${article.media[0].file_path.replace('public/', '')}`
+  : (article.image || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070'),
             link: `news/article/${article.slug || article.id}`,
             genre: article.genre,
             published_at: article.published_at

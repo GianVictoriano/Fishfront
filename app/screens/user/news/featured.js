@@ -762,20 +762,28 @@ const fallbackNewsData = [
 const defaultImage = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
 
 const getImageUrl = (url) => {
-  console.log('getImageUrl input:', url); // Debug: Log input
-  if (!url) {
-    console.log('getImageUrl: no url, returning default'); // Debug: Log fallback
-    return defaultImage;
-  }
+  if (!url) return defaultImage;
   // Convert to string if it's a number or other type
   const urlStr = String(url);
   if (urlStr.startsWith('http')) {
-    console.log('getImageUrl: returning full URL:', urlStr); // Debug: Log full URL
+    // Fix storage URLs to use correct API path
+    if (urlStr.includes('/storage/articles/')) {
+      return urlStr.replace('/storage/articles/', '/api/storage/app/public/articles/');
+    }
     return urlStr;
   }
-  const finalUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
-  console.log('getImageUrl: constructed URL:', finalUrl); // Debug: Log constructed URL
-  return finalUrl;
+  
+  // Handle creatives paths - use /api/public/ prefix
+  if (urlStr.includes('creatives/')) {
+    return `${process.env.EXPO_PUBLIC_API_URL}/api/public/${urlStr}`;
+  }
+  
+  // Handle articles paths - use /api/storage/app/public/ prefix
+  if (urlStr.includes('articles/')) {
+    return `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${urlStr}`;
+  }
+  
+  return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}${urlStr}`;
 };
 
 const NewsCard = ({ item, compact, bigTrending, isFirst, onInteraction }) => {
@@ -1108,7 +1116,29 @@ export default function FeaturedScreen() {
             id: item.id?.toString() || '',
             title: item.title,
             excerpt: item.excerpt || item.summary || '',
-            image: getImageUrl(item.image || item.image_path), // Check both like news.web.js
+            image: (() => {
+              // Prefer media field with proper path construction
+              if (item.media && item.media.length > 0) {
+                const filePath = item.media[0].file_path.replace('public/', '');
+                return `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${filePath}`;
+              }
+              // Handle image field - if it's already a full URL, fix the path
+              if (item.image) {
+                if (item.image.startsWith('http')) {
+                  // Convert existing full URL to use correct path
+                  if (item.image.includes('/storage/articles/')) {
+                    return item.image.replace('/storage/articles/', '/api/storage/app/public/articles/');
+                  }
+                  return item.image;
+                }
+                // Handle relative paths
+                if (item.image.includes('articles/')) {
+                  return `${process.env.EXPO_PUBLIC_API_URL}/api/storage/app/public/${item.image}`;
+                }
+                return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '')}/public_html/api/public/storage/${item.image}`;
+              }
+              return 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070';
+            })(),
             date: item.published_at ? new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '',
             category: 'Featured',
           }));
